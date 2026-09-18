@@ -16,6 +16,7 @@ import sys
 from datetime import datetime
 
 import board_pack
+import validation
 
 TOOL_DIR = os.path.dirname(os.path.abspath(__file__))
 BOARDS_DIR = os.path.join(TOOL_DIR, "boards")
@@ -200,6 +201,13 @@ def synth_board(
     if not os.path.isfile(board_path):
         return {"ok": False, "message": f"缺少板描述: {board_path}"}
     board = json.load(open(board_path, encoding="utf-8"))
+    validation_result = validation.validate_board(board)
+    if not validation_result["ok"]:
+        return {
+            "ok": False,
+            "message": f"板描述校验失败: {board_path}",
+            "validation": validation_result,
+        }
     logo_ledc = board_pack.board_logo_ledc(board)
     policy_enabled = board_pack.default_policy(logo_ledc)
 

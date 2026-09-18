@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "om6239-pinmux"
+version = "0.1.0"
+description = "OM6239 board pinmux and porting assistant"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["pywebview>=5.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+extend-exclude = ["synth", "reports"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.setuptools]
+py-modules = [
+    "biz_sync", "board_pack", "golden_diff", "launch", "operations",
+    "port_apply", "synth_golden", "validation"
+]

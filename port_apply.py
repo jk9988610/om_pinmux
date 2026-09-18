@@ -19,6 +19,7 @@ from pathlib import Path
 
 import biz_sync
 import golden_diff
+import validation
 
 TOOL_DIR = os.path.dirname(os.path.abspath(__file__))
 BOARDS_DIR = os.path.join(TOOL_DIR, "boards")
@@ -307,6 +308,13 @@ def run(
     target = resolve_sdk(target_hint)
     golden = resolve_sdk(golden_hint)
     board = load_board(board_name)
+    validation_result = validation.validate_board(board)
+    if not validation_result["ok"]:
+        return {
+            "ok": False,
+            "message": f"板描述校验失败: {board_name}",
+            "validation": validation_result,
+        }
     g_periph = periph_of(golden)
     t_periph = periph_of(target)
     feat = board_to_feat(board, g_periph)

@@ -21,6 +21,7 @@ from datetime import datetime
 import biz_sync
 import golden_diff
 import port_apply
+import validation
 
 TOOL_DIR = os.path.dirname(os.path.abspath(__file__))
 BOARDS_DIR = os.path.join(TOOL_DIR, "boards")
@@ -319,6 +320,13 @@ def apply_board_pack(
     """
     target = port_apply.resolve_sdk(target_hint)
     board = load_board(board_name)
+    validation_result = validation.validate_board(board)
+    if not validation_result["ok"]:
+        return {
+            "ok": False,
+            "message": f"板描述校验失败: {board_name}",
+            "validation": validation_result,
+        }
     logo_ledc = board_logo_ledc(board)
 
     # synth policy overlay

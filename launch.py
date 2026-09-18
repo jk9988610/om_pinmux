@@ -42,9 +42,9 @@ except ImportError:
     board_pack = None  # type: ignore
 
 try:
-    import synth_golden
+    import validation
 except ImportError:
-    synth_golden = None  # type: ignore
+    validation = None  # type: ignore
 
 BEGIN_H = "/* >>> OM_PINMUX_GENERATED begin */"
 END_H = "/* <<< OM_PINMUX_GENERATED end */"
@@ -938,6 +938,14 @@ class WindowApi:
             if not name or name in ("blank",):
                 return {"ok": False, "message": "请先在下拉框选择板名（如 BD319）"}
             data = json.loads(desc_json) if isinstance(desc_json, str) else desc_json
+            if validation is not None:
+                validation_result = validation.validate_board(data)
+                if not validation_result.get("ok"):
+                    return {
+                        "ok": False,
+                        "message": "板描述校验失败，未保存",
+                        "validation": validation_result,
+                    }
             path = os.path.join(HERE, "boards", f"{name}.json")
             os.makedirs(os.path.dirname(path), exist_ok=True)
             open(path, "w", encoding="utf-8", newline="\n").write(

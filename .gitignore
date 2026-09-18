@@ -1,0 +1,24 @@
+# Python caches and test tools
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Local Python environments
+.venv/
+venv/
+
+# Local application state
+pinmux_state.json
+launch.log
+
+# Generated operation output (keep the smoke checklist baseline)
+reports/*.txt
+!reports/BD319_smoke_checklist.md
+
+# Editor-local state
+.cursor/*
+!.cursor/plans/
