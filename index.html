@@ -1,0 +1,2170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OM6239 PinMux — 引脚可视化配置</title>
+<style>
+  :root {
+    --bg: #1a1d23;
+    --panel: #242830;
+    --border: #3a4050;
+    --text: #e8eaed;
+    --muted: #9aa0a8;
+    --accent: #3d9cf0;
+    --warn: #e6a23c;
+    --danger: #f56c6c;
+    --ok: #67c23a;
+    --pin-free: #3a4050;
+    --chip: #2c313c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+  }
+  body {
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+  /* 独立窗口无边框时：标题栏可拖拽 */
+  html.pinmux-frameless header {
+    -webkit-app-region: drag;
+    app-region: drag;
+  }
+  html.pinmux-frameless header .toolbar,
+  html.pinmux-frameless header .win-btns,
+  html.pinmux-frameless header button,
+  html.pinmux-frameless header select,
+  html.pinmux-frameless header label,
+  html.pinmux-frameless header input {
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+  }
+  .win-btns {
+    display: none;
+    gap: 4px;
+    margin-left: 4px;
+  }
+  html.pinmux-host .win-btns { display: inline-flex; }
+  .win-btns button {
+    min-width: 32px;
+    padding: 4px 8px;
+  }
+  header h1 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+  }
+  header .sub { color: var(--muted); font-size: 12px; }
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+  button, select, label.file-btn {
+    background: #323844;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  button:hover, label.file-btn:hover { border-color: var(--accent); }
+  button.primary { background: #1e5a96; border-color: var(--accent); }
+  button.danger { background: #5a2a2a; border-color: var(--danger); }
+  input[type="file"] { display: none; }
+  .layout {
+    display: grid;
+    grid-template-columns: 280px 1fr 360px;
+    gap: 0;
+    flex: 1;
+    min-height: 0;
+    height: auto;
+  }
+  .panel {
+    overflow: auto;
+    border-right: 1px solid var(--border);
+    padding: 12px;
+    background: var(--panel);
+  }
+  .panel:last-child { border-right: none; border-left: 1px solid var(--border); }
+  .center {
+    overflow: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+  h2 {
+    margin: 0 0 10px;
+    font-size: 13px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .role-group { margin-bottom: 14px; }
+  .role-group h3 {
+    margin: 0 0 6px;
+    font-size: 12px;
+    color: var(--accent);
+  }
+  .role-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    border: 1px solid transparent;
+  }
+  .role-item:hover { background: #2e3440; }
+  .role-item.active { border-color: var(--accent); background: #1e3a55; }
+  .role-item.conflict { color: var(--danger); }
+  .swatch {
+    width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0;
+  }
+  .role-pin {
+    margin-left: auto;
+    font-family: Consolas, monospace;
+    color: var(--muted);
+    font-size: 11px;
+  }
+  .chip-wrap {
+    position: relative;
+    width: 440px;
+    height: 440px;
+  }
+  .chip-body {
+    position: absolute;
+    inset: 78px;
+    background: linear-gradient(145deg, #353b48, #232830);
+    border: 2px solid #555c6c;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    box-shadow: inset 0 0 40px rgba(0,0,0,.35);
+  }
+  .chip-body .name { font-size: 18px; font-weight: 700; letter-spacing: 0.08em; }
+  .chip-body .pkg { color: var(--muted); font-size: 11px; margin-top: 4px; }
+  .pin.special {
+    opacity: 0.75;
+    cursor: default;
+    font-size: 9px;
+  }
+  .mux-hint {
+    font-family: Consolas, monospace;
+    font-size: 11px;
+    color: #a8d4ff;
+    background: #1e3a55;
+    border-radius: 4px;
+    padding: 6px 8px;
+    margin-top: 8px;
+    width: min(520px, 100%);
+  }
+  .pin {
+    position: absolute;
+    width: 54px;
+    height: 28px;
+    border-radius: 4px;
+    border: 1px solid #555;
+    background: var(--pin-free);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 10px;
+    line-height: 1.1;
+    transition: transform .1s, box-shadow .1s;
+    user-select: none;
+  }
+  .pin:hover { transform: scale(1.08); z-index: 2; box-shadow: 0 0 0 2px var(--accent); }
+  .pin.selected { box-shadow: 0 0 0 2px #fff; z-index: 3; }
+  .pin.conflict { outline: 2px solid var(--danger); }
+  .pin .pname { font-weight: 700; font-family: Consolas, monospace; }
+  .pin .plabel {
+    max-width: 50px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #ddd;
+    font-size: 9px;
+  }
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    justify-content: center;
+    max-width: 520px;
+  }
+  .legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted);
+    font-size: 11px;
+  }
+  .form-row {
+    display: grid;
+    grid-template-columns: 110px 1fr;
+    gap: 8px;
+    margin-bottom: 8px;
+    align-items: center;
+  }
+  .form-row input, .form-row select {
+    background: #1a1d23;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 4px;
+    padding: 5px 8px;
+    width: 100%;
+  }
+  .conflicts {
+    background: #3a2222;
+    border: 1px solid var(--danger);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-bottom: 12px;
+    color: #ffb4b4;
+    font-size: 12px;
+  }
+  .conflicts.empty {
+    background: #1e3320;
+    border-color: var(--ok);
+    color: #b4ffb4;
+  }
+  textarea.code {
+    width: 100%;
+    height: 220px;
+    background: #12151a;
+    color: #c8d0dc;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 11px;
+    padding: 8px;
+    resize: vertical;
+  }
+  .tabs { display: flex; gap: 4px; margin-bottom: 8px; }
+  .tabs button.active { background: #1e5a96; border-color: var(--accent); }
+  .hint { color: var(--muted); font-size: 11px; margin: 6px 0 12px; }
+  .opt-block {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px;
+    margin-bottom: 10px;
+  }
+  .opt-block label { display: flex; align-items: center; gap: 6px; margin: 4px 0; cursor: pointer; }
+  .badge {
+    display: inline-block;
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    margin-right: 4px;
+    font-weight: 600;
+  }
+  .badge.err { background: #5a2a2a; color: #ffb4b4; }
+  .badge.warn { background: #5a4520; color: #ffe0a0; }
+  .badge.ok { background: #1e3320; color: #b4ffb4; }
+  .badge.info { background: #1e3a55; color: #a8d4ff; }
+  @media (max-width: 1100px) {
+    .layout { grid-template-columns: 1fr; height: auto; }
+    .panel { border: none; border-bottom: 1px solid var(--border); max-height: 360px; }
+  }
+</style>
+</head>
+<body>
+<header class="pywebview-drag-region" id="titleBar">
+  <h1>OM6239 PinMux</h1>
+  <span class="sub">OM6239 单芯片 · 原理图+手册 → Keil user_config</span>
+  <div class="toolbar">
+    <select id="presetSelect" title="加载板描述">
+      <option value="">— 板描述 —</option>
+      <option value="blank">空白板（手册固定脚）</option>
+      <option value="BD319">BD319（原理图脚位）</option>
+      <option value="CH04">归档样例 CH04</option>
+      <option value="KC536">归档样例 KC536</option>
+    </select>
+    <label class="file-btn">导入 .h<input type="file" id="importH" accept=".h,.c,text/*" /></label>
+    <label class="file-btn">导入 JSON<input type="file" id="importJson" accept=".json,application/json" /></label>
+    <button id="btnExportJson">导出板描述</button>
+    <button id="btnSaveBoard" title="把当前脚位/features 写回 boards/<板名>.json">保存板 JSON</button>
+    <button id="btnPickProj" title="选择 SDK / mouse_demo / periph">选工程目录</button>
+    <button id="btnPickGolden" title="选择金机/参照工程（如 CH04）">选金机</button>
+    <button id="btnPickDonor" title="可选供体 SDK（如现有 BD319 工程，用于拷 RGB 业务文件）">选供体</button>
+    <button id="btnSynthGolden" title="由板 JSON + E:\\pictures\\&lt;板&gt; 生成宏观金机 synth/">生成宏观金机</button>
+    <button id="btnScanBiz" title="扫描 periph/main 里引用了哪些脚位宏">扫描业务引用</button>
+    <button id="btnPortCheck" title="换板体检：LEDC 文件/轮询/RTE/SEL≠滚轮等（KC536→CH04 经验）">换板体检</button>
+    <button id="btnInvGolden" title="关注文件清单：金机 vs 目标（无需 compare GUI）">金机清单</button>
+    <button id="btnInvSynth" title="宏观金机脚位对照（synth vs 目标 user_config）">宏观对照</button>
+    <button id="btnOpenCompare" title="打开 E:\tools\compare 目录对比（左金机 / 右目标）">目录对比</button>
+    <button id="btnExportDiff" title="导出 unified .diff（调用 compare.engine）">导出.diff</button>
+    <button class="primary" id="btnWriteProj" title="写入脚位，并按板型同步 key_io / sleep 契约">写入工程</button>
+    <button class="primary" id="btnApplyPack" title="按策略勾选应用板级包（补丁/供体拷贝）">应用板级包</button>
+    <button class="primary" id="btnGen">生成 / 校验</button>
+    <button class="danger" id="btnClearPin" title="清除当前选中角色的引脚">清除选中</button>
+    <span class="win-btns">
+      <button type="button" id="btnWinMin" title="最小化">—</button>
+      <button type="button" id="btnWinMax" title="最大化">□</button>
+      <button type="button" id="btnWinClose" class="danger" title="关闭">×</button>
+    </span>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- 左侧：功能角色列表 -->
+  <aside class="panel" id="rolePanel">
+    <h2>原理图 → 固件</h2>
+    <p class="hint">按网名选功能，再点芯片 Pxx（封装 Pin 见手册）。同脚冲突标红。</p>
+    <div id="schematicHint" class="hint"></div>
+    <div id="roleList"></div>
+  </aside>
+
+  <!-- 中间：芯片图 -->
+  <main class="center">
+    <div id="conflictBox" class="conflicts empty">无引脚冲突</div>
+    <div class="chip-wrap" id="chipWrap"></div>
+    <div class="mux-hint" id="muxHint">复用推导：—</div>
+    <div class="legend" id="legend"></div>
+  </main>
+
+  <!-- 右侧：属性 + 代码 -->
+  <aside class="panel">
+    <h2>板级选项</h2>
+    <div id="projBindBar" class="hint" style="margin-bottom:8px;word-break:break-all">工程：未绑定（点顶栏「选工程目录」）</div>
+    <div class="form-row"><label>项目名</label><input id="projName" value="NEW_BOARD" /></div>
+    <div class="form-row"><label>客户名</label><input id="consumerName" value="App" /></div>
+    <div class="form-row"><label>项目 ID L</label><input id="projIdL" value="0x0000" /></div>
+    <div class="form-row"><label>项目 ID H</label><input id="projIdH" value="0x071" /></div>
+    <div class="form-row"><label>版本号</label><input id="verId" type="number" value="1" min="1" /></div>
+
+    <div class="opt-block">
+      <strong>板型 features（只勾原理图有的）</strong>
+      <label><input type="radio" name="modePins" value="dual" checked /> 双模式脚 MODE_24G + MODE_BLE</label>
+      <label><input type="radio" name="modePins" value="single" /> 单模式脚 MODE_BLE_24G</label>
+      <label><input type="radio" name="logoType" value="ledc" checked /> LOGO：LEDC 灯带</label>
+      <label><input type="radio" name="logoType" value="rgb" /> LOGO：独立 RGB</label>
+      <label><input type="checkbox" id="hasKeyC0" /> 有 KEY_C0（矩阵列）</label>
+      <label><input type="checkbox" id="hasExtraKeys" /> 有 KEY_B / KEY_P / KEY_DPI</label>
+      <label><input type="checkbox" id="hasDpiPair" /> 有 KEY_DPI_SUB / ADD</label>
+      <label><input type="checkbox" id="hasSensorNcs" /> 有 Sensor NCS</label>
+      <label><input type="checkbox" id="hasLedLow" /> 有 LED_LOW</label>
+      <label><input type="radio" name="ledPolarity" value="active_high" checked /> LED 高电平亮</label>
+      <label><input type="radio" name="ledPolarity" value="active_low" /> LED 低电平亮</label>
+      <label><input type="checkbox" id="syncBizOnWrite" checked /> 写入时同步业务契约（key_io / sleep）</label>
+    </div>
+
+    <div class="opt-block" id="policyBlock">
+      <strong>关注策略（应用板级包时生效）</strong>
+      <p class="hint" style="margin:4px 0 6px">RGB 板默认关 LEDC、开 RGB 包；可手改。需供体的项无供体则跳过。</p>
+      <div id="policyList"></div>
+      <button type="button" id="btnReloadPolicy" style="margin-top:6px">按 LOGO 类型重置策略</button>
+    </div>
+
+    <div class="form-row">
+      <label>Sensor 方向</label>
+      <select id="sensorDir">
+        <option value="SENSOR_DIR_CLOCK_0">CLOCK_0</option>
+        <option value="SENSOR_DIR_CLOCK_3">CLOCK_3</option>
+        <option value="SENSOR_DIR_CLOCK_6" selected>CLOCK_6</option>
+        <option value="SENSOR_DIR_CLOCK_9">CLOCK_9</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>滚轮 PinMux</label>
+      <select id="wheelMux">
+        <option value="ENCODER_PINMUX_SEL_IO_00_01">IO_00_01（硬件）</option>
+        <option value="ENCODER_PINMUX_SEL_IO_20_21">IO_20_21（硬件）</option>
+        <option value="ENCODER_PINMUX_SEL_IO_24_25">IO_24_25（硬件）</option>
+        <option value="SOFT_GPIO">SOFT_GPIO（非硬件对，软解码）</option>
+      </select>
+    </div>
+
+    <h2>选中引脚 GPIO 表项</h2>
+    <div id="gpioEditor" class="hint">点击已分配功能后可编辑模式/上下拉/初值</div>
+
+    <div class="tabs">
+      <button class="active" data-tab="validate">校验报告</button>
+      <button data-tab="h">user_config.h</button>
+      <button data-tab="c">gpio 表</button>
+      <button data-tab="feat">features</button>
+      <button data-tab="sleep">sleep 模板</button>
+      <button data-tab="refs">业务引用</button>
+      <button data-tab="port">换板体检</button>
+      <button data-tab="golden">金机对比</button>
+      <button data-tab="synth">宏观金机</button>
+      <button data-tab="diff">摘要</button>
+    </div>
+    <textarea class="code" id="codeOut" readonly spellcheck="false"></textarea>
+    <div class="toolbar" style="margin:8px 0 0;justify-content:flex-start">
+      <button id="btnCopy">复制</button>
+      <button id="btnDlH">下载 .h</button>
+      <button id="btnDlC">下载 gpio 表</button>
+      <button id="btnDlFeat">下载 features</button>
+      <button id="btnDlSleep">下载 sleep</button>
+    </div>
+  </aside>
+</div>
+
+<script>
+/* ========== 数据模型 ========== */
+const PINS = [];
+for (let port = 0; port <= 3; port++) {
+  for (let bit = 0; bit <= 7; bit++) {
+    PINS.push(`P${port}${bit}`);
+  }
+}
+
+/* 手册 QFN32 封装（DataSheet Table1.1 / Figure1.1） */
+const CHIP = {
+  package_pins: [
+    { pkg:1, name:"P32", side:"left", idx:0, alt:["PWM"] },
+    { pkg:2, name:"P00", side:"left", idx:1, alt:["PWM","ENC"] },
+    { pkg:3, name:"P01", side:"left", idx:2, alt:["PWM","ENC","LEDC"] },
+    { pkg:4, name:"VDD", side:"left", idx:3, special:true },
+    { pkg:5, name:"VBUS", side:"left", idx:4, special:true },
+    { pkg:6, name:"P02", side:"left", idx:5, alt:["USB_DN"] },
+    { pkg:7, name:"P03", side:"left", idx:6, alt:["USB_DP"] },
+    { pkg:8, name:"P04", side:"left", idx:7, alt:["PWM","UART"] },
+    { pkg:9, name:"P05", side:"bottom", idx:0, alt:["PWM","LEDC"] },
+    { pkg:10, name:"P06", side:"bottom", idx:1, alt:["PWM","UART"] },
+    { pkg:11, name:"P07", side:"bottom", idx:2, alt:[] },
+    { pkg:12, name:"P10", side:"bottom", idx:3, alt:[] },
+    { pkg:13, name:"P11", side:"bottom", idx:4, alt:["SCLK"] },
+    { pkg:14, name:"P12", side:"bottom", idx:5, alt:["SDIO"] },
+    { pkg:15, name:"P13", side:"bottom", idx:6, alt:[] },
+    { pkg:16, name:"P33", side:"bottom", idx:7, alt:["LVD","LEDC"] },
+    { pkg:17, name:"P34", side:"right", idx:7, alt:[] },
+    { pkg:18, name:"XTALP", side:"right", idx:6, special:true },
+    { pkg:19, name:"XTALN", side:"right", idx:5, special:true },
+    { pkg:20, name:"BOOT", side:"right", idx:4, special:true },
+    { pkg:21, name:"RF", side:"right", idx:3, special:true },
+    { pkg:22, name:"P36", side:"right", idx:2, alt:[] },
+    { pkg:23, name:"P20", side:"right", idx:1, alt:["ENC"] },
+    { pkg:24, name:"P21", side:"right", idx:0, alt:["ENC","LEDC"] },
+    { pkg:25, name:"P22", side:"top", idx:7, alt:["PWM"] },
+    { pkg:26, name:"P23", side:"top", idx:6, alt:["LVD"] },
+    { pkg:27, name:"P24", side:"top", idx:5, alt:[] },
+    { pkg:28, name:"P25", side:"top", idx:4, alt:[] },
+    { pkg:29, name:"P26", side:"top", idx:3, alt:["PWM"] },
+    { pkg:30, name:"P27", side:"top", idx:2, alt:[] },
+    { pkg:31, name:"P30", side:"top", idx:1, alt:[] },
+    { pkg:32, name:"P31", side:"top", idx:0, alt:[] }
+  ],
+  internal: ["P14","P15","P16","P17"],
+  ledcSel: { P01:"IO_01", P05:"IO_05", P21:"IO_21", P33:"IO_33" },
+  encPairs: [
+    { macro:"ENCODER_PINMUX_SEL_IO_00_01", pins:["P00","P01"] },
+    { macro:"ENCODER_PINMUX_SEL_IO_20_21", pins:["P20","P21"] },
+    { macro:"ENCODER_PINMUX_SEL_IO_24_25", pins:["P24","P25"] }
+  ]
+};
+
+const COLORS = {
+  key: "#e6a23c", wheel: "#67c23a", mode: "#b37feb", sensor: "#3d9cf0",
+  led: "#f56c6c", logo: "#f098b8", power: "#5dade2", flash: "#95a5a6",
+  usb: "#48c9b0", misc: "#aab7b8", free: "#3a4050", special: "#2a3038"
+};
+
+/** 角色定义：id -> 宏名、分组、原理图网名、默认 GPIO */
+const ROLE_DEFS = [
+  { id: "KEY_R0_PIN", group: "按键", color: "key", gpio: ["INPUT_PULLUP","PU_30K","HIGH"], net: "KEY_L" },
+  { id: "KEY_R1_PIN", group: "按键", color: "key", gpio: ["INPUT_PULLUP","PU_30K","HIGH"], net: "KEY_R" },
+  { id: "KEY_R2_PIN", group: "按键", color: "key", gpio: ["INPUT_PULLUP","PU_30K","HIGH"], net: "KEY_M" },
+  { id: "KEY_PAIR_PIN", group: "按键", color: "key", gpio: ["INPUT_PULLUP","PU_30K","HIGH"], net: "PAIR?" },
+  { id: "KEY_C0_PIN", group: "按键", color: "key", gpio: ["OUTPUT_PP","PU_30K","HIGH"], opt: "hasKeyC0", net: "COL0" },
+  { id: "KEY_B_PIN", group: "按键", color: "key", gpio: ["INPUT_PULLUP","PU_30K","HIGH"], opt: "hasExtraKeys", net: "KEY_4" },
+  { id: "KEY_P_PIN", group: "按键", color: "key", gpio: ["INPUT_PULLUP","PU_30K","HIGH"], opt: "hasExtraKeys", net: "KEY_5" },
+  { id: "KEY_DPI_PIN", group: "按键", color: "key", gpio: ["INPUT_PULLUP","PU_30K","HIGH"], opt: "hasExtraKeys", net: "KEY_DPI" },
+  { id: "KEY_DPI_SUB_PIN", group: "按键", color: "key", gpio: ["INPUT_PULLUP","PU_30K","HIGH"], opt: "hasDpiPair", net: "DPI-" },
+  { id: "KEY_DPI_ADD_PIN", group: "按键", color: "key", gpio: ["INPUT_PULLUP","PU_30K","HIGH"], opt: "hasDpiPair", net: "DPI+" },
+
+  { id: "WHEEL_A_PIN", group: "滚轮", color: "wheel", gpio: ["INPUT_PULLUP","PU_30K","HIGH"], net: "ZWHA" },
+  { id: "WHEEL_B_PIN", group: "滚轮", color: "wheel", gpio: ["INPUT_PULLUP","PU_30K","HIGH"], net: "ZWHB" },
+
+  { id: "MODE_24G_PIN", group: "模式", color: "mode", gpio: ["INPUT_PULLDOWN","PD_150K","HIGH"], opt: "modeDual", net: "2.4G" },
+  { id: "MODE_BLE_PIN", group: "模式", color: "mode", gpio: ["INPUT_PULLDOWN","PD_150K","HIGH"], opt: "modeDual", net: "BLE" },
+  { id: "MODE_BLE_24G_PIN", group: "模式", color: "mode", gpio: ["INPUT_PULLUP","PU_30K","HIGH"], opt: "modeSingle", net: "MODE" },
+
+  { id: "SENSOR_MOTION_PIN", group: "Sensor", color: "sensor", gpio: ["INPUT_PULLUP","PU_30K","HIGH"], net: "MOTION" },
+  { id: "SENSOR_SCLK_PIN", group: "Sensor", color: "sensor", gpio: ["OUTPUT_PP","PU_30K","HIGH"], net: "SCK" },
+  { id: "SENSOR_SDIO_PIN", group: "Sensor", color: "sensor", gpio: ["INPUT_PULLUP","PU_30K","HIGH"], net: "SDIO" },
+  { id: "SENSOR_NCS_PIN", group: "Sensor", color: "sensor", gpio: ["OUTPUT_PP","PU_30K","HIGH"], net: "NCS", opt: "hasSensorNcs" },
+
+  { id: "LED_MODE_R_PIN", group: "指示灯", color: "led", gpio: ["OUTPUT_PP","PU_30K","LOW"], net: "IND_R" },
+  { id: "LED_MODE_G_PIN", group: "指示灯", color: "led", gpio: ["OUTPUT_PP","PU_30K","LOW"], net: "IND_G" },
+  { id: "LED_MODE_B_PIN", group: "指示灯", color: "led", gpio: ["OUTPUT_PP","PU_30K","LOW"], net: "IND_B" },
+  { id: "LED_LOW_PIN", group: "指示灯", color: "led", gpio: ["OUTPUT_PP","PU_30K","LOW"], opt: "hasLedLow", net: "LED_LOW" },
+
+  { id: "LEDC_CTRL_PIN", group: "LOGO", color: "logo", gpio: ["OUTPUT_PP","PU_30K","HIGH"], opt: "logoLedc", net: "LEDC_EN" },
+  { id: "LEDC_PIN", group: "LOGO", color: "logo", gpio: ["OUTPUT_PP","PU_30K","HIGH"], opt: "logoLedc", net: "LEDC_DAT" },
+  { id: "LED_R_PIN", group: "LOGO", color: "logo", gpio: ["OUTPUT_PP","PU_30K","HIGH"], opt: "logoRgb", net: "LED_R" },
+  { id: "LED_G_PIN", group: "LOGO", color: "logo", gpio: ["OUTPUT_PP","PU_30K","HIGH"], opt: "logoRgb", net: "LED_G" },
+  { id: "LED_B_PIN", group: "LOGO", color: "logo", gpio: ["OUTPUT_PP","PU_30K","HIGH"], opt: "logoRgb", net: "LED_B" },
+
+  { id: "USB_5V", group: "电源/充电", color: "power", gpio: ["INPUT_PULLDOWN","PD_150K","HIGH"], net: "CHECK_5V" },
+  { id: "BAT_CHG_PIN", group: "电源/充电", color: "power", gpio: ["INPUT_PULLUP","PU_30K","HIGH"], net: "CHAR_OK" },
+  { id: "LVD_PIN", group: "电源/充电", color: "power", gpio: ["INPUT_FLOATING","PU_NONE","HIGH"], net: "LVD" },
+
+  { id: "USB_DN_PIN", group: "USB/Flash", color: "usb", gpio: null, fixed: true, net: "USB_N" },
+  { id: "USB_DP_PIN", group: "USB/Flash", color: "usb", gpio: null, fixed: true, net: "USB_P" },
+  { id: "FLASH_CS_PIN", group: "USB/Flash", color: "flash", gpio: ["INPUT_PULLUP","PU_30K","HIGH"], net: "FLASH_CS" },
+  { id: "FLASH_SCLK_PIN", group: "USB/Flash", color: "flash", gpio: ["INPUT_PULLUP","PU_30K","HIGH"], net: "FLASH_SCK" },
+  { id: "FLASH_MOSI_PIN", group: "USB/Flash", color: "flash", gpio: ["INPUT_PULLUP","PU_30K","HIGH"], net: "FLASH_MOSI" },
+  { id: "FLASH_MISO_PIN", group: "USB/Flash", color: "flash", gpio: ["INPUT_PULLUP","PU_30K","HIGH"], net: "FLASH_MISO" },
+];
+
+const MODE_MAP = {
+  INPUT_FLOATING: "USER_GPIO_MODE_INPUT_FLOATING",
+  INPUT_PULLUP: "USER_GPIO_MODE_INPUT_PULLUP",
+  INPUT_PULLDOWN: "USER_GPIO_MODE_INPUT_PULLDOWN",
+  OUTPUT_PP: "USER_GPIO_MODE_OUTPUT_PP",
+};
+const LEVEL_MAP = { HIGH: "PIN_HIGH_LEV", LOW: "PIN_LOW_LEV" };
+
+const PRESETS = {
+  BD319: {
+    meta: {
+      projName: "BD319", consumerName: "App", projIdL: "0x0485", projIdH: "0x071", verId: 1,
+      modePins: "dual", logoType: "rgb", hasKeyC0: false, hasExtraKeys: true, hasDpiPair: false,
+      hasLedLow: false, hasSensorNcs: true,
+      ledPolarity: "active_high", sensorDir: "SENSOR_DIR_CLOCK_6", wheelMux: "ENCODER_PINMUX_SEL_IO_24_25"
+    },
+    pins: {
+      KEY_R0_PIN: "P26", KEY_R1_PIN: "P20", KEY_R2_PIN: "P21",
+      KEY_B_PIN: "P00", KEY_P_PIN: "P01", KEY_DPI_PIN: "P36",
+      WHEEL_A_PIN: "P24", WHEEL_B_PIN: "P25",
+      MODE_24G_PIN: "P27", MODE_BLE_PIN: "P30",
+      SENSOR_MOTION_PIN: "P07", SENSOR_SCLK_PIN: "P11", SENSOR_SDIO_PIN: "P12", SENSOR_NCS_PIN: "P10",
+      LED_R_PIN: "P04", LED_G_PIN: "P05", LED_B_PIN: "P06",
+      LED_MODE_R_PIN: "P04", LED_MODE_G_PIN: "P05", LED_MODE_B_PIN: "P06",
+      USB_5V: "P32", BAT_CHG_PIN: "P31", LVD_PIN: "P33",
+      USB_DN_PIN: "P02", USB_DP_PIN: "P03",
+      FLASH_CS_PIN: "P17", FLASH_SCLK_PIN: "P15", FLASH_MOSI_PIN: "P16", FLASH_MISO_PIN: "P14"
+    },
+    gpioOverride: {
+      LED_R_PIN: ["OUTPUT_PP","PU_30K","LOW"],
+      LED_G_PIN: ["OUTPUT_PP","PU_30K","LOW"],
+      LED_B_PIN: ["OUTPUT_PP","PU_30K","LOW"],
+      MODE_24G_PIN: ["INPUT_PULLDOWN","PD_150K","HIGH"],
+      MODE_BLE_PIN: ["INPUT_PULLDOWN","PD_150K","HIGH"]
+    },
+    hint: "BD319：双模式 P27/P30；滚轮 P24/P25 → ENCODER IO_24_25；无 KEY_PAIR。写入后请确认 key_io 已适配双模式。"
+  },
+  CH04: {
+    meta: {
+      projName: "CH04", consumerName: "App", projIdL: "0x0457", projIdH: "0x071", verId: 4,
+      modePins: "dual", logoType: "ledc", hasKeyC0: true, hasExtraKeys: false, hasDpiPair: false, hasLedLow: true,
+      ledPolarity: "active_high", sensorDir: "SENSOR_DIR_CLOCK_6", wheelMux: "ENCODER_PINMUX_SEL_IO_00_01"
+    },
+    pins: {
+      KEY_R0_PIN: "P32", KEY_R1_PIN: "P36", KEY_R2_PIN: "P20", KEY_PAIR_PIN: "P24", KEY_C0_PIN: "P31",
+      WHEEL_A_PIN: "P00", WHEEL_B_PIN: "P01",
+      MODE_24G_PIN: "P27", MODE_BLE_PIN: "P26",
+      SENSOR_MOTION_PIN: "P07", SENSOR_SCLK_PIN: "P11", SENSOR_SDIO_PIN: "P12",
+      LED_MODE_R_PIN: "P23", LED_MODE_G_PIN: "P22", LED_MODE_B_PIN: "P21", LED_LOW_PIN: "P04",
+      LEDC_CTRL_PIN: "P05", LEDC_PIN: "P34",
+      USB_5V: "P25", BAT_CHG_PIN: "P30", LVD_PIN: "P33",
+      USB_DN_PIN: "P02", USB_DP_PIN: "P03",
+      FLASH_CS_PIN: "P17", FLASH_SCLK_PIN: "P15", FLASH_MOSI_PIN: "P16", FLASH_MISO_PIN: "P14"
+    },
+    gpioOverride: {}
+  },
+  KC536: {
+    meta: {
+      projName: "KC536", consumerName: "BYC", projIdL: "0x0023", projIdH: "0x071", verId: 5,
+      modePins: "single", logoType: "rgb", hasKeyC0: false, hasExtraKeys: true, hasDpiPair: false, hasLedLow: false,
+      ledPolarity: "active_low", sensorDir: "SENSOR_DIR_CLOCK_6", wheelMux: "ENCODER_PINMUX_SEL_IO_20_21"
+    },
+    pins: {
+      KEY_R0_PIN: "P34", KEY_R1_PIN: "P07", KEY_R2_PIN: "P10", KEY_PAIR_PIN: "P27",
+      KEY_B_PIN: "P22", KEY_P_PIN: "P25", KEY_DPI_PIN: "P31",
+      WHEEL_A_PIN: "P21", WHEEL_B_PIN: "P20",
+      MODE_BLE_24G_PIN: "P26",
+      SENSOR_MOTION_PIN: "P13", SENSOR_SCLK_PIN: "P11", SENSOR_SDIO_PIN: "P12",
+      LED_MODE_R_PIN: "P32", LED_MODE_G_PIN: "P00", LED_MODE_B_PIN: "P01",
+      LED_R_PIN: "P04", LED_G_PIN: "P05", LED_B_PIN: "P06",
+      USB_5V: "P24", BAT_CHG_PIN: "P30", LVD_PIN: "P23",
+      USB_DN_PIN: "P02", USB_DP_PIN: "P03",
+      FLASH_CS_PIN: "P17", FLASH_SCLK_PIN: "P15", FLASH_MOSI_PIN: "P16", FLASH_MISO_PIN: "P14"
+    },
+    gpioOverride: {
+      LED_MODE_R_PIN: ["OUTPUT_PP","PU_30K","HIGH"],
+      LED_MODE_G_PIN: ["OUTPUT_PP","PU_30K","HIGH"],
+      LED_MODE_B_PIN: ["OUTPUT_PP","PU_30K","HIGH"],
+      MODE_BLE_24G_PIN: ["INPUT_PULLUP","PU_30K","HIGH"]
+    }
+  }
+};
+
+let state = {
+  activeRole: null,
+  pins: {},
+  gpio: {},
+  tab: "validate",
+  lastBoard: ""
+};
+
+function opts() {
+  return {
+    modeDual: document.querySelector('input[name="modePins"]:checked').value === "dual",
+    modeSingle: document.querySelector('input[name="modePins"]:checked').value === "single",
+    logoLedc: document.querySelector('input[name="logoType"]:checked').value === "ledc",
+    logoRgb: document.querySelector('input[name="logoType"]:checked').value === "rgb",
+    hasKeyC0: document.getElementById("hasKeyC0").checked,
+    hasExtraKeys: document.getElementById("hasExtraKeys").checked,
+    hasDpiPair: document.getElementById("hasDpiPair").checked,
+    hasSensorNcs: document.getElementById("hasSensorNcs").checked,
+    hasLedLow: document.getElementById("hasLedLow").checked,
+    ledPolarity: document.querySelector('input[name="ledPolarity"]:checked').value,
+    sensorDir: document.getElementById("sensorDir").value,
+    wheelMux: document.getElementById("wheelMux").value,
+    modePins: document.querySelector('input[name="modePins"]:checked').value,
+    logoType: document.querySelector('input[name="logoType"]:checked').value,
+    projName: document.getElementById("projName").value.trim(),
+    consumerName: document.getElementById("consumerName").value.trim(),
+    projIdL: document.getElementById("projIdL").value.trim(),
+    projIdH: document.getElementById("projIdH").value.trim(),
+    verId: document.getElementById("verId").value
+  };
+}
+
+/** 板级 features 契约（给业务代码 #if 用） */
+function featuresOf(o) {
+  return {
+    BOARD_HAS_KEY_C0: !!o.hasKeyC0,
+    BOARD_HAS_EXTRA_KEYS: !!o.hasExtraKeys,
+    BOARD_HAS_DPI_PAIR: !!o.hasDpiPair,
+    BOARD_HAS_SENSOR_NCS: !!o.hasSensorNcs,
+    BOARD_HAS_LED_LOW: !!o.hasLedLow,
+    BOARD_MODE_DUAL_PIN: !!o.modeDual,
+    BOARD_MODE_SINGLE_PIN: !!o.modeSingle,
+    BOARD_LOGO_LEDC: !!o.logoLedc,
+    BOARD_LOGO_RGB: !!o.logoRgb,
+    BOARD_LED_ACTIVE_HIGH: o.ledPolarity === "active_high",
+    BOARD_LED_ACTIVE_LOW: o.ledPolarity === "active_low",
+    BOARD_WHEEL_SOFT_GPIO: o.wheelMux === "SOFT_GPIO"
+  };
+}
+
+/** 写入时交给 Python 的业务契约（同步 key_io / sleep） */
+function bizFeaturesOf(o) {
+  return {
+    has_key_pair: !!state.pins.KEY_PAIR_PIN,
+    has_key_c0: !!o.hasKeyC0,
+    has_dpi_pair: !!o.hasDpiPair,
+    has_extra_keys: !!o.hasExtraKeys,
+    mode_dual: !!o.modeDual,
+    mode_single: !!o.modeSingle,
+    logo_ledc: !!o.logoLedc,
+    logo_rgb: !!o.logoRgb
+  };
+}
+
+let lastBizScan = null;
+let lastPortCheck = null;
+let lastGoldenInv = null;
+let lastSynthInv = null;
+let lastSynthResult = null;
+let policyState = {}; // id -> bool
+
+async function reloadPolicyCatalog() {
+  const logoLedc = document.querySelector('input[name="logoType"]:checked').value === "ledc";
+  const r = await hostCallArgs("get_policy_catalog", logoLedc);
+  const box = document.getElementById("policyList");
+  if (!box) return;
+  box.innerHTML = "";
+  if (!r || !r.ok) {
+    box.innerHTML = `<span class="hint">${(r && r.message) || "无法加载策略"}</span>`;
+    return;
+  }
+  (r.catalog || []).forEach(c => {
+    const id = c.id;
+    if (!(id in policyState)) policyState[id] = !!c.enabled;
+    const lab = document.createElement("label");
+    lab.style.display = "block";
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.dataset.policyId = id;
+    cb.checked = !!policyState[id];
+    cb.addEventListener("change", () => { policyState[id] = cb.checked; });
+    lab.appendChild(cb);
+    lab.appendChild(document.createTextNode(
+      ` ${c.title}${c.needs_donor ? " 〔需供体〕" : ""}`
+    ));
+    box.appendChild(lab);
+  });
+  if (r.donor_root) updateProjBindBar({ donor_root: r.donor_root });
+}
+
+function collectPolicy() {
+  const out = { ...policyState };
+  document.querySelectorAll("#policyList input[data-policy-id]").forEach(cb => {
+    out[cb.dataset.policyId] = cb.checked;
+  });
+  return out;
+}
+
+function formatSynthTab() {
+  const lines = [];
+  lines.push("=== 宏观金机 ===");
+  if (lastSynthResult && lastSynthResult.ok) {
+    lines.push(lastSynthResult.message || "");
+    lines.push(`目录: ${lastSynthResult.out_dir || ""}`);
+    lines.push(`LOGO LEDC: ${lastSynthResult.logo_ledc}`);
+  } else {
+    lines.push("尚未生成。选板 →「生成宏观金机」（读 boards/*.json + E:\\\\pictures\\\\<板>）。");
+  }
+  lines.push("");
+  if (lastSynthInv && lastSynthInv.text) {
+    lines.push(lastSynthInv.text);
+  } else {
+    lines.push("脚位对照：点「宏观对照」。");
+  }
+  return lines.join("\n");
+}
+let lastProjInfo = null;
+
+function formatBizScan(r) {
+  if (!r || !r.ok) return (r && r.message) || "尚未扫描（点顶栏「扫描业务引用」）";
+  const lines = [];
+  lines.push(`引用总数: ${r.ref_count}`);
+  lines.push(`扫描根: ${(r.roots || []).join(" | ")}`);
+  if (r.issues && r.issues.length) {
+    lines.push("", "=== 契约提示 ===");
+    r.issues.forEach(x => lines.push("- " + x));
+  }
+  lines.push("", "=== 宏 → 文件 ===");
+  const mf = r.macro_files || {};
+  Object.keys(mf).sort().forEach(mac => {
+    lines.push(`${mac}: ${mf[mac].join(", ")}`);
+  });
+  lines.push("", "=== 样例行（每宏最多若干） ===");
+  const macros = r.macros || {};
+  Object.keys(macros).sort().forEach(mac => {
+    lines.push(`\n[${mac}]`);
+    (macros[mac] || []).slice(0, 8).forEach(hit => {
+      lines.push(`  ${hit.file}:${hit.line}  ${hit.text}`);
+    });
+  });
+  return lines.join("\n");
+}
+
+function formatPortCheck(r) {
+  if (!r || !r.ok) return (r && r.message) || "尚未体检（点顶栏「换板体检」；需先选工程目录）";
+  const lines = [];
+  const s = r.summary || {};
+  lines.push(`=== 换板体检（KC536→CH04 经验）===  error=${s.error||0}  warn=${s.warn||0}  total=${s.total||0}`);
+  lines.push(`periph: ${r.periph || ""}`);
+  lines.push(`sdk: ${r.sdk || "(未定位)"}`);
+  lines.push(`feat: logo_ledc=${!!(r.feat||{}).logo_ledc}  has_key_c0=${!!(r.feat||{}).has_key_c0}`);
+  lines.push("");
+  const order = ["B/D", "B", "C", "D", "E"];
+  const byStage = {};
+  (r.items || []).forEach(it => {
+    (byStage[it.stage] = byStage[it.stage] || []).push(it);
+  });
+  order.forEach(st => {
+    const list = byStage[st];
+    if (!list) return;
+    lines.push(`--- 阶段 ${st} ---`);
+    list.forEach(it => {
+      const mark = it.pass ? "PASS" : it.level.toUpperCase();
+      lines.push(`[${mark}] ${it.title}`);
+      if (it.detail) lines.push(`       ${it.detail}`);
+    });
+    lines.push("");
+  });
+  Object.keys(byStage).filter(k => !order.includes(k)).forEach(st => {
+    lines.push(`--- 阶段 ${st} ---`);
+    byStage[st].forEach(it => {
+      const mark = it.pass ? "PASS" : it.level.toUpperCase();
+      lines.push(`[${mark}] ${it.title}`);
+      if (it.detail) lines.push(`       ${it.detail}`);
+    });
+  });
+  lines.push("说明：本体检只报告缺口，不自动改业务；A/B 脚位仍用「生成/校验」+「写入工程」。");
+  return lines.join("\n");
+}
+
+function formatGoldenInv(r) {
+  if (r && r.text) return r.text;
+  if (!r || !r.ok) {
+    return (r && r.message) ||
+      "尚未对比。流程：选工程目录 → 选金机 →「金机清单」或「目录对比」/「导出.diff」\n" +
+      "目录对比调用本机 E:\\tools\\compare（可用环境变量 OM_COMPARE_ROOT）。";
+  }
+  return JSON.stringify(r, null, 2);
+}
+
+/** mouse_demo 里已知会引用的宏契约（静态检查用） */
+const CODE_CONTRACTS = [
+  { file: "key_io.h", macros: ["KEY_R0_PIN","KEY_R1_PIN","KEY_R2_PIN"], when: () => true },
+  { file: "key_io.h", macros: ["KEY_PAIR_PIN"], when: (o) => !!state.pins.KEY_PAIR_PIN, level: "error" },
+  { file: "key_io.h", macros: ["KEY_B_PIN","KEY_P_PIN"], when: (o) => o.hasExtraKeys, level: "error" },
+  { file: "key_io.h", macros: ["KEY_DPI_SUB_PIN","KEY_DPI_ADD_PIN"], when: (o) => o.hasDpiPair, level: "error" },
+  { file: "key_io.c / main.c", macros: ["KEY_C0_PIN"], when: (o) => o.hasKeyC0, level: "error" },
+  { file: "BD319 按键", macros: [], when: (o) => !o.hasKeyC0 && o.hasExtraKeys, level: "info",
+    note: "BD319 为独立对地键（无矩阵 KEY_C0），业务扫描勿再走列扫描" },
+  /* LEDC_RGB_NUMBER 是生成常量，不是脚位角色，勿用 p() 校验 */
+  { file: "ledc.c / ledc.h", macros: ["LEDC_PIN","LEDC_CTRL_PIN"], when: (o) => o.logoLedc, level: "error" },
+  { file: "user_config sleep", macros: ["MODE_24G_PIN","MODE_BLE_PIN"], when: (o) => o.modeDual, level: "error" },
+  { file: "user_config sleep", macros: ["MODE_BLE_24G_PIN"], when: (o) => o.modeSingle, level: "error" },
+];
+
+function roleVisible(role) {
+  if (!role.opt) return true;
+  const o = opts();
+  return !!o[role.opt];
+}
+
+function shortLabel(roleId) {
+  return roleId.replace(/_PIN$/, "").replace(/^KEY_/, "K_").replace(/^SENSOR_/, "S_").replace(/^LED_MODE_/, "LM_").replace(/^FLASH_/, "F_");
+}
+
+function pinOwners(pin) {
+  return Object.entries(state.pins)
+    .filter(([rid, p]) => p === pin && roleVisible(ROLE_DEFS.find(r => r.id === rid) || {}))
+    .map(([rid]) => rid);
+}
+
+function conflicts() {
+  const map = {};
+  for (const [rid, pin] of Object.entries(state.pins)) {
+    const role = ROLE_DEFS.find(r => r.id === rid);
+    if (!role || !roleVisible(role) || !pin) continue;
+    (map[pin] ||= []).push(rid);
+  }
+  return Object.entries(map).filter(([, ids]) => ids.length > 1);
+}
+
+/* ========== 布局：QFN 四边引脚 ========== */
+function pinPositions() {
+  /* 与手册 Figure1.1 / assets/om6239_pinout.png 同向 */
+  const pos = {};
+  const W = 440, H = 440, margin = 6, span = 300, start = 70;
+  for (const p of CHIP.package_pins) {
+    const i = p.idx;
+    if (p.side === "left") pos[p.name] = { x: margin, y: start + i * (span / 7) };
+    else if (p.side === "bottom") pos[p.name] = { x: start + i * (span / 7), y: H - 36 };
+    else if (p.side === "right") pos[p.name] = { x: W - 62, y: start + i * (span / 7) };
+    else if (p.side === "top") pos[p.name] = { x: start + i * (span / 7), y: margin };
+  }
+  return pos;
+}
+
+function chipMeta(name) {
+  return CHIP.package_pins.find(p => p.name === name);
+}
+
+/** LEDC 硬件 SEL 占用脚：优先落在手册 SEL 集合的 LEDC_PIN，其次 LEDC_CTRL_PIN */
+function inferLedcMuxPin() {
+  const data = state.pins.LEDC_PIN;
+  const ctrl = state.pins.LEDC_CTRL_PIN;
+  if (data && CHIP.ledcSel[data]) return data;
+  if (ctrl && CHIP.ledcSel[ctrl]) return ctrl;
+  return null;
+}
+
+function deriveMux() {
+  const wa = state.pins.WHEEL_A_PIN, wb = state.pins.WHEEL_B_PIN;
+  const lines = [];
+  let wheel = null;
+  if (wa && wb) {
+    for (const ep of CHIP.encPairs) {
+      const set = new Set(ep.pins);
+      if (set.has(wa) && set.has(wb)) { wheel = ep.macro; break; }
+    }
+    if (wheel) {
+      lines.push(`编码器 → ${wheel}`);
+      const sel = document.getElementById("wheelMux");
+      if (sel && sel.value !== wheel && sel.value !== "SOFT_GPIO") {
+        sel.value = wheel;
+        lines.push("(已自动改 WHEEL_IO_SELECT)");
+      }
+    } else {
+      lines.push(`编码器脚 ${wa}/${wb} 非硬件对 → 用 SOFT_GPIO 软解码`);
+      const sel = document.getElementById("wheelMux");
+      if (sel && sel.value !== "SOFT_GPIO") {
+        sel.value = "SOFT_GPIO";
+        lines.push("(已自动改滚轮为 SOFT_GPIO)");
+      }
+    }
+  }
+  if (opts().logoLedc) {
+    const muxPin = inferLedcMuxPin();
+    if (muxPin) {
+      const hint = CHIP.ledcSel[muxPin];
+      lines.push(`LEDC_SEL → ${hint} @ ${muxPin}（写 drv_pmu_ledc_sel；勿与滚轮脚重叠）`);
+      if (wa && wb && (muxPin === wa || muxPin === wb)) {
+        lines.push(`⚠ SEL=${muxPin} 与滚轮 ${wa}/${wb} 冲突 → 灯带+滚轮会同时失效`);
+      }
+    } else {
+      lines.push("LEDC：LEDC_PIN/CTRL 均不在 {P01,P05,P21,P33}，请在 ledc.c 显式指定 SEL，并避开滚轮脚");
+    }
+  }
+  if (state.pins.LVD_PIN) lines.push(`LVD → POF_LVD_PIN_${state.pins.LVD_PIN}`);
+  lines.push("USB 固定 P02/P03；片内 Flash 占位 P14~P17 勿当板级 IO");
+  const el = document.getElementById("muxHint");
+  if (el) el.textContent = "复用推导： " + lines.join(" · ");
+  return { wheel, lines };
+}
+
+function renderChip() {
+  const wrap = document.getElementById("chipWrap");
+  const positions = pinPositions();
+  const conf = new Set(conflicts().map(([p]) => p));
+
+  let html = `<div class="chip-body"><div class="name">OM6239</div><div class="pkg">QFN32 · DataSheet</div></div>`;
+  for (const pin of CHIP.package_pins) {
+    const { x, y } = positions[pin.name] || { x: 0, y: 0 };
+    if (pin.special) {
+      html += `<div class="pin special" style="left:${x}px;top:${y}px;background:${COLORS.special}" title="封装脚${pin.pkg} ${pin.name}（非 GPIO）">
+        <span class="pname">${pin.name}</span>
+        <span class="plabel">#${pin.pkg}</span>
+      </div>`;
+      continue;
+    }
+    const owners = pinOwners(pin.name);
+    const role = owners[0] ? ROLE_DEFS.find(r => r.id === owners[0]) : null;
+    const color = owners.length ? COLORS[role?.color || "misc"] : COLORS.free;
+    const alt = (pin.alt || []).join("/");
+    const label = owners.length ? shortLabel(owners[0]) : alt;
+    const cls = ["pin"];
+    if (conf.has(pin.name)) cls.push("conflict");
+    if (state.activeRole && state.pins[state.activeRole] === pin.name) cls.push("selected");
+    html += `<div class="${cls.join(" ")}" data-pin="${pin.name}" style="left:${x}px;top:${y}px;background:${color}" title="#${pin.pkg} ${pin.name}${alt ? " / "+alt : ""}${owners.length ? " → "+owners.join(",") : ""}">
+      <span class="pname">${pin.name}</span>
+      <span class="plabel">${label || ("#"+pin.pkg)}</span>
+    </div>`;
+  }
+  wrap.innerHTML = html;
+  wrap.querySelectorAll(".pin[data-pin]").forEach(el => {
+    el.addEventListener("click", () => onPinClick(el.dataset.pin));
+  });
+
+  document.getElementById("legend").innerHTML = Object.entries({
+    key: "按键", wheel: "滚轮", mode: "模式", sensor: "Sensor",
+    led: "指示灯", logo: "LOGO", power: "电源", usb: "USB", flash: "Flash(内)"
+  }).map(([k, n]) => `<span><i class="swatch" style="background:${COLORS[k]};display:inline-block;width:10px;height:10px;border-radius:2px"></i>${n}</span>`).join("");
+
+  deriveMux();
+  renderConflicts();
+}
+
+function renderConflicts() {
+  updateConflictBanner();
+}
+
+function renderRoles() {
+  const list = document.getElementById("roleList");
+  const groups = {};
+  for (const role of ROLE_DEFS) {
+    if (!roleVisible(role)) continue;
+    (groups[role.group] ||= []).push(role);
+  }
+  let html = "";
+  for (const [g, roles] of Object.entries(groups)) {
+    html += `<div class="role-group"><h3>${g}</h3>`;
+    for (const role of roles) {
+      const pin = state.pins[role.id] || "—";
+      const conf = pin !== "—" && pinOwners(pin).length > 1;
+      const active = state.activeRole === role.id ? "active" : "";
+      html += `<div class="role-item ${active} ${conf ? "conflict" : ""}" data-role="${role.id}">
+        <i class="swatch" style="background:${COLORS[role.color]}"></i>
+        <span title="${role.id}">${role.net ? role.net + " → " : ""}${role.id.replace(/_PIN$/,"").replace(/^KEY_/,"")}</span>
+        <span class="role-pin">${pin}</span>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+  list.innerHTML = html;
+  list.querySelectorAll(".role-item").forEach(el => {
+    el.addEventListener("click", () => {
+      state.activeRole = el.dataset.role;
+      renderRoles();
+      renderChip();
+      renderGpioEditor();
+    });
+  });
+}
+
+function ensureGpio(roleId) {
+  if (state.gpio[roleId]) return;
+  const role = ROLE_DEFS.find(r => r.id === roleId);
+  if (role?.gpio) state.gpio[roleId] = [...role.gpio];
+}
+
+function onPinClick(pin) {
+  if (CHIP.internal.includes(pin)) {
+    alert(`${pin} 不在 QFN32 封装上（多为片内 Flash 占位）。板级网名请映射到封装脚；Flash 宏保持 SDK 默认即可。`);
+  }
+  if (!state.activeRole) {
+    const owners = pinOwners(pin);
+    if (owners.length) {
+      state.activeRole = owners[0];
+      renderRoles();
+      renderGpioEditor();
+    }
+    return;
+  }
+  const role = ROLE_DEFS.find(r => r.id === state.activeRole);
+  if (role?.fixed) {
+    alert("USB 固定 P02/P03（手册），一般勿改");
+  }
+  state.pins[state.activeRole] = pin;
+  ensureGpio(state.activeRole);
+  renderAll();
+}
+
+function renderGpioEditor() {
+  const box = document.getElementById("gpioEditor");
+  const rid = state.activeRole;
+  if (!rid) {
+    box.innerHTML = `<span class="hint">点击左侧功能后再编辑 GPIO 表项</span>`;
+    return;
+  }
+  ensureGpio(rid);
+  const g = state.gpio[rid];
+  if (!g) {
+    box.innerHTML = `<span class="hint">${rid} 不进入 gpio_config_table</span>`;
+    return;
+  }
+  box.innerHTML = `
+    <div class="form-row"><label>角色</label><span style="font-family:Consolas">${rid} → ${state.pins[rid]||"—"}</span></div>
+    <div class="form-row"><label>模式</label>
+      <select id="gMode">
+        ${Object.keys(MODE_MAP).map(m => `<option value="${m}" ${g[0]===m?"selected":""}>${m}</option>`).join("")}
+      </select>
+    </div>
+    <div class="form-row"><label>上下拉</label>
+      <select id="gPull">
+        ${["PU_NONE","PU_30K","PU_150K","PD_150K"].map(p => `<option ${g[1]===p?"selected":""}>${p}</option>`).join("")}
+      </select>
+    </div>
+    <div class="form-row"><label>初值</label>
+      <select id="gLev">
+        <option value="HIGH" ${g[2]==="HIGH"?"selected":""}>HIGH</option>
+        <option value="LOW" ${g[2]==="LOW"?"selected":""}>LOW</option>
+      </select>
+    </div>`;
+  ["gMode","gPull","gLev"].forEach(id => {
+    document.getElementById(id).addEventListener("change", () => {
+      state.gpio[rid] = [
+        document.getElementById("gMode").value,
+        document.getElementById("gPull").value,
+        document.getElementById("gLev").value
+      ];
+      generateCode();
+    });
+  });
+}
+
+/* ========== 导入 / 预设 ========== */
+function applyPreset(name, opts) {
+  const persist = !(opts && opts.persist === false);
+  if (name === "blank") {
+    state.pins = {
+      USB_DN_PIN: "P02", USB_DP_PIN: "P03",
+      FLASH_CS_PIN: "P17", FLASH_SCLK_PIN: "P15", FLASH_MOSI_PIN: "P16", FLASH_MISO_PIN: "P14"
+    };
+    state.gpio = {};
+    state.lastBoard = "blank";
+    renderAll();
+    if (persist) hostCall("save_session", JSON.stringify({ board: "blank" }));
+    return;
+  }
+  const p = PRESETS[name];
+  if (!p) return;
+  const m = p.meta;
+  document.getElementById("projName").value = m.projName;
+  document.getElementById("consumerName").value = m.consumerName;
+  document.getElementById("projIdL").value = m.projIdL;
+  document.getElementById("projIdH").value = m.projIdH;
+  document.getElementById("verId").value = m.verId;
+  document.querySelector(`input[name="modePins"][value="${m.modePins}"]`).checked = true;
+  document.querySelector(`input[name="logoType"][value="${m.logoType}"]`).checked = true;
+  document.getElementById("hasKeyC0").checked = m.hasKeyC0;
+  document.getElementById("hasExtraKeys").checked = m.hasExtraKeys;
+  document.getElementById("hasDpiPair").checked = !!m.hasDpiPair;
+  document.getElementById("hasSensorNcs").checked = !!m.hasSensorNcs;
+  document.getElementById("hasLedLow").checked = m.hasLedLow;
+  document.querySelector(`input[name="ledPolarity"][value="${m.ledPolarity}"]`).checked = true;
+  document.getElementById("sensorDir").value = m.sensorDir;
+  document.getElementById("wheelMux").value = m.wheelMux;
+
+  state.pins = { ...p.pins };
+  state.gpio = {};
+  for (const role of ROLE_DEFS) {
+    if (role.gpio && state.pins[role.id]) {
+      state.gpio[role.id] = p.gpioOverride[role.id]
+        ? [...p.gpioOverride[role.id]]
+        : [...role.gpio];
+    }
+  }
+  if (m.ledPolarity === "active_low") {
+    for (const id of ["LED_MODE_R_PIN","LED_MODE_G_PIN","LED_MODE_B_PIN","LED_R_PIN","LED_G_PIN","LED_B_PIN"]) {
+      if (state.gpio[id]) state.gpio[id][2] = "HIGH";
+    }
+  }
+  const hintEl = document.getElementById("schematicHint");
+  if (hintEl) hintEl.textContent = p.hint || (name === "BD319" ? "对照 BD319 原理图 + OM6239 手册填 Pxx" : "");
+  state.lastBoard = name;
+  policyState = {};
+  renderAll();
+  reloadPolicyCatalog();
+  if (persist) hostCall("save_session", JSON.stringify({ board: name }));
+}
+
+function parseUserConfigH(text) {
+  const pins = {};
+  const re = /#define\s+(KEY_\w+_PIN|WHEEL_[AB]_PIN|MODE_\w+_PIN|SENSOR_\w+_PIN|LED_\w+_PIN|LEDC(?:_CTRL)?_PIN|USB_5V|BAT_CHG_PIN|LVD_PIN|USB_D[NP]_PIN|FLASH_\w+_PIN)\s+\(?(P\d{2})\)?/g;
+  let m;
+  while ((m = re.exec(text))) {
+    pins[m[1]] = m[2];
+  }
+  // 板型启发式
+  if (pins.MODE_BLE_24G_PIN) {
+    document.querySelector('input[name="modePins"][value="single"]').checked = true;
+  } else if (pins.MODE_24G_PIN || pins.MODE_BLE_PIN) {
+    document.querySelector('input[name="modePins"][value="dual"]').checked = true;
+  }
+  if (pins.LED_R_PIN || pins.LED_G_PIN) {
+    document.querySelector('input[name="logoType"][value="rgb"]').checked = true;
+  } else if (pins.LEDC_PIN) {
+    document.querySelector('input[name="logoType"][value="ledc"]').checked = true;
+  }
+  document.getElementById("hasKeyC0").checked = !!pins.KEY_C0_PIN;
+  document.getElementById("hasExtraKeys").checked = !!(pins.KEY_B_PIN || pins.KEY_DPI_PIN);
+  document.getElementById("hasLedLow").checked = !!pins.LED_LOW_PIN;
+
+  const nameM = text.match(/#define\s+iPROJECT_NAME\s+"([^"]+)"/);
+  const consM = text.match(/#define\s+iCONSUMER_NAME\s+"([^"]+)"/);
+  const idLM = text.match(/#define\s+iPROJECT_ID_L\s+(0x[0-9a-fA-F]+|\d+)/);
+  const idHM = text.match(/#define\s+iPROJECT_ID_H\s+(0x[0-9a-fA-F]+|\d+)/);
+  const verM = text.match(/#define\s+iREAL_VERSION_ID\s+(\d+)/);
+  const dirM = text.match(/#define\s+SENSOR_DIR_DEFINE\s+(SENSOR_DIR_CLOCK_\d)/);
+  const muxM = text.match(/#define\s+WHEEL_IO_SELECT\s+(\w+)/);
+  const softM = text.match(/#define\s+WHEEL_SOFT_GPIO\s+/);
+  if (nameM) document.getElementById("projName").value = nameM[1];
+  if (consM) document.getElementById("consumerName").value = consM[1];
+  if (idLM) document.getElementById("projIdL").value = idLM[1];
+  if (idHM) document.getElementById("projIdH").value = idHM[1];
+  if (verM) document.getElementById("verId").value = verM[1];
+  if (dirM) document.getElementById("sensorDir").value = dirM[1];
+  if (softM) document.getElementById("wheelMux").value = "SOFT_GPIO";
+  else if (muxM) document.getElementById("wheelMux").value = muxM[1];
+
+  // 极性启发式：led_r_on 是否 gpio_clear
+  if (/#define\s+led_r_on\(\)\s+\(gpio_clear/.test(text)) {
+    document.querySelector('input[name="ledPolarity"][value="active_low"]').checked = true;
+  } else if (/#define\s+led_r_on\(\)\s+\(gpio_set/.test(text)) {
+    document.querySelector('input[name="ledPolarity"][value="active_high"]').checked = true;
+  }
+
+  state.pins = { ...state.pins, ...pins };
+  for (const role of ROLE_DEFS) {
+    if (role.gpio && state.pins[role.id]) ensureGpio(role.id);
+  }
+  renderAll();
+}
+
+/* ========== 代码生成 ========== */
+function pad(s, n) { return (s + " ".repeat(n)).slice(0, n); }
+
+function generateH(o) {
+  const p = (id) => state.pins[id];
+  const lines = [];
+  lines.push("/* --- 由 OM6239 PinMux 工具生成的外设引脚区（请合并进 user_config.h）--- */");
+  lines.push("/* 建议同时 #include \"board_features.h\"（见 features 页） */");
+  lines.push("");
+  lines.push("//* 按键配置 */");
+  for (const id of ["KEY_R0_PIN","KEY_R1_PIN","KEY_R2_PIN","KEY_PAIR_PIN","KEY_C0_PIN","KEY_B_PIN","KEY_P_PIN","KEY_DPI_PIN","KEY_DPI_SUB_PIN","KEY_DPI_ADD_PIN"]) {
+    const role = ROLE_DEFS.find(r => r.id === id);
+    if (!roleVisible(role) || !p(id)) continue;
+    lines.push(`#define ${pad(id, 22)} (${p(id)})`);
+  }
+  lines.push("");
+  lines.push("//* IO口唤醒配置 */");
+  const wake = ["KEY_R0_PIN","KEY_R1_PIN","KEY_R2_PIN","KEY_PAIR_PIN"].filter(id => p(id));
+  lines.push(`#define PIN_WAKE_UP_MASK        ${wake.map(id => `(1<<${id})`).join(" | ")}|(1<<SENSOR_MOTION_PIN)`);
+  lines.push(`#define KEY_PIN_WAKE_UP_EN()    ${wake.map(id => `drv_pmu_wakeup_pin_set(${id}, PMU_PIN_WAKEUP_TYPE_FALL)`).join("; \\\n                                ")}; \\`);
+  lines.push(`                                drv_pmu_wakeup_pin_set(SENSOR_MOTION_PIN, PMU_PIN_WAKEUP_TYPE_FALL);`);
+  lines.push(`#define KEY_PIN_WAKE_UP_DIS()   ${wake.map(id => `drv_pmu_wakeup_pin_set(${id}, PMU_PIN_WAKEUP_TYPE_DISABLE)`).join("; \\\n                                ")}; \\`);
+  lines.push(`                                drv_pmu_wakeup_pin_set(SENSOR_MOTION_PIN, PMU_PIN_WAKEUP_TYPE_DISABLE);`);
+  lines.push("");
+  lines.push("//* 滚轮IO口配置 */");
+  if (p("WHEEL_A_PIN")) lines.push(`#define WHEEL_A_PIN             (${p("WHEEL_A_PIN")})`);
+  if (p("WHEEL_B_PIN")) lines.push(`#define WHEEL_B_PIN             (${p("WHEEL_B_PIN")})`);
+  if (o.wheelMux === "SOFT_GPIO") {
+    lines.push("/* 滚轮不在硬件 Encoder 对上：业务侧请 GPIO 软解码；下列宏仅满足 drv_encoder 编译 */");
+    lines.push("#define WHEEL_SOFT_GPIO         1");
+    lines.push("#ifndef WHEEL_IO_SELECT");
+    lines.push("#define WHEEL_IO_SELECT         ENCODER_PINMUX_SEL_IO_00_01");
+    lines.push("#endif");
+  } else {
+    lines.push(`#define WHEEL_IO_SELECT         ${o.wheelMux}`);
+  }
+  lines.push("");
+
+  if (o.modeDual) {
+    if (p("MODE_24G_PIN")) lines.push(`#define MODE_24G_PIN            (${p("MODE_24G_PIN")})`);
+    if (p("MODE_BLE_PIN")) lines.push(`#define MODE_BLE_PIN            (${p("MODE_BLE_PIN")})`);
+  } else {
+    lines.push("//* 模式检测脚配置 */");
+    if (p("MODE_BLE_24G_PIN")) lines.push(`#define MODE_BLE_24G_PIN        (${p("MODE_BLE_24G_PIN")})`);
+    lines.push("//{\n    #define MODE_BLE_CHECK      0\n    #define MODE_24G_CHECK      1\n//}");
+  }
+  lines.push("");
+  lines.push("//* SENSOR IO口配置 */");
+  for (const id of ["SENSOR_MOTION_PIN","SENSOR_SCLK_PIN","SENSOR_SDIO_PIN","SENSOR_NCS_PIN"]) {
+    const role = ROLE_DEFS.find(r => r.id === id);
+    if (!roleVisible(role) || !p(id)) continue;
+    lines.push(`#define ${pad(id, 22)} (${p(id)})`);
+  }
+  lines.push(`#define SENSOR_DIR_DEFINE       ${o.sensorDir}`);
+  lines.push(`#define SENSOR_DIR_CLOCK_0      1`);
+  lines.push(`#define SENSOR_DIR_CLOCK_3      2`);
+  lines.push(`#define SENSOR_DIR_CLOCK_6      3`);
+  lines.push(`#define SENSOR_DIR_CLOCK_9      4`);
+  lines.push("");
+
+  const on = o.ledPolarity === "active_high" ? "gpio_set" : "gpio_clear";
+  const off = o.ledPolarity === "active_high" ? "gpio_clear" : "gpio_set";
+  const allOff = o.ledPolarity === "active_high" ? "DATAOUTCLR" : "DATAOUTSET";
+  const allOn = o.ledPolarity === "active_high" ? "DATAOUTSET" : "DATAOUTCLR";
+
+  lines.push("//* LED指示灯配置 */");
+  for (const id of ["LED_MODE_R_PIN","LED_MODE_G_PIN","LED_MODE_B_PIN","LED_LOW_PIN"]) {
+    const role = ROLE_DEFS.find(r => r.id === id);
+    if (!roleVisible(role) || !p(id)) continue;
+    lines.push(`#define ${pad(id, 22)} (${p(id)})`);
+  }
+  lines.push("//{");
+  lines.push(`    #define led_r_on()            (${on}(LED_MODE_R_PIN))`);
+  lines.push(`    #define led_r_off()           (${off}(LED_MODE_R_PIN))`);
+  lines.push(`    #define led_g_on()            (${on}(LED_MODE_G_PIN))`);
+  lines.push(`    #define led_g_off()           (${off}(LED_MODE_G_PIN))`);
+  lines.push(`    #define led_b_on()            (${on}(LED_MODE_B_PIN))`);
+  lines.push(`    #define led_b_off()           (${off}(LED_MODE_B_PIN))`);
+  if (o.hasLedLow && p("LED_LOW_PIN")) {
+    lines.push(`    #define led_low_off()         (${off}(LED_LOW_PIN))`);
+    lines.push(`    #define led_low_on()          (${on}(LED_LOW_PIN))`);
+  }
+  lines.push(`    #define mode_led_all_off()    (OM_GPIO0->${allOff} = (1<<LED_MODE_R_PIN)|(1<<LED_MODE_G_PIN)|(1<<LED_MODE_B_PIN))`);
+  lines.push(`    #define mode_led_all_on()     (OM_GPIO0->${allOn} = (1<<LED_MODE_R_PIN)|(1<<LED_MODE_G_PIN)|(1<<LED_MODE_B_PIN))`);
+  lines.push("//}");
+  lines.push("");
+  lines.push(`#define LED_MODE_24G_PIN        LED_MODE_R_PIN`);
+  lines.push(`#define LED_MODE_BT1_PIN        LED_MODE_G_PIN`);
+  lines.push(`#define LED_MODE_BT0_PIN        LED_MODE_B_PIN`);
+  lines.push("//{");
+  lines.push(`    #define led_bt0_on()            (${on}(LED_MODE_BT0_PIN))`);
+  lines.push(`    #define led_bt0_off()           (${off}(LED_MODE_BT0_PIN))`);
+  lines.push(`    #define led_24g_on()            (${on}(LED_MODE_24G_PIN))`);
+  lines.push(`    #define led_24g_off()           (${off}(LED_MODE_24G_PIN))`);
+  lines.push(`    #define led_bt1_on()            (${on}(LED_MODE_BT1_PIN))`);
+  lines.push(`    #define led_bt1_off()           (${off}(LED_MODE_BT1_PIN))`);
+  lines.push("//}");
+  lines.push("");
+
+  lines.push("//* LOGO灯配置 */");
+  if (o.logoLedc) {
+    if (p("LEDC_CTRL_PIN")) lines.push(`#define LEDC_CTRL_PIN           (${p("LEDC_CTRL_PIN")})`);
+    if (p("LEDC_PIN")) lines.push(`#define LEDC_PIN                (${p("LEDC_PIN")})`);
+    lines.push(`#define LEDC_RGB_NUMBER         6`);
+    lines.push(`#define LEDC_RGB_DATA_SIZE      LEDC_RGB_NUMBER*3`);
+  } else {
+    for (const id of ["LED_R_PIN","LED_G_PIN","LED_B_PIN"]) {
+      if (p(id)) lines.push(`#define ${pad(id, 22)} (${p(id)})`);
+    }
+  }
+  lines.push("");
+  lines.push("//* USB 5V以及充电检测配置 */");
+  if (p("USB_5V")) lines.push(`#define USB_5V                  (${p("USB_5V")})`);
+  if (p("BAT_CHG_PIN")) lines.push(`#define BAT_CHG_PIN             (${p("BAT_CHG_PIN")})`);
+  lines.push(`#define BAT_CHG_OK              (gpio_read(BAT_CHG_PIN))`);
+  lines.push(`#define USB_5V_PIN              (gpio_read(USB_5V))`);
+  lines.push("");
+  lines.push("//* LVD检测引脚 */");
+  if (p("LVD_PIN")) {
+    lines.push(`#define LVD_PIN                 (${p("LVD_PIN")})`);
+    lines.push(`#define LVD_CHECK_INDEX         (POF_LVD_PIN_${p("LVD_PIN")})`);
+  }
+  lines.push("");
+  lines.push("//* USB */");
+  lines.push(`#define USB_DN_PIN              (${p("USB_DN_PIN") || "P02"})`);
+  lines.push(`#define USB_DP_PIN              (${p("USB_DP_PIN") || "P03"})`);
+  lines.push("");
+  for (const id of ["FLASH_CS_PIN","FLASH_SCLK_PIN","FLASH_MOSI_PIN","FLASH_MISO_PIN"]) {
+    if (p(id)) lines.push(`#define ${pad(id, 22)} (${p(id)})`);
+  }
+  lines.push("");
+  lines.push("//* 当前UART仅调试用 */");
+  lines.push(`#define UART_PIN                (KEY_R0_PIN)`);
+  lines.push("");
+  lines.push(`#define iPROJECT_ID_H  ${o.projIdH}`);
+  lines.push(`#define iPROJECT_ID_L  ${o.projIdL}`);
+  lines.push(`#define iREAL_VERSION_ID        ${o.verId}`);
+  lines.push(`#define iCONSUMER_NAME "${o.consumerName}"`);
+  lines.push(`#define iPROJECT_NAME  "${o.projName}"`);
+  return lines.join("\n");
+}
+
+function generateCTable() {
+  const order = ROLE_DEFS.filter(r => roleVisible(r) && r.gpio && state.pins[r.id]);
+  const lines = [];
+  lines.push("const user_gpio_config_t gpio_config_table[] = {");
+  lines.push("    // PIN脚             模式                            上拉/下拉      初始电平");
+  for (const role of order) {
+    ensureGpio(role.id);
+    const [mode, pull, lev] = state.gpio[role.id];
+    const comment = role.group === "按键" && role.id === "KEY_R0_PIN" ? "      /* 按键配置 */"
+      : role.id === "WHEEL_A_PIN" ? "      /* 滚轮配置 */"
+      : role.id.startsWith("FLASH_") && role.id === "FLASH_CS_PIN" ? "       /* FLASH SPI IO CONFIG ，don't change */"
+      : "";
+    lines.push(`    {${pad(role.id+",", 18)} ${pad(MODE_MAP[mode]+",", 32)} ${pad(pull+",", 12)} ${LEVEL_MAP[lev]}},${comment}`);
+  }
+  lines.push("};");
+  return lines.join("\n");
+}
+
+function generateDiff() {
+  const mux = deriveMux();
+  const assigned = Object.entries(state.pins).filter(([, v]) => v).sort((a, b) => a[0].localeCompare(b[0]));
+  const lines = [];
+  lines.push("=== 当前板配置摘要（对照原理图+OM6239手册）===");
+  lines.push(`项目: ${opts().projName}  已分配功能: ${assigned.length}`);
+  lines.push("");
+  lines.push("--- 引脚 ---");
+  for (const [k, v] of assigned) {
+    const meta = chipMeta(v);
+    const pkg = meta ? `封装#${meta.pkg}` : (CHIP.internal.includes(v) ? "非封装/内部" : "");
+    lines.push(`${k.padEnd(22)} ${v}  ${pkg}`);
+  }
+  lines.push("");
+  lines.push("--- 复用推导 ---");
+  lines.push(...mux.lines);
+  lines.push("");
+  lines.push("--- 有限性（别指望全自动）---");
+  lines.push("· 原理图网名→Pxx 仍需人眼对手册封装图");
+  lines.push("· 写入工程时默认同步 key_io / sleep 契约（可取消勾选）");
+  lines.push("· 灯效路径、软滚轮解码等仍可能需人工合并 board_features");
+  lines.push("· Keil 工程文件与 SDK 版本不由本工具改");
+  lines.push("· 归档样例 CH04/KC536 仅作对照；BD319 下拉已含完整原理图脚位");
+  if (opts().wheelMux === "SOFT_GPIO") {
+    lines.push("· 本板滚轮为 SOFT_GPIO：合并脚位后仍需手改 encoder 扫描");
+  }
+  return lines.join("\n");
+}
+
+function buildBoardDesc() {
+  const o = opts();
+  return {
+    schema: "om6239-board-desc/v2",
+    chip: "OM6239",
+    meta: {
+      projName: o.projName,
+      consumerName: o.consumerName,
+      projIdL: o.projIdL,
+      projIdH: o.projIdH,
+      verId: Number(o.verId),
+      modePins: o.modePins,
+      logoType: o.logoType,
+      hasKeyC0: o.hasKeyC0,
+      hasExtraKeys: o.hasExtraKeys,
+      hasDpiPair: o.hasDpiPair,
+      hasSensorNcs: o.hasSensorNcs,
+      hasLedLow: o.hasLedLow,
+      ledPolarity: o.ledPolarity,
+      sensorDir: o.sensorDir,
+      wheelMux: o.wheelMux
+    },
+    features: featuresOf(o),
+    pins: { ...state.pins },
+    gpio: { ...state.gpio },
+    derived: {
+      LVD_CHECK_INDEX: state.pins.LVD_PIN ? `POF_LVD_PIN_${state.pins.LVD_PIN}` : null,
+      WHEEL_IO_SELECT: o.wheelMux === "SOFT_GPIO" ? null : o.wheelMux,
+      WHEEL_SOFT_GPIO: o.wheelMux === "SOFT_GPIO"
+    }
+  };
+}
+
+function runValidation() {
+  const o = opts();
+  const p = (id) => state.pins[id];
+  const issues = [];
+  const add = (level, code, msg) => issues.push({ level, code, msg });
+
+  // 1) 同脚冲突
+  for (const [pin, ids] of conflicts()) {
+    add("error", "PIN_CONFLICT", `${pin} 被多个功能占用: ${ids.join(", ")}`);
+  }
+
+  // 2) features 对应脚必须存在
+  const need = [
+    ["KEY_R0_PIN", true], ["KEY_R1_PIN", true], ["KEY_R2_PIN", true], ["KEY_PAIR_PIN", false],
+    ["WHEEL_A_PIN", true], ["WHEEL_B_PIN", true],
+    ["SENSOR_MOTION_PIN", true], ["SENSOR_SCLK_PIN", true], ["SENSOR_SDIO_PIN", true],
+    ["SENSOR_NCS_PIN", o.hasSensorNcs],
+    ["LED_MODE_R_PIN", true], ["LED_MODE_G_PIN", true], ["LED_MODE_B_PIN", true],
+    ["USB_5V", true], ["BAT_CHG_PIN", true], ["LVD_PIN", true],
+    ["USB_DN_PIN", true], ["USB_DP_PIN", true],
+    ["FLASH_CS_PIN", true], ["FLASH_SCLK_PIN", true], ["FLASH_MOSI_PIN", true], ["FLASH_MISO_PIN", true],
+    ["KEY_C0_PIN", o.hasKeyC0],
+    ["KEY_B_PIN", o.hasExtraKeys], ["KEY_P_PIN", o.hasExtraKeys], ["KEY_DPI_PIN", o.hasExtraKeys],
+    ["KEY_DPI_SUB_PIN", o.hasDpiPair], ["KEY_DPI_ADD_PIN", o.hasDpiPair],
+    ["LED_LOW_PIN", o.hasLedLow],
+    ["MODE_24G_PIN", o.modeDual], ["MODE_BLE_PIN", o.modeDual],
+    ["MODE_BLE_24G_PIN", o.modeSingle],
+    ["LEDC_PIN", o.logoLedc], ["LEDC_CTRL_PIN", o.logoLedc],
+    ["LED_R_PIN", o.logoRgb], ["LED_G_PIN", o.logoRgb], ["LED_B_PIN", o.logoRgb],
+  ];
+  for (const [id, en] of need) {
+    if (en && !p(id)) {
+      const filled = Object.keys(state.pins).filter(k =>
+        state.pins[k] && !["USB_DN_PIN","USB_DP_PIN","FLASH_CS_PIN","FLASH_SCLK_PIN","FLASH_MOSI_PIN","FLASH_MISO_PIN"].includes(k)
+      ).length;
+      add(filled < 4 ? "info" : "error", "MISSING_PIN", `已启用功能但未分配引脚: ${id}`);
+    }
+  }
+
+  // 3) 互斥
+  if (o.modeDual && o.modeSingle) add("error", "MODE_MUTEX", "模式脚 dual/single 不应同时为真");
+  if (o.logoLedc && o.logoRgb) add("error", "LOGO_MUTEX", "LOGO 不可同时为 LEDC 与 RGB");
+  if (o.hasExtraKeys && o.hasDpiPair && p("KEY_DPI_PIN") && (p("KEY_DPI_SUB_PIN") || p("KEY_DPI_ADD_PIN"))) {
+    add("warn", "DPI_NAMING", "同时存在 KEY_DPI_PIN 与 KEY_DPI_SUB/ADD，请确认 key_io 用哪套命名");
+  }
+
+  // 4) 滚轮 PinMux 与脚号联动
+  const wa = p("WHEEL_A_PIN"), wb = p("WHEEL_B_PIN");
+  if (wa && wb) {
+    const set01 = new Set(["P00","P01"]);
+    const set20 = new Set(["P20","P21"]);
+    const set24 = new Set(["P24","P25"]);
+    const both01 = set01.has(wa) && set01.has(wb);
+    const both20 = set20.has(wa) && set20.has(wb);
+    const both24 = set24.has(wa) && set24.has(wb);
+    const soft = o.wheelMux === "SOFT_GPIO";
+    const hwOk = both01 || both20 || both24;
+    if (o.wheelMux === "ENCODER_PINMUX_SEL_IO_00_01" && !both01) {
+      add("error", "WHEEL_MUX", `WHEEL 脚为 ${wa}/${wb}，但 WHEEL_IO_SELECT=IO_00_01`);
+    }
+    if (o.wheelMux === "ENCODER_PINMUX_SEL_IO_20_21" && !both20) {
+      add("error", "WHEEL_MUX", `WHEEL 脚为 ${wa}/${wb}，但 WHEEL_IO_SELECT=IO_20_21`);
+    }
+    if (o.wheelMux === "ENCODER_PINMUX_SEL_IO_24_25" && !both24) {
+      add("error", "WHEEL_MUX", `WHEEL 脚为 ${wa}/${wb}，但 WHEEL_IO_SELECT=IO_24_25`);
+    }
+    if (!hwOk) {
+      if (soft) {
+        add("info", "WHEEL_SOFT", `滚轮 ${wa}/${wb}：SOFT_GPIO。需改 key_io/main 软解码；仍会生成占位 WHEEL_IO_SELECT 以便编译`);
+      } else {
+        add("error", "WHEEL_PAIR", `滚轮脚 ${wa}/${wb} 非硬件对，请改选 SOFT_GPIO 或改到 00_01/20_21/24_25`);
+      }
+    } else if (soft) {
+      add("warn", "WHEEL_SOFT", `脚在硬件对上却选了 SOFT_GPIO，通常应改用对应 IO_00_01 / IO_20_21 / IO_24_25`);
+    }
+  }
+
+  // 5) LVD 宏联动
+  if (p("LVD_PIN")) {
+    add("info", "LVD_INDEX", `LVD_CHECK_INDEX 应使用 POF_LVD_PIN_${p("LVD_PIN")}`);
+  }
+
+  // 6) LEDC_SEL：手册脚 + 与滚轮互斥（KC536→CH04：IO_01 抢 P01 滚轮）
+  if (o.logoLedc) {
+    const muxPin = inferLedcMuxPin();
+    const wa = p("WHEEL_A_PIN"), wb = p("WHEEL_B_PIN");
+    if (!muxPin) {
+      add("warn", "LEDC_SEL",
+        "LEDC_PIN/CTRL 均不在手册 SEL={P01,P05,P21,P33}：须在 ledc.c 写 drv_pmu_ledc_sel，并避开滚轮脚");
+    } else {
+      add("info", "LEDC_SEL", `建议 drv_pmu_ledc_sel(PMU_LEDC_SEL_${CHIP.ledcSel[muxPin]}) @ ${muxPin}`);
+      if (wa && wb && (muxPin === wa || muxPin === wb)) {
+        add("error", "LEDC_WHEEL",
+          `LEDC_SEL 占用 ${muxPin}，与滚轮 ${wa}/${wb} 冲突（会抢走编码器脚，灯带+滚轮同时挂）`);
+      }
+      // 滚轮在 00_01 时禁止推荐 IO_01
+      if (wa && wb && new Set(["P00", "P01"]).has(wa) && new Set(["P00", "P01"]).has(wb) && muxPin === "P01") {
+        add("error", "LEDC_WHEEL", "滚轮在 P00/P01 时不可用 LEDC SEL=IO_01，请改 P05/P21/P33");
+      }
+      if (wa && wb && new Set(["P20", "P21"]).has(wa) && new Set(["P20", "P21"]).has(wb) && muxPin === "P21") {
+        add("error", "LEDC_WHEEL", "滚轮在 P20/P21 时不可用 LEDC SEL=IO_21，请改 P01/P05/P33");
+      }
+    }
+  }
+
+  // 7) 代码契约
+  for (const c of CODE_CONTRACTS) {
+    if (!c.when(o)) continue;
+    if (c.note && (!c.macros || !c.macros.length)) {
+      add(c.level || "info", "CONTRACT", `[${c.file}] ${c.note}`);
+      continue;
+    }
+    if (c.level === "warn" && c.note && !c.macros.every(m => p(m))) {
+      const missing = c.macros.filter(m => !p(m));
+      if (missing.length) add("warn", "CONTRACT", `[${c.file}] ${c.note}（缺: ${missing.join(", ")}）`);
+      continue;
+    }
+    if (c.level === "warn") continue;
+    for (const m of c.macros) {
+      if (!p(m)) add(c.level || "error", "CONTRACT", `[${c.file}] 需要宏 ${m}`);
+    }
+  }
+
+  // 8) 换板手改清单（阶段提示）
+  add("info", "CHECKLIST", "A/B 完成后：点「换板体检」扫 C/D（ledc 文件、RTE、polling、SEL≠滚轮）");
+  add("info", "CHECKLIST", "有金机时：选金机 →「金机清单」/「目录对比」(E:\\tools\\compare) 对照 DIFF 与仅金机文件");
+  add("info", "CHECKLIST", "合并后请人工核对: periph_gpio_sleep_set / key_io 扫描 / 无线改灯用 Cmd_Idle_Cfg");
+  if (o.logoRgb) add("info", "CHECKLIST", "RGB LOGO 板：确认工程未再编译依赖 LEDC_PIN 的 ledc 动画路径，或加 BOARD_LOGO_LEDC 开关");
+  if (o.modeSingle) add("info", "CHECKLIST", "单模式脚板：sleep/模式扫描应使用 MODE_BLE_24G_PIN，不要再读 MODE_24G/BLE");
+
+  // 极性与 GPIO 初值一致性提示
+  if (o.ledPolarity === "active_low") {
+    for (const id of ["LED_MODE_R_PIN","LED_MODE_G_PIN","LED_MODE_B_PIN"]) {
+      if (state.gpio[id] && state.gpio[id][2] === "LOW") {
+        add("warn", "LED_INIT", `${id} 为低电平亮，GPIO 初值=LOW 上电可能常亮，建议初值 HIGH`);
+      }
+    }
+  }
+
+  return issues;
+}
+
+function generateValidateReport() {
+  const issues = runValidation();
+  const nErr = issues.filter(i => i.level === "error").length;
+  const nWarn = issues.filter(i => i.level === "warn").length;
+  const lines = [];
+  lines.push(`=== 板描述校验 ===  error=${nErr}  warn=${nWarn}  info=${issues.length - nErr - nWarn}`);
+  lines.push(`项目: ${opts().projName}  chip: OM6239`);
+  lines.push("");
+  if (!issues.filter(i => i.level === "error" || i.level === "warn").length) {
+    lines.push("✓ 无 error / warn（仍请看 info 清单）");
+    lines.push("");
+  }
+  for (const i of issues) {
+    const tag = i.level === "error" ? "[ERR ]" : i.level === "warn" ? "[WARN]" : "[INFO]";
+    lines.push(`${tag} ${i.code}: ${i.msg}`);
+  }
+  lines.push("");
+  lines.push("--- Features 快照 ---");
+  const f = featuresOf(opts());
+  for (const [k, v] of Object.entries(f)) lines.push(`${k}=${v ? 1 : 0}`);
+  return lines.join("\n");
+}
+
+function generateFeaturesH() {
+  const f = featuresOf(opts());
+  const o = opts();
+  const lines = [];
+  lines.push("/**");
+  lines.push(" * board_features.h — 由 OM6239 PinMux 生成");
+  lines.push(` * board: ${o.projName}`);
+  lines.push(" * 业务代码请用 #if BOARD_HAS_xxx / BOARD_LOGO_LEDC 包住板差异，避免直接假设宏存在。");
+  lines.push(" */");
+  lines.push("#ifndef BOARD_FEATURES_H");
+  lines.push("#define BOARD_FEATURES_H");
+  lines.push("");
+  for (const [k, v] of Object.entries(f)) {
+    lines.push(`#define ${pad(k, 28)} (${v ? 1 : 0})`);
+  }
+  lines.push("");
+  if (o.wheelMux === "SOFT_GPIO") {
+    lines.push("#define BOARD_WHEEL_SOFT_GPIO       (1)");
+    lines.push("/* 无 BOARD_WHEEL_IO_SELECT：业务侧走 GPIO 正交解码 */");
+  } else {
+    lines.push(`#define BOARD_WHEEL_IO_SELECT       ${o.wheelMux}`);
+  }
+  if (state.pins.LVD_PIN) {
+    lines.push(`#define BOARD_LVD_CHECK_INDEX      POF_LVD_PIN_${state.pins.LVD_PIN}`);
+  }
+  lines.push("");
+  lines.push("/* 示例：");
+  lines.push(" * #if BOARD_HAS_KEY_C0");
+  lines.push(" *   ... 矩阵列扫描 ...");
+  lines.push(" * #endif");
+  lines.push(" * #if BOARD_LOGO_LEDC");
+  lines.push(" *   ledc_process();");
+  lines.push(" * #elif BOARD_LOGO_RGB");
+  lines.push(" *   logo_rgb_process();");
+  lines.push(" * #endif");
+  lines.push(" */");
+  lines.push("");
+  lines.push("#endif /* BOARD_FEATURES_H */");
+  return lines.join("\n");
+}
+
+function generateSleepTemplate() {
+  const o = opts();
+  const lines = [];
+  lines.push("/**");
+  lines.push(" * periph_gpio_sleep_set() 板型模板 — 由 PinMux 生成，请合并进 user_config.c");
+  lines.push(` * board: ${o.projName}`);
+  lines.push(" */");
+  lines.push("void periph_gpio_sleep_set()");
+  lines.push("{");
+  lines.push("    gpio_set_pad_buffer(LVD_PIN, PAD_IN_BUFFER_OFF);");
+  lines.push("");
+  lines.push("    gpio_set_pd(WHEEL_A_PIN);");
+  lines.push("    gpio_set_pd(WHEEL_B_PIN);");
+  lines.push("");
+  if (o.logoLedc) {
+    lines.push("#if BOARD_LOGO_LEDC");
+    lines.push("    gpio_dir_in(LEDC_PIN);");
+    lines.push("    gpio_set_pd(LEDC_PIN);");
+    lines.push("#endif");
+  }
+  if (o.hasLedLow) {
+    lines.push("#if BOARD_HAS_LED_LOW");
+    lines.push("    led_low_off();");
+    lines.push("#endif");
+  }
+  lines.push("");
+  if (o.modeDual) {
+    lines.push("#if BOARD_MODE_DUAL_PIN");
+    lines.push("    if (gpio_read(MODE_24G_PIN))");
+    lines.push("        gpio_set_pu(MODE_24G_PIN, PU_30K);");
+    lines.push("    else");
+    lines.push("        gpio_set_pd(MODE_24G_PIN);");
+    lines.push("    if (gpio_read(MODE_BLE_PIN))");
+    lines.push("        gpio_set_pu(MODE_BLE_PIN, PU_30K);");
+    lines.push("    else");
+    lines.push("        gpio_set_pd(MODE_BLE_PIN);");
+    lines.push("#endif");
+  } else {
+    lines.push("#if BOARD_MODE_SINGLE_PIN");
+    lines.push("    if (MODE_BLE_CHECK == gpio_read(MODE_BLE_24G_PIN))");
+    lines.push("        gpio_set_pd(MODE_BLE_24G_PIN);");
+    lines.push("    else");
+    lines.push("        gpio_set_pu(MODE_BLE_24G_PIN, PU_30K);");
+    lines.push("#endif");
+  }
+  if (o.logoRgb) {
+    lines.push("");
+    lines.push("#if BOARD_LOGO_RGB");
+    lines.push("    /* RGB LOGO：按原理图决定休眠时拉低/浮空，以下为常见关灯写法 */");
+    lines.push("    // gpio_set(LED_R_PIN); gpio_set(LED_G_PIN); gpio_set(LED_B_PIN); /* active_low 灭 */");
+    lines.push("#endif");
+  }
+  lines.push("");
+  lines.push("    OM_RCC->CLKGATE = 0x0742;");
+  lines.push("}");
+  return lines.join("\n");
+}
+
+function generateCode() {
+  let text = "";
+  if (state.tab === "validate") text = generateValidateReport();
+  else if (state.tab === "h") text = generateH(opts());
+  else if (state.tab === "c") text = generateCTable();
+  else if (state.tab === "feat") text = generateFeaturesH();
+  else if (state.tab === "sleep") text = generateSleepTemplate();
+  else if (state.tab === "refs") text = formatBizScan(lastBizScan);
+  else if (state.tab === "port") text = formatPortCheck(lastPortCheck);
+  else if (state.tab === "golden") text = formatGoldenInv(lastGoldenInv);
+  else if (state.tab === "synth") text = formatSynthTab();
+  else text = generateDiff();
+  document.getElementById("codeOut").value = text;
+  updateConflictBanner();
+}
+
+function updateConflictBanner() {
+  const box = document.getElementById("conflictBox");
+  const issues = runValidation();
+  const nErr = issues.filter(i => i.level === "error").length;
+  const nWarn = issues.filter(i => i.level === "warn").length;
+  box.style.cssText = "";
+  if (nErr) {
+    box.className = "conflicts";
+    box.textContent = `校验: ${nErr} error, ${nWarn} warn — 见右侧「校验报告」`;
+  } else if (nWarn) {
+    box.className = "conflicts";
+    box.style.cssText = "border-color:var(--warn);background:#3a3220;color:#ffe0a0";
+    box.textContent = `校验: 0 error, ${nWarn} warn — 见右侧「校验报告」`;
+  } else {
+    box.className = "conflicts empty";
+    box.textContent = "校验通过（无 error / warn）";
+  }
+}
+
+function renderAll() {
+  renderRoles();
+  renderChip();
+  renderGpioEditor();
+  generateCode();
+}
+
+/* ========== 事件 ========== */
+document.getElementById("presetSelect").addEventListener("change", (e) => {
+  if (e.target.value) applyPreset(e.target.value);
+  e.target.value = "";
+});
+
+document.getElementById("importH").addEventListener("change", async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  parseUserConfigH(await f.text());
+  e.target.value = "";
+});
+
+document.getElementById("importJson").addEventListener("change", async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    applyBoardDesc(data);
+  } catch (err) {
+    alert("JSON 解析失败: " + err.message);
+  }
+  e.target.value = "";
+});
+
+function applyBoardDesc(data) {
+  const m = data.meta || data;
+  if (m.projName != null) document.getElementById("projName").value = m.projName;
+  if (m.consumerName != null) document.getElementById("consumerName").value = m.consumerName;
+  if (m.projIdL != null) document.getElementById("projIdL").value = m.projIdL;
+  if (m.projIdH != null) document.getElementById("projIdH").value = m.projIdH;
+  if (m.verId != null) document.getElementById("verId").value = m.verId;
+  if (m.modePins) document.querySelector(`input[name="modePins"][value="${m.modePins}"]`).checked = true;
+  if (m.logoType) document.querySelector(`input[name="logoType"][value="${m.logoType}"]`).checked = true;
+  if (m.hasKeyC0 != null) document.getElementById("hasKeyC0").checked = m.hasKeyC0;
+  if (m.hasExtraKeys != null) document.getElementById("hasExtraKeys").checked = m.hasExtraKeys;
+  if (m.hasDpiPair != null) document.getElementById("hasDpiPair").checked = m.hasDpiPair;
+  if (m.hasSensorNcs != null) document.getElementById("hasSensorNcs").checked = m.hasSensorNcs;
+  if (m.hasLedLow != null) document.getElementById("hasLedLow").checked = m.hasLedLow;
+  if (m.ledPolarity) document.querySelector(`input[name="ledPolarity"][value="${m.ledPolarity}"]`).checked = true;
+  if (m.sensorDir) document.getElementById("sensorDir").value = m.sensorDir;
+  if (m.wheelMux) document.getElementById("wheelMux").value = m.wheelMux;
+  if (data.pins) state.pins = { ...data.pins };
+  state.gpio = {};
+  if (data.gpio) {
+    for (const [k, v] of Object.entries(data.gpio)) state.gpio[k] = [...v];
+  } else {
+    for (const role of ROLE_DEFS) {
+      if (role.gpio && state.pins[role.id]) ensureGpio(role.id);
+    }
+  }
+  renderAll();
+}
+
+document.getElementById("btnGen").addEventListener("click", () => {
+  state.tab = "validate";
+  document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === "validate"));
+  generateCode();
+});
+document.getElementById("btnClearPin").addEventListener("click", () => {
+  if (!state.activeRole) return;
+  delete state.pins[state.activeRole];
+  renderAll();
+});
+
+document.getElementById("btnCopy").addEventListener("click", async () => {
+  await navigator.clipboard.writeText(document.getElementById("codeOut").value);
+  alert("已复制到剪贴板");
+});
+
+function download(name, content) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([content], { type: "text/plain" }));
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+document.getElementById("btnDlH").addEventListener("click", () => download("user_config_pins.h", generateH(opts())));
+document.getElementById("btnDlC").addEventListener("click", () => download("gpio_config_table.c", generateCTable()));
+document.getElementById("btnDlFeat").addEventListener("click", () => download("board_features.h", generateFeaturesH()));
+document.getElementById("btnDlSleep").addEventListener("click", () => download("periph_gpio_sleep_set.c", generateSleepTemplate()));
+
+document.getElementById("btnExportJson").addEventListener("click", () => {
+  const data = buildBoardDesc();
+  download(`${data.meta.projName || "board"}_board_desc.json`, JSON.stringify(data, null, 2));
+});
+
+function updateProjBindBar(info) {
+  const el = document.getElementById("projBindBar");
+  if (!el) return;
+  if (info) lastProjInfo = Object.assign({}, lastProjInfo || {}, info);
+  const i = lastProjInfo || info || {};
+  const parts = [];
+  if (i.periph) parts.push(`目标: ${i.periph}`);
+  else if (i.root) parts.push(`目标: ${i.root}`);
+  else parts.push("目标: 未绑定（选工程目录）");
+  if (i.golden_root) parts.push(`金机: ${i.golden_root}`);
+  else parts.push("金机: 未选");
+  if (i.donor_root) parts.push(`供体: ${i.donor_root}`);
+  else parts.push("供体: 未选");
+  if (i.compare_root) parts.push(`compare: ${i.compare_root}`);
+  el.textContent = parts.join("  |  ");
+  el.style.color = i.periph ? "var(--ok, #3dd68c)" : "";
+}
+
+async function hostCallArgs(method, ...args) {
+  try {
+    if (window.pywebview && window.pywebview.api && window.pywebview.api[method]) {
+      return await window.pywebview.api[method](...args);
+    }
+  } catch (e) {
+    console.warn("hostCallArgs", method, e);
+    return { ok: false, message: String(e) };
+  }
+  return { ok: false, message: "请用 launch.ps1 / python launch.py 启动桌面版后再写入工程" };
+}
+
+document.getElementById("btnPickProj").addEventListener("click", async () => {
+  const r = await hostCallArgs("pick_project_dir");
+  if (r && r.ok) {
+    updateProjBindBar(r);
+    alert(r.message || "已绑定工程");
+  } else {
+    alert((r && r.message) || "选择失败");
+  }
+});
+
+document.getElementById("btnScanBiz").addEventListener("click", async () => {
+  const r = await hostCallArgs("scan_biz_refs");
+  lastBizScan = r;
+  state.tab = "refs";
+  document.querySelectorAll(".tabs button").forEach(b => {
+    b.classList.toggle("active", b.dataset.tab === "refs");
+  });
+  generateCode();
+  if (r && r.ok) {
+    const issueN = (r.issues || []).length;
+    alert(`扫描完成：${r.ref_count} 处引用` + (issueN ? `，${issueN} 条契约提示` : "") + "\n见右侧「业务引用」页");
+  } else {
+    alert((r && r.message) || "扫描失败");
+  }
+});
+
+document.getElementById("btnPortCheck").addEventListener("click", async () => {
+  const feat = bizFeaturesOf(opts());
+  const r = await hostCallArgs("scan_port_checklist", JSON.stringify(feat));
+  lastPortCheck = r;
+  state.tab = "port";
+  document.querySelectorAll(".tabs button").forEach(b => {
+    b.classList.toggle("active", b.dataset.tab === "port");
+  });
+  generateCode();
+  if (r && r.ok) {
+    const s = r.summary || {};
+    alert((r.message || "体检完成") + `\nerror=${s.error||0} warn=${s.warn||0}\n见右侧「换板体检」页`);
+  } else {
+    alert((r && r.message) || "体检失败");
+  }
+});
+
+function showGoldenTab(r) {
+  lastGoldenInv = r;
+  state.tab = "golden";
+  document.querySelectorAll(".tabs button").forEach(b => {
+    b.classList.toggle("active", b.dataset.tab === "golden");
+  });
+  generateCode();
+}
+
+document.getElementById("btnPickGolden").addEventListener("click", async () => {
+  const r = await hostCallArgs("pick_golden_dir");
+  if (r && r.ok) {
+    updateProjBindBar({ golden_root: r.golden_root });
+    alert(r.message || "已选金机");
+  } else {
+    alert((r && r.message) || "选择失败");
+  }
+});
+
+document.getElementById("btnInvGolden").addEventListener("click", async () => {
+  const r = await hostCallArgs("inventory_golden");
+  showGoldenTab(r);
+  alert((r && r.message) || (r && r.ok ? "清单完成" : "清单失败"));
+});
+
+document.getElementById("btnOpenCompare").addEventListener("click", async () => {
+  const r = await hostCallArgs("open_golden_compare");
+  if (r && r.compare_root) updateProjBindBar({ compare_root: r.compare_root });
+  alert((r && r.message) || "无法打开目录对比");
+});
+
+document.getElementById("btnExportDiff").addEventListener("click", async () => {
+  const r = await hostCallArgs("export_golden_diff", "");
+  if (r && r.ok) showGoldenTab(r);
+  alert((r && r.message) || "导出失败");
+});
+
+document.getElementById("btnSaveBoard").addEventListener("click", async () => {
+  const name = document.getElementById("presetSelect").value;
+  if (!name || name === "blank") {
+    alert("请先在下拉框选择板名（如 BD319）");
+    return;
+  }
+  const r = await hostCallArgs("save_board_json", name, JSON.stringify(buildBoardDesc()));
+  alert((r && r.message) || "保存失败");
+});
+
+document.getElementById("btnPickDonor").addEventListener("click", async () => {
+  const r = await hostCallArgs("pick_donor_dir");
+  if (r && r.ok) updateProjBindBar({ donor_root: r.donor_root });
+  alert((r && r.message) || "已取消");
+});
+
+document.getElementById("btnSynthGolden").addEventListener("click", async () => {
+  const name = document.getElementById("presetSelect").value;
+  if (!name || name === "blank") {
+    alert("请先选择板名");
+    return;
+  }
+  const r = await hostCallArgs("synth_golden_board", name, "");
+  lastSynthResult = r;
+  state.tab = "synth";
+  document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === "synth"));
+  generateCode();
+  await reloadPolicyCatalog();
+  alert((r && r.message) || "生成失败");
+});
+
+document.getElementById("btnInvSynth").addEventListener("click", async () => {
+  const name = document.getElementById("presetSelect").value;
+  const r = await hostCallArgs("inventory_synth", name || "");
+  lastSynthInv = r;
+  state.tab = "synth";
+  document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === "synth"));
+  generateCode();
+  alert((r && r.message) || "对照失败");
+});
+
+document.getElementById("btnReloadPolicy").addEventListener("click", async () => {
+  policyState = {};
+  await reloadPolicyCatalog();
+});
+
+document.getElementById("btnApplyPack").addEventListener("click", async () => {
+  const name = document.getElementById("presetSelect").value;
+  if (!name || name === "blank") {
+    alert("请先选择板名");
+    return;
+  }
+  if (!confirm("将先「写入工程」脚位，再按策略应用板级包。继续？")) return;
+  // 先写脚位
+  generateCode();
+  const o = opts();
+  const syncBiz = document.getElementById("syncBizOnWrite").checked;
+  const payload = {
+    pins_h: generateH(o),
+    gpio_c: generateCTable(),
+    meta: {
+      projName: o.projName,
+      consumerName: o.consumerName,
+      projIdL: o.projIdL,
+      projIdH: o.projIdH,
+      verId: o.verId
+    },
+    write_features: true,
+    features_h: generateFeaturesH(),
+    write_sleep: true,
+    sleep_c: generateSleepTemplate(),
+    sync_biz: syncBiz,
+    biz_features: bizFeaturesOf(o)
+  };
+  const wr = await hostCallArgs("write_user_config", JSON.stringify(payload));
+  if (!wr || !wr.ok) {
+    alert((wr && wr.message) || "写入脚位失败，已中止板级包");
+    return;
+  }
+  const packPayload = {
+    board: name,
+    policy: collectPolicy(),
+    features_h: generateFeaturesH(),
+    dry_run: false
+  };
+  const r = await hostCallArgs("apply_board_pack", JSON.stringify(packPayload));
+  if (r && r.checklist) {
+    lastPortCheck = r.checklist;
+    state.tab = "port";
+    document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === "port"));
+    generateCode();
+  }
+  alert((r && r.message) || "板级包失败");
+});
+
+document.getElementById("btnWriteProj").addEventListener("click", async () => {
+  generateCode();
+  const issues = runValidation();
+  const errors = (issues || []).filter(i => i.level === "error");
+  if (errors.length) {
+    if (!confirm(`校验有 ${errors.length} 个错误，仍要写入？\n` + errors.slice(0, 5).map(e => e.msg).join("\n"))) {
+      return;
+    }
+  }
+  const o = opts();
+  const syncBiz = document.getElementById("syncBizOnWrite").checked;
+  const payload = {
+    pins_h: generateH(o),
+    gpio_c: generateCTable(),
+    meta: {
+      projName: o.projName,
+      consumerName: o.consumerName,
+      projIdL: o.projIdL,
+      projIdH: o.projIdH,
+      verId: o.verId
+    },
+    write_features: true,
+    features_h: generateFeaturesH(),
+    write_sleep: true,
+    sleep_c: generateSleepTemplate(),
+    sync_biz: syncBiz,
+    biz_features: bizFeaturesOf(o)
+  };
+  const r = await hostCallArgs("write_user_config", JSON.stringify(payload));
+  if (r && r.ok) {
+    if (r.scan) {
+      lastBizScan = r.scan;
+    }
+    alert(r.message || "写入成功");
+  } else {
+    alert((r && r.message) || "写入失败");
+  }
+});
+
+document.querySelectorAll(".tabs button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tabs button").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    state.tab = btn.dataset.tab;
+    generateCode();
+  });
+});
+
+[
+  "projName","consumerName","projIdL","projIdH","verId","sensorDir","wheelMux",
+  "hasKeyC0","hasExtraKeys","hasDpiPair","hasSensorNcs","hasLedLow"
+].forEach(id => {
+  document.getElementById(id).addEventListener("change", renderAll);
+});
+document.querySelectorAll('input[name="modePins"],input[name="logoType"],input[name="ledPolarity"]').forEach(el => {
+  el.addEventListener("change", () => {
+    if (el.name === "logoType") {
+      policyState = {};
+      reloadPolicyCatalog();
+    }
+    renderAll();
+  });
+});
+
+/* 启动：先空白（不写会话）；宿主就绪后再恢复上次选板 */
+applyPreset("blank", { persist: false });
+reloadPolicyCatalog();
+document.getElementById("schematicHint").textContent =
+  "流程：原理图网名 → 左侧功能 → 点 QFN32 脚。复用(编码器/LEDC/LVD)自动推导。归档样例仅作参考。";
+
+/* ========== 独立窗口宿主（pywebview） ========== */
+let hostMaximized = false;
+
+async function hostCall(method, ...args) {
+  try {
+    if (window.pywebview && window.pywebview.api && window.pywebview.api[method]) {
+      return await window.pywebview.api[method](...args);
+    }
+  } catch (e) {
+    console.warn("hostCall", method, e);
+  }
+  return null;
+}
+
+function syncMaxButton(maximized) {
+  hostMaximized = !!maximized;
+  const btn = document.getElementById("btnWinMax");
+  if (!btn) return;
+  btn.textContent = hostMaximized ? "❐" : "□";
+  btn.title = hostMaximized ? "向下还原" : "最大化";
+}
+window.syncMaxButton = syncMaxButton;
+
+async function toggleHostMaximize() {
+  const res = await hostCall("toggle_maximize");
+  if (res && typeof res === "object" && "maximized" in res) {
+    syncMaxButton(res.maximized);
+    return;
+  }
+  if (res === true) {
+    syncMaxButton(!hostMaximized);
+  }
+}
+
+window.pinmuxHostReady = function () {
+  if (typeof window.__PINMUX_MAX__ === "boolean") hostMaximized = window.__PINMUX_MAX__;
+  else if (window.__PINMUX_FS__ === false) hostMaximized = false;
+  syncMaxButton(hostMaximized);
+
+  const minBtn = document.getElementById("btnWinMin");
+  const maxBtn = document.getElementById("btnWinMax");
+  const closeBtn = document.getElementById("btnWinClose");
+  if (minBtn && !minBtn._bound) {
+    minBtn._bound = true;
+    minBtn.addEventListener("click", () => hostCall("minimize"));
+  }
+  if (maxBtn && !maxBtn._bound) {
+    maxBtn._bound = true;
+    maxBtn.addEventListener("click", () => toggleHostMaximize());
+  }
+  if (closeBtn && !closeBtn._bound) {
+    closeBtn._bound = true;
+    closeBtn.addEventListener("click", () => hostCall("close"));
+  }
+  if (window.__PINMUX_PROJECT__) updateProjBindBar(window.__PINMUX_PROJECT__);
+
+  const board = window.__PINMUX_BOARD__ || window.__PINMUX_PROJECT__?.board || "";
+  if (board && board !== "blank" && PRESETS[board] && state.lastBoard !== board) {
+    applyPreset(board, { persist: false });
+    const hintEl = document.getElementById("schematicHint");
+    if (hintEl && PRESETS[board].hint) {
+      hintEl.textContent = PRESETS[board].hint + "（已恢复上次选板）";
+    }
+  }
+
+  const bar = document.getElementById("titleBar");
+  if (bar && !bar._dblBound) {
+    bar._dblBound = true;
+    bar.addEventListener("dblclick", (e) => {
+      if (e.target.closest("button,select,label,input,.toolbar")) return;
+      e.preventDefault();
+      toggleHostMaximize();
+    });
+  }
+};
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "F11") {
+    e.preventDefault();
+    toggleHostMaximize();
+  } else if (e.key === "Escape" && hostMaximized) {
+    toggleHostMaximize();
+  }
+});
+
+if (window.__PINMUX_HOST__?.ok) window.pinmuxHostReady();
+</script>
+</body>
+</html>

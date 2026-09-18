@@ -1,0 +1,20 @@
+{
+  "project_root": "F:\\SE71M_0023_KC536_20260909",
+  "periph": "F:\\SE71M_0023_KC536_20260909\\projects\\mouse_demo\\periph",
+  "board": "CH04",
+  "golden_root": "F:\\SE71M_0457_CH04_V4_20260829",
+  "compare_root": "E:\\tools\\compare",
+  "donor_root": "",
+  "updated": "2026-09-18T09:50:24",
+  "window": {
+    "x": 6,
+    "y": 72,
+    "width": 1538,
+    "height": 844,
+    "maximized": false,
+    "restore_x": 6,
+    "restore_y": 72,
+    "restore_width": 1538,
+    "restore_height": 844
+  }
+}

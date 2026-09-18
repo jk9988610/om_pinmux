@@ -1,0 +1,16 @@
+{
+  "logo_ledc": false,
+  "logo_rgb": true,
+  "require_ledc_files": false,
+  "mode_dual": true,
+  "has_key_pair": false,
+  "has_extra_keys": true,
+  "has_key_c0": false,
+  "wheel_a": "P24",
+  "wheel_b": "P25",
+  "forbid_ch04_port_apply": true,
+  "notes": [
+    "RGB 板勿对 CH04 跑 port_apply 整包拷 ledc*",
+    "宏观金机只校验契约与策略，不替代实机冒烟"
+  ]
+}

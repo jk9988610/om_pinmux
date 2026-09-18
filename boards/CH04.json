@@ -1,0 +1,69 @@
+{
+  "schema": "om6239-board-desc/v2",
+  "chip": "OM6239",
+  "meta": {
+    "projName": "CH04",
+    "consumerName": "App",
+    "projIdL": "0x0457",
+    "projIdH": "0x071",
+    "verId": 4,
+    "modePins": "dual",
+    "logoType": "ledc",
+    "hasKeyC0": true,
+    "hasExtraKeys": false,
+    "hasDpiPair": false,
+    "hasLedLow": true,
+    "ledPolarity": "active_high",
+    "sensorDir": "SENSOR_DIR_CLOCK_6",
+    "wheelMux": "ENCODER_PINMUX_SEL_IO_00_01"
+  },
+  "features": {
+    "BOARD_HAS_KEY_C0": true,
+    "BOARD_HAS_EXTRA_KEYS": false,
+    "BOARD_HAS_DPI_PAIR": false,
+    "BOARD_HAS_LED_LOW": true,
+    "BOARD_MODE_DUAL_PIN": true,
+    "BOARD_MODE_SINGLE_PIN": false,
+    "BOARD_LOGO_LEDC": true,
+    "BOARD_LOGO_RGB": false,
+    "BOARD_LED_ACTIVE_HIGH": true,
+    "BOARD_LED_ACTIVE_LOW": false
+  },
+  "pins": {
+    "KEY_R0_PIN": "P32",
+    "KEY_R1_PIN": "P36",
+    "KEY_R2_PIN": "P20",
+    "KEY_PAIR_PIN": "P24",
+    "KEY_C0_PIN": "P31",
+    "WHEEL_A_PIN": "P00",
+    "WHEEL_B_PIN": "P01",
+    "MODE_24G_PIN": "P27",
+    "MODE_BLE_PIN": "P26",
+    "SENSOR_MOTION_PIN": "P07",
+    "SENSOR_SCLK_PIN": "P11",
+    "SENSOR_SDIO_PIN": "P12",
+    "LED_MODE_R_PIN": "P23",
+    "LED_MODE_G_PIN": "P22",
+    "LED_MODE_B_PIN": "P21",
+    "LED_LOW_PIN": "P04",
+    "LEDC_CTRL_PIN": "P05",
+    "LEDC_PIN": "P34",
+    "USB_5V": "P25",
+    "BAT_CHG_PIN": "P30",
+    "LVD_PIN": "P33",
+    "USB_DN_PIN": "P02",
+    "USB_DP_PIN": "P03",
+    "FLASH_CS_PIN": "P17",
+    "FLASH_SCLK_PIN": "P15",
+    "FLASH_MOSI_PIN": "P16",
+    "FLASH_MISO_PIN": "P14"
+  },
+  "gpio": {},
+  "derived": {
+    "LVD_CHECK_INDEX": "POF_LVD_PIN_P33",
+    "WHEEL_IO_SELECT": "ENCODER_PINMUX_SEL_IO_00_01"
+  },
+  "notes": [
+    "当前 mouse_demo/key_io.h 仍引用 KEY_B/P/DPI_SUB/ADD；CH04 未开 hasExtraKeys/hasDpiPair，校验会 WARN，需后续用 BOARD_HAS_* 包住 key_io。"
+  ]
+}

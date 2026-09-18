@@ -1,0 +1,76 @@
+{
+  "schema": "om6239-board-desc/v2",
+  "chip": "OM6239",
+  "meta": {
+    "projName": "KC536",
+    "consumerName": "BYC",
+    "projIdL": "0x0023",
+    "projIdH": "0x071",
+    "verId": 5,
+    "modePins": "single",
+    "logoType": "rgb",
+    "hasKeyC0": false,
+    "hasExtraKeys": true,
+    "hasDpiPair": false,
+    "hasLedLow": false,
+    "ledPolarity": "active_low",
+    "sensorDir": "SENSOR_DIR_CLOCK_6",
+    "wheelMux": "ENCODER_PINMUX_SEL_IO_20_21"
+  },
+  "features": {
+    "BOARD_HAS_KEY_C0": false,
+    "BOARD_HAS_EXTRA_KEYS": true,
+    "BOARD_HAS_DPI_PAIR": false,
+    "BOARD_HAS_LED_LOW": false,
+    "BOARD_MODE_DUAL_PIN": false,
+    "BOARD_MODE_SINGLE_PIN": true,
+    "BOARD_LOGO_LEDC": false,
+    "BOARD_LOGO_RGB": true,
+    "BOARD_LED_ACTIVE_HIGH": false,
+    "BOARD_LED_ACTIVE_LOW": true
+  },
+  "pins": {
+    "KEY_R0_PIN": "P34",
+    "KEY_R1_PIN": "P07",
+    "KEY_R2_PIN": "P10",
+    "KEY_PAIR_PIN": "P27",
+    "KEY_B_PIN": "P22",
+    "KEY_P_PIN": "P25",
+    "KEY_DPI_PIN": "P31",
+    "WHEEL_A_PIN": "P21",
+    "WHEEL_B_PIN": "P20",
+    "MODE_BLE_24G_PIN": "P26",
+    "SENSOR_MOTION_PIN": "P13",
+    "SENSOR_SCLK_PIN": "P11",
+    "SENSOR_SDIO_PIN": "P12",
+    "LED_MODE_R_PIN": "P32",
+    "LED_MODE_G_PIN": "P00",
+    "LED_MODE_B_PIN": "P01",
+    "LED_R_PIN": "P04",
+    "LED_G_PIN": "P05",
+    "LED_B_PIN": "P06",
+    "USB_5V": "P24",
+    "BAT_CHG_PIN": "P30",
+    "LVD_PIN": "P23",
+    "USB_DN_PIN": "P02",
+    "USB_DP_PIN": "P03",
+    "FLASH_CS_PIN": "P17",
+    "FLASH_SCLK_PIN": "P15",
+    "FLASH_MOSI_PIN": "P16",
+    "FLASH_MISO_PIN": "P14"
+  },
+  "gpio": {
+    "LED_MODE_R_PIN": ["OUTPUT_PP", "PU_30K", "HIGH"],
+    "LED_MODE_G_PIN": ["OUTPUT_PP", "PU_30K", "HIGH"],
+    "LED_MODE_B_PIN": ["OUTPUT_PP", "PU_30K", "HIGH"],
+    "MODE_BLE_24G_PIN": ["INPUT_PULLUP", "PU_30K", "HIGH"]
+  },
+  "derived": {
+    "LVD_CHECK_INDEX": "POF_LVD_PIN_P23",
+    "WHEEL_IO_SELECT": "ENCODER_PINMUX_SEL_IO_20_21"
+  },
+  "notes": [
+    "单模式脚 + RGB LOGO + active_low LED；sleep 与 CH04 不同。",
+    "有 KEY_DPI_PIN，但 key_io.h 契约名是 DPI_SUB/ADD，合并时需对齐命名。"
+  ]
+}
