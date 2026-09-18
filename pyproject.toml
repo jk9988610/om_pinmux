@@ -10,6 +10,9 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = ["pywebview>=5.0"]
 
+[project.scripts]
+om-pinmux = "om_pinmux:main"
+
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "ruff>=0.6"]
 
@@ -27,6 +30,6 @@ select = ["E", "F", "I"]
 
 [tool.setuptools]
 py-modules = [
-    "biz_sync", "board_pack", "golden_diff", "launch", "operations",
+    "biz_sync", "board_pack", "golden_diff", "launch", "om_pinmux", "operations",
     "port_apply", "synth_golden", "validation"
 ]

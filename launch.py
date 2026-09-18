@@ -315,14 +315,14 @@ def load_window_geom(cli_w: int | None, cli_h: int | None) -> dict:
 
 
 def ensure_webview():
+    """Verify the desktop dependency; installation is explicit and reproducible."""
     try:
         import webview  # noqa: F401
-        return
-    except ImportError:
-        pass
-    log("正在安装 pywebview …")
-    import subprocess
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "pywebview", "-q"])
+    except ImportError as exc:
+        raise RuntimeError(
+            "缺少 pywebview。请先执行: python -m pip install -r requirements.txt "
+            "（或 python -m pip install -e .）"
+        ) from exc
 
 
 def find_periph_dir(root: str) -> str | None:

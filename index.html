@@ -33,14 +33,15 @@
     background: var(--bg);
   }
   body {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    min-height: 100vh;
   }
   header {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 10px 16px;
+    gap: 8px;
+    padding: 6px 10px;
     border-bottom: 1px solid var(--border);
     background: var(--panel);
     flex-wrap: wrap;
@@ -72,19 +73,20 @@
   }
   header h1 {
     margin: 0;
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 600;
   }
-  header .sub { color: var(--muted); font-size: 12px; }
-  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+  header .sub { color: var(--muted); font-size: 11px; }
+  .toolbar { display: flex; gap: 5px; flex-wrap: wrap; margin-left: auto; }
   button, select, label.file-btn {
     background: #323844;
     color: var(--text);
     border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 6px 12px;
+    border-radius: 4px;
+    padding: 3px 7px;
     cursor: pointer;
-    font-size: 12px;
+    font-size: 11px;
+    line-height: 1.35;
   }
   button:hover, label.file-btn:hover { border-color: var(--accent); }
   button.primary { background: #1e5a96; border-color: var(--accent); }
@@ -92,16 +94,15 @@
   input[type="file"] { display: none; }
   .layout {
     display: grid;
-    grid-template-columns: 280px 1fr 360px;
+    grid-template-columns: minmax(220px, 260px) minmax(0, 1fr) minmax(280px, 330px);
     gap: 0;
-    flex: 1;
     min-height: 0;
-    height: auto;
+    overflow: hidden;
   }
   .panel {
     overflow: auto;
     border-right: 1px solid var(--border);
-    padding: 12px;
+    padding: 9px;
     background: var(--panel);
   }
   .panel:last-child { border-right: none; border-left: 1px solid var(--border); }
@@ -255,17 +256,52 @@
   }
   textarea.code {
     width: 100%;
-    height: 220px;
+    min-height: 150px;
+    height: clamp(150px, 23vh, 250px);
     background: #12151a;
     color: #c8d0dc;
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: 5px;
     font-family: Consolas, "Courier New", monospace;
     font-size: 11px;
     padding: 8px;
     resize: vertical;
   }
-  .tabs { display: flex; gap: 4px; margin-bottom: 8px; }
+  .output-dock {
+    border-top: 1px solid var(--border);
+    background: #1d2129;
+    padding: 7px 12px 8px;
+  }
+  .output-inner {
+    width: min(980px, calc(100vw - 32px));
+    margin: 0 auto;
+  }
+  .output-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+  .output-head h2 { margin: 0 auto 0 0; }
+  .output-actions { display: flex; gap: 5px; flex-wrap: wrap; }
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 27px;
+    padding: 4px 10px;
+    background: #171a20;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 11px;
+  }
+  .status-main { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .status-spacer { margin-left: auto; }
+  .status-ok { color: var(--ok); }
+  .status-warn { color: var(--warn); }
+  .status-error { color: var(--danger); }
+  .tabs { display: flex; gap: 3px; margin-bottom: 0; flex-wrap: wrap; }
+  .tabs button { padding: 2px 6px; font-size: 10px; }
   .tabs button.active { background: #1e5a96; border-color: var(--accent); }
   .hint { color: var(--muted); font-size: 11px; margin: 6px 0 12px; }
   .opt-block {
@@ -288,8 +324,11 @@
   .badge.ok { background: #1e3320; color: #b4ffb4; }
   .badge.info { background: #1e3a55; color: #a8d4ff; }
   @media (max-width: 1100px) {
-    .layout { grid-template-columns: 1fr; height: auto; }
-    .panel { border: none; border-bottom: 1px solid var(--border); max-height: 360px; }
+    body { overflow: auto; grid-template-rows: auto auto auto auto; }
+    .layout { grid-template-columns: 1fr; min-height: auto; overflow: visible; }
+    .panel { border: none; border-bottom: 1px solid var(--border); max-height: 320px; }
+    .output-inner { width: 100%; }
+    .output-head { align-items: flex-start; flex-wrap: wrap; }
   }
 </style>
 </head>
@@ -402,29 +441,44 @@
 
     <h2>选中引脚 GPIO 表项</h2>
     <div id="gpioEditor" class="hint">点击已分配功能后可编辑模式/上下拉/初值</div>
-
-    <div class="tabs">
-      <button class="active" data-tab="validate">校验报告</button>
-      <button data-tab="h">user_config.h</button>
-      <button data-tab="c">gpio 表</button>
-      <button data-tab="feat">features</button>
-      <button data-tab="sleep">sleep 模板</button>
-      <button data-tab="refs">业务引用</button>
-      <button data-tab="port">换板体检</button>
-      <button data-tab="golden">金机对比</button>
-      <button data-tab="synth">宏观金机</button>
-      <button data-tab="diff">摘要</button>
-    </div>
-    <textarea class="code" id="codeOut" readonly spellcheck="false"></textarea>
-    <div class="toolbar" style="margin:8px 0 0;justify-content:flex-start">
-      <button id="btnCopy">复制</button>
-      <button id="btnDlH">下载 .h</button>
-      <button id="btnDlC">下载 gpio 表</button>
-      <button id="btnDlFeat">下载 features</button>
-      <button id="btnDlSleep">下载 sleep</button>
-    </div>
   </aside>
 </div>
+
+<section class="output-dock" aria-label="输出与报告">
+  <div class="output-inner">
+    <div class="output-head">
+      <h2>输出 / 报告</h2>
+      <div class="tabs">
+        <button class="active" data-tab="validate">校验报告</button>
+        <button data-tab="h">user_config.h</button>
+        <button data-tab="c">gpio 表</button>
+        <button data-tab="feat">features</button>
+        <button data-tab="sleep">sleep 模板</button>
+        <button data-tab="refs">业务引用</button>
+        <button data-tab="port">换板体检</button>
+        <button data-tab="golden">金机对比</button>
+        <button data-tab="synth">宏观金机</button>
+        <button data-tab="diff">摘要</button>
+      </div>
+      <div class="output-actions">
+        <button id="btnCopy">复制</button>
+        <button id="btnDlH">下载 .h</button>
+        <button id="btnDlC">下载 gpio</button>
+        <button id="btnDlFeat">下载 features</button>
+        <button id="btnDlSleep">下载 sleep</button>
+      </div>
+    </div>
+    <textarea class="code" id="codeOut" readonly spellcheck="false"></textarea>
+  </div>
+</section>
+
+<footer class="status-bar" aria-live="polite">
+  <span id="statusText" class="status-main">就绪：请选择板描述或工程目录</span>
+  <span class="status-spacer"></span>
+  <span id="statusBoard">板：—</span>
+  <span id="statusProject">工程：未绑定</span>
+  <button id="btnStatusValidate" title="切换到校验报告">校验</button>
+</footer>
 
 <script>
 /* ========== 数据模型 ========== */
@@ -624,6 +678,29 @@ let state = {
   tab: "validate",
   lastBoard: ""
 };
+
+function setStatus(message, level = "") {
+  const text = document.getElementById("statusText");
+  if (!text) return;
+  text.textContent = message || "就绪";
+  text.className = `status-main${level ? ` status-${level}` : ""}`;
+}
+
+function refreshStatusMeta() {
+  const board = document.getElementById("statusBoard");
+  const project = document.getElementById("statusProject");
+  if (board) board.textContent = `板：${state.lastBoard || "—"}`;
+  if (project) project.textContent = `工程：${lastProjInfo?.periph || lastProjInfo?.root || "未绑定"}`;
+}
+
+function switchOutputTab(tab) {
+  state.tab = tab;
+  document.querySelectorAll(".tabs button").forEach(button => {
+    button.classList.toggle("active", button.dataset.tab === tab);
+  });
+  generateCode();
+}
+
 
 function opts() {
   return {
@@ -1699,11 +1776,11 @@ function updateConflictBanner() {
   box.style.cssText = "";
   if (nErr) {
     box.className = "conflicts";
-    box.textContent = `校验: ${nErr} error, ${nWarn} warn — 见右侧「校验报告」`;
+    box.textContent = `校验: ${nErr} error, ${nWarn} warn — 见下方「校验报告」`;
   } else if (nWarn) {
     box.className = "conflicts";
     box.style.cssText = "border-color:var(--warn);background:#3a3220;color:#ffe0a0";
-    box.textContent = `校验: 0 error, ${nWarn} warn — 见右侧「校验报告」`;
+    box.textContent = `校验: 0 error, ${nWarn} warn — 见下方「校验报告」`;
   } else {
     box.className = "conflicts empty";
     box.textContent = "校验通过（无 error / warn）";
@@ -1769,12 +1846,16 @@ function applyBoardDesc(data) {
     }
   }
   renderAll();
+  refreshStatusMeta();
+  setStatus(`已加载板描述：${state.lastBoard || m.projName || "未命名"}`, "ok");
 }
 
 document.getElementById("btnGen").addEventListener("click", () => {
-  state.tab = "validate";
-  document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === "validate"));
-  generateCode();
+  switchOutputTab("validate");
+  const issues = runValidation();
+  const errors = issues.filter(item => item.level === "error").length;
+  const warnings = issues.filter(item => item.level === "warn").length;
+  setStatus(`校验完成：${errors} error，${warnings} warn`, errors ? "error" : warnings ? "warn" : "ok");
 });
 document.getElementById("btnClearPin").addEventListener("click", () => {
   if (!state.activeRole) return;
@@ -1820,6 +1901,7 @@ function updateProjBindBar(info) {
   if (i.compare_root) parts.push(`compare: ${i.compare_root}`);
   el.textContent = parts.join("  |  ");
   el.style.color = i.periph ? "var(--ok, #3dd68c)" : "";
+  refreshStatusMeta();
 }
 
 async function hostCallArgs(method, ...args) {
@@ -1837,7 +1919,7 @@ async function hostCallArgs(method, ...args) {
 document.getElementById("btnPickProj").addEventListener("click", async () => {
   const r = await hostCallArgs("pick_project_dir");
   if (r && r.ok) {
-    updateProjBindBar(r);
+    setStatus(`已绑定工程：${r.periph || r.root}`, "ok");
     alert(r.message || "已绑定工程");
   } else {
     alert((r && r.message) || "选择失败");
@@ -1852,6 +1934,7 @@ document.getElementById("btnScanBiz").addEventListener("click", async () => {
     b.classList.toggle("active", b.dataset.tab === "refs");
   });
   generateCode();
+  setStatus(r && r.ok ? `业务引用扫描完成：${r.ref_count} 处` : "业务引用扫描失败", r && r.ok ? "ok" : "error");
   if (r && r.ok) {
     const issueN = (r.issues || []).length;
     alert(`扫描完成：${r.ref_count} 处引用` + (issueN ? `，${issueN} 条契约提示` : "") + "\n见右侧「业务引用」页");
@@ -2049,12 +2132,11 @@ document.getElementById("btnWriteProj").addEventListener("click", async () => {
 });
 
 document.querySelectorAll(".tabs button").forEach(btn => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".tabs button").forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
-    state.tab = btn.dataset.tab;
-    generateCode();
-  });
+  btn.addEventListener("click", () => switchOutputTab(btn.dataset.tab));
+});
+
+document.getElementById("btnStatusValidate").addEventListener("click", () => {
+  document.getElementById("btnGen").click();
 });
 
 [

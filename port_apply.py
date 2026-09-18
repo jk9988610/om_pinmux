@@ -14,6 +14,7 @@ import os
 import re
 import shutil
 import sys
+import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path
 
@@ -166,67 +167,106 @@ def apply_copies(items: list[dict], dry_run: bool) -> list[str]:
     return written
 
 
-def _file_xml(name: str, path: str, ftype: str) -> str:
-    return (
-        "            <File>\n"
-        f"              <FileName>{name}</FileName>\n"
-        f"              <FileType>{ftype}</FileType>\n"
-        f"              <FilePath>{path}</FilePath>\n"
-        "            </File>\n"
-    )
+def _xml_text(parent: ET.Element, tag: str) -> str:
+    child = parent.find(tag)
+    return (child.text or "").strip() if child is not None else ""
+
+
+def _find_group(root: ET.Element, group_name: str) -> ET.Element | None:
+    for group in root.findall(".//Group"):
+        if _xml_text(group, "GroupName") == group_name:
+            return group
+    return None
+
+
+def _append_uvproj_file(files: ET.Element, spec: dict) -> None:
+    entry = ET.SubElement(files, "File")
+    ET.SubElement(entry, "FileName").text = spec["name"]
+    ET.SubElement(entry, "FileType").text = spec["ftype"]
+    ET.SubElement(entry, "FilePath").text = spec["path"]
+
+
+def _indent_xml(element: ET.Element, level: int = 0) -> None:
+    """Keep generated Keil XML reviewable on Python versions without ET.indent."""
+    indent = "  "
+    children = list(element)
+    if children:
+        if not element.text or not element.text.strip():
+            element.text = "\n" + indent * (level + 1)
+        for child in children:
+            _indent_xml(child, level + 1)
+        if not children[-1].tail or not children[-1].tail.strip():
+            children[-1].tail = "\n" + indent * level
+    if level and (not element.tail or not element.tail.strip()):
+        element.tail = "\n" + indent * level
 
 
 def ensure_uvproj_ledc(uvproj_path: str, dry_run: bool = False) -> dict:
-    """若缺 ledc.c / ledc_mode.c / drv_ledc.c 则插入 File 节点。"""
-    if not os.path.isfile(uvproj_path):
-        return {"ok": False, "message": f"无 uvprojx: {uvproj_path}", "added": []}
+    """使用 XML 解析幂等地补齐 ledc.c / ledc_mode.c / drv_ledc.c 工程节点。"""
+    path = os.path.abspath(uvproj_path)
+    if not os.path.isfile(path):
+        return {"ok": False, "message": f"无 uvprojx: {path}", "added": []}
+    try:
+        tree = ET.parse(path)
+    except ET.ParseError as exc:
+        return {"ok": False, "message": f"uvprojx XML 解析失败: {exc}", "added": []}
 
-    text = open(uvproj_path, encoding="utf-8", errors="replace").read()
+    root = tree.getroot()
     added: list[str] = []
-
     for spec in UVPROJ_LEDC_FILES:
-        name = spec["name"]
-        if f"<FileName>{name}</FileName>" in text:
-            continue
-        entry = _file_xml(name, spec["path"], spec["ftype"])
-        # Prefer insert after a known sibling in same group
-        after = spec.get("after") or ""
-        inserted = False
-        if after:
-            pat = (
-                rf"(<FileName>{re.escape(after)}</FileName>\s*"
-                r"<FileType>\d+</FileType>\s*"
-                r"<FilePath>[^<]+</FilePath>\s*"
-                r"</File>\s*)"
+        group = _find_group(root, spec["group"])
+        if group is None:
+            return {
+                "ok": False,
+                "message": f"找不到 Group {spec['group']} 以插入 {spec['name']}",
+                "added": added,
+            }
+        files = group.find("Files")
+        if files is None:
+            return {
+                "ok": False,
+                "message": f"Group {spec['group']} 缺少 Files 节点",
+                "added": added,
+            }
+        existing = [
+            item for item in files.findall("File")
+            if _xml_text(item, "FileName") == spec["name"]
+        ]
+        if existing:
+            matching = any(
+                _xml_text(item, "FilePath").replace("/", "\\") == spec["path"]
+                for item in existing
             )
-            m = re.search(pat, text)
-            if m:
-                text = text[: m.end()] + entry + text[m.end() :]
-                inserted = True
-        if not inserted:
-            # Fallback: before closing </Files> of the named group
-            gpat = (
-                rf"(<GroupName>{re.escape(spec['group'])}</GroupName>\s*<Files>)"
-                r"(.*?)"
-                r"(</Files>\s*</Group>)"
-            )
-            gm = re.search(gpat, text, flags=re.S)
-            if not gm:
+            if not matching:
                 return {
                     "ok": False,
-                    "message": f"找不到 Group {spec['group']} 以插入 {name}",
+                    "message": f"{spec['name']} 已存在但路径不匹配，请人工确认",
                     "added": added,
                 }
-            text = text[: gm.start(3)] + entry + text[gm.start(3) :]
-        added.append(name)
+            continue
+        _append_uvproj_file(files, spec)
+        added.append(spec["name"])
 
     if not added:
         return {"ok": True, "message": "uvproj 已含 ledc 文件", "added": []}
-
     if dry_run:
         return {"ok": True, "message": f"将添加: {', '.join(added)}", "added": added}
 
-    open(uvproj_path, "w", encoding="utf-8", newline="\n").write(text)
+    _indent_xml(root)
+    tree.write(path, encoding="utf-8", xml_declaration=True)
+    try:
+        verified_root = ET.parse(path).getroot()
+        for spec in UVPROJ_LEDC_FILES:
+            group = _find_group(verified_root, spec["group"])
+            files = group.find("Files") if group is not None else None
+            if files is None or not any(
+                _xml_text(item, "FileName") == spec["name"]
+                and _xml_text(item, "FilePath").replace("/", "\\") == spec["path"]
+                for item in files.findall("File")
+            ):
+                return {"ok": False, "message": f"写后验证失败: {spec['name']}", "added": added}
+    except ET.ParseError as exc:
+        return {"ok": False, "message": f"写后 XML 校验失败: {exc}", "added": added}
     return {"ok": True, "message": f"已添加: {', '.join(added)}", "added": added}
 
 
