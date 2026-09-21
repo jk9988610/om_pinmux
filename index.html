@@ -6,6 +6,15 @@
 <title>OM6239 PinMux — 引脚可视化配置</title>
 <style>
   :root {
+    --left-pane: 300px;
+    --right-pane: 300px;
+    --output-pane: 150px;
+    --chip-width: 500px;
+    --chip-height:500px;
+    --pin-width: 45px;
+    --pin-height: 25px;
+    --chip-margin: 5px;
+    --pin-gap: 2px;
     --bg: #1a1d23;
     --panel: #242830;
     --border: #3a4050;
@@ -31,21 +40,31 @@
     height: 100%;
     overflow: hidden;
     background: var(--bg);
+    scrollbar-width: thin;
+    scrollbar-color: rgba(160,170,185,.42) transparent;
   }
+  * { scrollbar-width: thin; scrollbar-color: rgba(160,170,185,.42) transparent; }
+  *::-webkit-scrollbar { width: 6px; height: 6px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+  *::-webkit-scrollbar-thumb { background: rgba(160,170,185,.42); border-radius: 8px; }
+  *::-webkit-scrollbar-thumb:hover { background: rgba(190,200,215,.68); }
   body {
     display: grid;
-    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    grid-template-rows: 34px auto minmax(0, 1fr) 27px;
     min-height: 100vh;
+    border: 0;
   }
   header {
     display: flex;
     align-items: center;
+    min-width: 0;
+    height: 34px;
     gap: 8px;
-    padding: 6px 10px;
+    padding: 0 9px;
     border-bottom: 1px solid var(--border);
-    background: var(--panel);
-    flex-wrap: wrap;
-    flex-shrink: 0;
+    background: #20242c;
+    overflow: hidden;
+    flex-wrap: nowrap;
   }
   /* 独立窗口无边框时：标题栏可拖拽 */
   html.pinmux-frameless header {
@@ -63,21 +82,45 @@
   }
   .win-btns {
     display: none;
-    gap: 4px;
-    margin-left: 4px;
+    gap: 0;
+    margin-left: auto;
+    flex: 0 0 auto;
   }
   html.pinmux-host .win-btns { display: inline-flex; }
   .win-btns button {
     min-width: 32px;
-    padding: 4px 8px;
+    height: 33px;
+    border: 0;
+    border-radius: 0;
+    padding: 0 8px;
   }
   header h1 {
     margin: 0;
-    font-size: 15px;
+    flex: 0 0 auto;
+    font-size: 13px;
     font-weight: 600;
   }
-  header .sub { color: var(--muted); font-size: 11px; }
+  header .sub { color: var(--muted); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .title-context { color: var(--muted); font-size: 10px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .toolbar { display: flex; gap: 5px; flex-wrap: wrap; margin-left: auto; }
+  .action-toolbar {
+    display: flex;
+    align-items: center;
+    align-content: center;
+    gap: 5px;
+    min-width: 0;
+    min-height: 34px;
+    padding: 4px 9px;
+    background: #1d2129;
+    border-bottom: 0;
+    overflow: visible;
+    white-space: normal;
+    flex-wrap: wrap;
+  }
+  .action-toolbar .toolbar { margin-left: 0; flex-wrap: wrap; }
+  .panel:hover::-webkit-scrollbar-thumb, .center:hover::-webkit-scrollbar-thumb { background: rgba(160,170,185,.42); }
+  .panel::-webkit-scrollbar-thumb, .center::-webkit-scrollbar-thumb { background: transparent; }
+  .panel:hover::-webkit-scrollbar-thumb, .center:hover::-webkit-scrollbar-thumb { background: rgba(160,170,185,.42); }
   button, select, label.file-btn {
     background: #323844;
     color: var(--text);
@@ -92,27 +135,58 @@
   button.primary { background: #1e5a96; border-color: var(--accent); }
   button.danger { background: #5a2a2a; border-color: var(--danger); }
   input[type="file"] { display: none; }
-  .layout {
+  .workspace {
     display: grid;
-    grid-template-columns: minmax(220px, 260px) minmax(0, 1fr) minmax(280px, 330px);
-    gap: 0;
+    grid-template-columns: var(--left-pane) 5px minmax(360px, 1fr) 5px var(--right-pane);
     min-height: 0;
     overflow: hidden;
+    border: 0;
+  }
+  .layout {
+    display: contents;
   }
   .panel {
+    min-width: 0;
     overflow: auto;
-    border-right: 1px solid var(--border);
     padding: 9px;
     background: var(--panel);
   }
-  .panel:last-child { border-right: none; border-left: 1px solid var(--border); }
+  .panel:last-child { border: 0; }
+  .pane-resizer {
+    background: var(--border);
+    cursor: col-resize;
+    position: relative;
+    z-index: 3;
+  }
+  .pane-resizer:hover, .pane-resizer.dragging { background: var(--accent); }
   .center {
-    overflow: auto;
-    padding: 16px;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    padding: 10px 12px 0;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) 5px minmax(70px, var(--output-pane));
+    background: var(--bg);
+  }
+  .chip-stage {
+    min-height: 0;
+    overflow: hidden;
+    padding: 2px 4px 6px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 16px;
+    justify-content: center;
+    gap: 5px;
+  }
+  .output-resizer {
+    background: var(--border);
+    cursor: row-resize;
+  }
+  .output-resizer:hover, .output-resizer.dragging { background: var(--accent); }
+  .center-output {
+    min-height: 0;
+    overflow: hidden;
+    padding: 7px 0 0;
   }
   h2 {
     margin: 0 0 10px;
@@ -150,12 +224,16 @@
   }
   .chip-wrap {
     position: relative;
-    width: 440px;
-    height: 440px;
+    width: min(var(--chip-width), calc(100vw - var(--left-pane) - var(--right-pane) - 60px));
+    height: min(var(--chip-height), calc((100vw - var(--left-pane) - var(--right-pane) - 60px) * .62));
+    min-width: 360px;
+    min-height: 230px;
+    aspect-ratio: 1.62 / 1;
+    flex: 0 0 auto;
   }
   .chip-body {
     position: absolute;
-    inset: 78px;
+    left: 11%; right: 11%; top: 27%; bottom: 27%;
     background: linear-gradient(145deg, #353b48, #232830);
     border: 2px solid #555c6c;
     border-radius: 12px;
@@ -165,27 +243,29 @@
     flex-direction: column;
     box-shadow: inset 0 0 40px rgba(0,0,0,.35);
   }
-  .chip-body .name { font-size: 18px; font-weight: 700; letter-spacing: 0.08em; }
-  .chip-body .pkg { color: var(--muted); font-size: 11px; margin-top: 4px; }
+  .chip-body .name { font-size: 15px; font-weight: 700; letter-spacing: 0.06em; }
+  .chip-body .pkg { color: var(--muted); font-size: 9px; margin-top: 2px; }
+  .chip-pass {
+    margin-top: 7px;
+    padding: 2px 7px;
+    border-radius: 10px;
+    color: #b4ffb4;
+    background: rgba(44,120,60,.42);
+    font-size: 10px;
+    white-space: nowrap;
+  }
   .pin.special {
     opacity: 0.75;
     cursor: default;
     font-size: 9px;
   }
   .mux-hint {
-    font-family: Consolas, monospace;
-    font-size: 11px;
-    color: #a8d4ff;
-    background: #1e3a55;
-    border-radius: 4px;
-    padding: 6px 8px;
-    margin-top: 8px;
-    width: min(520px, 100%);
+    display: none;
   }
   .pin {
     position: absolute;
-    width: 54px;
-    height: 28px;
+    width: var(--pin-width);
+    height: var(--pin-height);
     border-radius: 4px;
     border: 1px solid #555;
     background: var(--pin-free);
@@ -194,12 +274,24 @@
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    font-size: 10px;
-    line-height: 1.1;
+    font-size: clamp(6px, 1.25vw, 8px);
+    line-height: 1;
+    overflow: hidden;
     transition: transform .1s, box-shadow .1s;
     user-select: none;
   }
-  .pin:hover { transform: scale(1.08); z-index: 2; box-shadow: 0 0 0 2px var(--accent); }
+  .pin.top, .pin.bottom {
+    width: var(--pin-width);
+    height: var(--pin-height);
+  }
+  .pin.top .pname, .pin.bottom .pname,
+  .pin.top .plabel, .pin.bottom .plabel {
+    writing-mode: horizontal-tb;
+    transform: none;
+    white-space: nowrap;
+  }
+  .pin.top .plabel, .pin.bottom .plabel { max-height: 14px; max-width: 34px; }
+
   .pin.selected { box-shadow: 0 0 0 2px #fff; z-index: 3; }
   .pin.conflict { outline: 2px solid var(--danger); }
   .pin .pname { font-weight: 700; font-family: Consolas, monospace; }
@@ -214,16 +306,16 @@
   .legend {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px 14px;
+    gap: 3px 8px;
     justify-content: center;
-    max-width: 520px;
+    max-width: 600px;
   }
   .legend span {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 3px;
     color: var(--muted);
-    font-size: 11px;
+    font-size: 9px;
   }
   .form-row {
     display: grid;
@@ -256,8 +348,8 @@
   }
   textarea.code {
     width: 100%;
-    min-height: 150px;
-    height: clamp(150px, 23vh, 250px);
+    height: 100%;
+    min-height: 90px;
     background: #12151a;
     color: #c8d0dc;
     border: 1px solid var(--border);
@@ -267,14 +359,11 @@
     padding: 8px;
     resize: vertical;
   }
-  .output-dock {
-    border-top: 1px solid var(--border);
-    background: #1d2129;
-    padding: 7px 12px 8px;
-  }
+  .output-dock { display: none; }
   .output-inner {
-    width: min(980px, calc(100vw - 32px));
-    margin: 0 auto;
+    width: 100%;
+    height: 100%;
+    margin: 0;
   }
   .output-head {
     display: flex;
@@ -322,11 +411,43 @@
   .badge.err { background: #5a2a2a; color: #ffb4b4; }
   .badge.warn { background: #5a4520; color: #ffe0a0; }
   .badge.ok { background: #1e3320; color: #b4ffb4; }
-  .badge.info { background: #1e3a55; color: #a8d4ff; }
+  .help-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    background: rgba(5,8,12,.68);
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .help-backdrop.open { display: flex; }
+  .help-dialog {
+    width: min(860px, 94vw);
+    max-height: 88vh;
+    overflow: auto;
+    padding: 20px 24px;
+    background: #242830;
+    color: var(--text);
+    box-shadow: 0 18px 60px rgba(0,0,0,.45);
+  }
+  .help-dialog h2 { color: var(--text); text-transform: none; margin: 0 0 12px; }
+  .help-dialog h3 { margin: 16px 0 5px; color: var(--accent); font-size: 13px; }
+  .help-dialog p, .help-dialog li { color: #c6cbd3; font-size: 12px; }
+  .help-dialog ul { margin-top: 5px; padding-left: 20px; }
+  .help-close { float: right; }
   @media (max-width: 1100px) {
-    body { overflow: auto; grid-template-rows: auto auto auto auto; }
-    .layout { grid-template-columns: 1fr; min-height: auto; overflow: visible; }
-    .panel { border: none; border-bottom: 1px solid var(--border); max-height: 320px; }
+    body { overflow: auto; grid-template-rows: 34px auto auto 27px; }
+    .action-toolbar { overflow: visible; }
+    .workspace { display: block; overflow: visible; }
+    .layout { display: block; }
+    .panel { border: none; border-bottom: 0; max-height: 320px; }
+    .pane-resizer { display: none; }
+    .center { display: block; min-height: 620px; overflow: visible; }
+    .chip-stage { min-height: 360px; }
+    .output-resizer { display: none; }
+    .center-output { height: 250px; padding: 8px 0; }
+    .chip-wrap { width: min(520px, calc(100vw - 32px)); height: min(320px, calc((100vw - 32px) * .62)); min-width: 360px; min-height: 230px; }
     .output-inner { width: 100%; }
     .output-head { align-items: flex-start; flex-wrap: wrap; }
   }
@@ -335,70 +456,78 @@
 <body>
 <header class="pywebview-drag-region" id="titleBar">
   <h1>OM6239 PinMux</h1>
-  <span class="sub">OM6239 单芯片 · 原理图+手册 → Keil user_config</span>
-  <div class="toolbar">
-    <select id="presetSelect" title="加载板描述">
-      <option value="">— 板描述 —</option>
-      <option value="blank">空白板（手册固定脚）</option>
-      <option value="BD319">BD319（原理图脚位）</option>
-      <option value="CH04">归档样例 CH04</option>
-      <option value="KC536">归档样例 KC536</option>
-    </select>
-    <label class="file-btn">导入 .h<input type="file" id="importH" accept=".h,.c,text/*" /></label>
-    <label class="file-btn">导入 JSON<input type="file" id="importJson" accept=".json,application/json" /></label>
-    <button id="btnExportJson">导出板描述</button>
-    <button id="btnSaveBoard" title="把当前脚位/features 写回 boards/<板名>.json">保存板 JSON</button>
-    <button id="btnPickProj" title="选择 SDK / mouse_demo / periph">选工程目录</button>
-    <button id="btnPickGolden" title="选择金机/参照工程（如 CH04）">选金机</button>
-    <button id="btnPickDonor" title="可选供体 SDK（如现有 BD319 工程，用于拷 RGB 业务文件）">选供体</button>
-    <button id="btnSynthGolden" title="由板 JSON + E:\\pictures\\&lt;板&gt; 生成宏观金机 synth/">生成宏观金机</button>
-    <button id="btnScanBiz" title="扫描 periph/main 里引用了哪些脚位宏">扫描业务引用</button>
-    <button id="btnPortCheck" title="换板体检：LEDC 文件/轮询/RTE/SEL≠滚轮等（KC536→CH04 经验）">换板体检</button>
-    <button id="btnInvGolden" title="关注文件清单：金机 vs 目标（无需 compare GUI）">金机清单</button>
-    <button id="btnInvSynth" title="宏观金机脚位对照（synth vs 目标 user_config）">宏观对照</button>
-    <button id="btnOpenCompare" title="打开 E:\tools\compare 目录对比（左金机 / 右目标）">目录对比</button>
-    <button id="btnExportDiff" title="导出 unified .diff（调用 compare.engine）">导出.diff</button>
-    <button class="primary" id="btnWriteProj" title="写入脚位，并按板型同步 key_io / sleep 契约">写入工程</button>
-    <button class="primary" id="btnApplyPack" title="按策略勾选应用板级包（补丁/供体拷贝）">应用板级包</button>
-    <button class="primary" id="btnGen">生成 / 校验</button>
-    <button class="danger" id="btnClearPin" title="清除当前选中角色的引脚">清除选中</button>
-    <span class="win-btns">
-      <button type="button" id="btnWinMin" title="最小化">—</button>
-      <button type="button" id="btnWinMax" title="最大化">□</button>
-      <button type="button" id="btnWinClose" class="danger" title="关闭">×</button>
-    </span>
-  </div>
+  <span class="sub">引脚配置工具</span>
+  <span class="title-context" id="titleContext">未选择板描述 · 未绑定工程</span>
+  <span class="win-btns">
+    <button type="button" id="btnWinMin" title="最小化">—</button>
+    <button type="button" id="btnWinMax" title="最大化">□</button>
+    <button type="button" id="btnWinClose" class="danger" title="关闭">×</button>
+  </span>
 </header>
 
+<nav class="action-toolbar" aria-label="工程工具栏">
+  <select id="presetSelect" title="加载引脚配置模板">
+    <option value="">— 引脚配置模板 —</option>
+    <option value="blank">空白板（手册固定脚）</option>
+    <option value="BD319">BD319（原理图脚位）</option>
+    <option value="CH04">归档样例 CH04</option>
+    <option value="KC536">归档样例 KC536</option>
+  </select>
+  <label class="file-btn">导入 .h<input type="file" id="importH" accept=".h,.c,text/*" /></label>
+  <label class="file-btn">导入 JSON<input type="file" id="importJson" accept=".json,application/json" /></label>
+  <button id="btnSaveBoard" title="保存当前引脚配置">保存配置</button>
+  <button id="btnPickProj">选工程</button>
+  <span class="toolbar-divider"></span>
+  <button class="primary" id="btnWriteProj">写入引脚配置</button>
+  <button class="primary" id="btnGen">生成 / 校验</button>
+  <button class="danger" id="btnClearPin">清除选中</button>
+  <button id="btnHelp" title="查看引脚配置说明">帮助</button>
+</nav>
+
+<div class="workspace">
 <div class="layout">
   <!-- 左侧：功能角色列表 -->
   <aside class="panel" id="rolePanel">
-    <h2>原理图 → 固件</h2>
-    <p class="hint">按网名选功能，再点芯片 Pxx（封装 Pin 见手册）。同脚冲突标红。</p>
+    <h2>引脚配置</h2>
+    <p class="hint">按功能角色选择引脚，检查复用关系和冲突。配置完成后可生成代码或写入工程。</p>
     <div id="schematicHint" class="hint"></div>
     <div id="roleList"></div>
   </aside>
+  <div class="pane-resizer" id="leftResizer" role="separator" aria-orientation="vertical" aria-label="调整左侧栏宽度"></div>
 
-  <!-- 中间：芯片图 -->
+  <!-- 中间：芯片图与居中输出区 -->
   <main class="center">
-    <div id="conflictBox" class="conflicts empty">无引脚冲突</div>
-    <div class="chip-wrap" id="chipWrap"></div>
-    <div class="mux-hint" id="muxHint">复用推导：—</div>
-    <div class="legend" id="legend"></div>
+    <section class="chip-stage">
+      <div class="chip-wrap" id="chipWrap"></div>
+      <div class="legend" id="legend"></div>
+    </section>
+    <div class="output-resizer" id="outputResizer" role="separator" aria-orientation="horizontal" aria-label="调整输出区高度"></div>
+    <section class="center-output" aria-label="输出与报告">
+      <div class="output-inner">
+        <div class="output-head">
+          <h2>校验与生成结果</h2>
+          <div class="tabs">
+            <button class="active" data-tab="validate">校验 / 复用</button>
+          </div>
+        </div>
+        <textarea class="code" id="codeOut" readonly spellcheck="false"></textarea>
+      </div>
+    </section>
   </main>
+  <div class="pane-resizer" id="rightResizer" role="separator" aria-orientation="vertical" aria-label="调整右侧栏宽度"></div>
 
-  <!-- 右侧：属性 + 代码 -->
+  <!-- 右侧：属性 -->
   <aside class="panel">
-    <h2>板级选项</h2>
-    <div id="projBindBar" class="hint" style="margin-bottom:8px;word-break:break-all">工程：未绑定（点顶栏「选工程目录」）</div>
+    <h2>引脚配置参数</h2>
+    <div id="projBindBar" class="hint" style="margin-bottom:8px;word-break:break-all">工程：未绑定（可选，用于写入配置）</div>
     <div class="form-row"><label>项目名</label><input id="projName" value="NEW_BOARD" /></div>
     <div class="form-row"><label>客户名</label><input id="consumerName" value="App" /></div>
     <div class="form-row"><label>项目 ID L</label><input id="projIdL" value="0x0000" /></div>
     <div class="form-row"><label>项目 ID H</label><input id="projIdH" value="0x071" /></div>
     <div class="form-row"><label>版本号</label><input id="verId" type="number" value="1" min="1" /></div>
 
-    <div class="opt-block">
-      <strong>板型 features（只勾原理图有的）</strong>
+    <div class="opt-block pinmux-only-options">
+      <strong>配置特性</strong>
       <label><input type="radio" name="modePins" value="dual" checked /> 双模式脚 MODE_24G + MODE_BLE</label>
       <label><input type="radio" name="modePins" value="single" /> 单模式脚 MODE_BLE_24G</label>
       <label><input type="radio" name="logoType" value="ledc" checked /> LOGO：LEDC 灯带</label>
@@ -411,13 +540,6 @@
       <label><input type="radio" name="ledPolarity" value="active_high" checked /> LED 高电平亮</label>
       <label><input type="radio" name="ledPolarity" value="active_low" /> LED 低电平亮</label>
       <label><input type="checkbox" id="syncBizOnWrite" checked /> 写入时同步业务契约（key_io / sleep）</label>
-    </div>
-
-    <div class="opt-block" id="policyBlock">
-      <strong>关注策略（应用板级包时生效）</strong>
-      <p class="hint" style="margin:4px 0 6px">RGB 板默认关 LEDC、开 RGB 包；可手改。需供体的项无供体则跳过。</p>
-      <div id="policyList"></div>
-      <button type="button" id="btnReloadPolicy" style="margin-top:6px">按 LOGO 类型重置策略</button>
     </div>
 
     <div class="form-row">
@@ -439,38 +561,31 @@
       </select>
     </div>
 
-    <h2>选中引脚 GPIO 表项</h2>
+    <h2>选中引脚 GPIO 配置</h2>
     <div id="gpioEditor" class="hint">点击已分配功能后可编辑模式/上下拉/初值</div>
   </aside>
 </div>
+</div>
 
-<section class="output-dock" aria-label="输出与报告">
-  <div class="output-inner">
-    <div class="output-head">
-      <h2>输出 / 报告</h2>
-      <div class="tabs">
-        <button class="active" data-tab="validate">校验报告</button>
-        <button data-tab="h">user_config.h</button>
-        <button data-tab="c">gpio 表</button>
-        <button data-tab="feat">features</button>
-        <button data-tab="sleep">sleep 模板</button>
-        <button data-tab="refs">业务引用</button>
-        <button data-tab="port">换板体检</button>
-        <button data-tab="golden">金机对比</button>
-        <button data-tab="synth">宏观金机</button>
-        <button data-tab="diff">摘要</button>
-      </div>
-      <div class="output-actions">
-        <button id="btnCopy">复制</button>
-        <button id="btnDlH">下载 .h</button>
-        <button id="btnDlC">下载 gpio</button>
-        <button id="btnDlFeat">下载 features</button>
-        <button id="btnDlSleep">下载 sleep</button>
-      </div>
-    </div>
-    <textarea class="code" id="codeOut" readonly spellcheck="false"></textarea>
-  </div>
-</section>
+<div class="help-backdrop" id="helpBackdrop" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+  <article class="help-dialog">
+    <button class="help-close" id="btnHelpClose">关闭</button>
+    <h2>OM6239 引脚配置帮助</h2>
+    <h3>一、引脚配置流程</h3>
+    <ul>
+      <li>选择引脚配置模板，按功能角色为 OM6239 封装引脚分配 GPIO。</li>
+      <li>检查引脚冲突、USB 固定脚、编码器复用和 LEDC_SEL 等约束。</li>
+      <li>点击“生成 / 校验”查看结果；需要落盘时选择工程并点击“写入引脚配置”。</li>
+    </ul>
+    <h3>二、界面说明</h3>
+    <ul>
+      <li><b>左侧引脚配置：</b>选择功能角色，再点击芯片封装脚。</li>
+      <li><b>中间 OM6239：</b>查看引脚占用、复用关系和冲突。</li>
+      <li><b>右侧配置参数：</b>设置模式脚、传感器、滚轮和 GPIO 初始化参数。</li>
+      <li><b>写入引脚配置：</b>只生成并写入 user_config.h / user_config.c 等引脚配置文件。</li>
+    </ul>
+  </article>
+</div>
 
 <footer class="status-bar" aria-live="polite">
   <span id="statusText" class="status-main">就绪：请选择板描述或工程目录</span>
@@ -679,6 +794,35 @@ let state = {
   lastBoard: ""
 };
 
+const layoutChannel = "om6239-pinmux-layout";
+function applyLayoutConfig(config = {}) {
+  const root = document.documentElement.style;
+  const map = {
+    left: "--left-pane", right: "--right-pane", output: "--output-pane",
+    chipW: "--chip-width", chipH: "--chip-height", pinW: "--pin-width",
+    pinH: "--pin-height", margin: "--chip-margin", gap: "--pin-gap"
+  };
+  for (const [key, cssVar] of Object.entries(map)) {
+    const value = Number(config[key]);
+    if (!Number.isFinite(value)) continue;
+    root.setProperty(cssVar, `${value}${key === "output" ? "px" : "px"}`);
+  }
+  requestAnimationFrame(() => renderChip());
+}
+function loadSavedLayoutConfig() {
+  try { applyLayoutConfig(JSON.parse(localStorage.getItem(layoutChannel) || "{}")); } catch (_) {}
+}
+try {
+  const channel = new BroadcastChannel(layoutChannel);
+  channel.onmessage = event => applyLayoutConfig(event.data);
+} catch (_) {}
+window.addEventListener("storage", event => {
+  if (event.key === layoutChannel && event.newValue) {
+    try { applyLayoutConfig(JSON.parse(event.newValue)); } catch (_) {}
+  }
+});
+loadSavedLayoutConfig();
+
 function setStatus(message, level = "") {
   const text = document.getElementById("statusText");
   if (!text) return;
@@ -689,8 +833,12 @@ function setStatus(message, level = "") {
 function refreshStatusMeta() {
   const board = document.getElementById("statusBoard");
   const project = document.getElementById("statusProject");
-  if (board) board.textContent = `板：${state.lastBoard || "—"}`;
-  if (project) project.textContent = `工程：${lastProjInfo?.periph || lastProjInfo?.root || "未绑定"}`;
+  const title = document.getElementById("titleContext");
+  const boardName = state.lastBoard || "—";
+  const projectPath = lastProjInfo?.periph || lastProjInfo?.root || "未绑定";
+  if (board) board.textContent = `板：${boardName}`;
+  if (project) project.textContent = `工程：${projectPath}`;
+  if (title) title.textContent = `板：${boardName} · 工程：${projectPath}`;
 }
 
 function switchOutputTab(tab) {
@@ -758,141 +906,7 @@ function bizFeaturesOf(o) {
   };
 }
 
-let lastBizScan = null;
-let lastPortCheck = null;
-let lastGoldenInv = null;
-let lastSynthInv = null;
-let lastSynthResult = null;
-let policyState = {}; // id -> bool
-
-async function reloadPolicyCatalog() {
-  const logoLedc = document.querySelector('input[name="logoType"]:checked').value === "ledc";
-  const r = await hostCallArgs("get_policy_catalog", logoLedc);
-  const box = document.getElementById("policyList");
-  if (!box) return;
-  box.innerHTML = "";
-  if (!r || !r.ok) {
-    box.innerHTML = `<span class="hint">${(r && r.message) || "无法加载策略"}</span>`;
-    return;
-  }
-  (r.catalog || []).forEach(c => {
-    const id = c.id;
-    if (!(id in policyState)) policyState[id] = !!c.enabled;
-    const lab = document.createElement("label");
-    lab.style.display = "block";
-    const cb = document.createElement("input");
-    cb.type = "checkbox";
-    cb.dataset.policyId = id;
-    cb.checked = !!policyState[id];
-    cb.addEventListener("change", () => { policyState[id] = cb.checked; });
-    lab.appendChild(cb);
-    lab.appendChild(document.createTextNode(
-      ` ${c.title}${c.needs_donor ? " 〔需供体〕" : ""}`
-    ));
-    box.appendChild(lab);
-  });
-  if (r.donor_root) updateProjBindBar({ donor_root: r.donor_root });
-}
-
-function collectPolicy() {
-  const out = { ...policyState };
-  document.querySelectorAll("#policyList input[data-policy-id]").forEach(cb => {
-    out[cb.dataset.policyId] = cb.checked;
-  });
-  return out;
-}
-
-function formatSynthTab() {
-  const lines = [];
-  lines.push("=== 宏观金机 ===");
-  if (lastSynthResult && lastSynthResult.ok) {
-    lines.push(lastSynthResult.message || "");
-    lines.push(`目录: ${lastSynthResult.out_dir || ""}`);
-    lines.push(`LOGO LEDC: ${lastSynthResult.logo_ledc}`);
-  } else {
-    lines.push("尚未生成。选板 →「生成宏观金机」（读 boards/*.json + E:\\\\pictures\\\\<板>）。");
-  }
-  lines.push("");
-  if (lastSynthInv && lastSynthInv.text) {
-    lines.push(lastSynthInv.text);
-  } else {
-    lines.push("脚位对照：点「宏观对照」。");
-  }
-  return lines.join("\n");
-}
 let lastProjInfo = null;
-
-function formatBizScan(r) {
-  if (!r || !r.ok) return (r && r.message) || "尚未扫描（点顶栏「扫描业务引用」）";
-  const lines = [];
-  lines.push(`引用总数: ${r.ref_count}`);
-  lines.push(`扫描根: ${(r.roots || []).join(" | ")}`);
-  if (r.issues && r.issues.length) {
-    lines.push("", "=== 契约提示 ===");
-    r.issues.forEach(x => lines.push("- " + x));
-  }
-  lines.push("", "=== 宏 → 文件 ===");
-  const mf = r.macro_files || {};
-  Object.keys(mf).sort().forEach(mac => {
-    lines.push(`${mac}: ${mf[mac].join(", ")}`);
-  });
-  lines.push("", "=== 样例行（每宏最多若干） ===");
-  const macros = r.macros || {};
-  Object.keys(macros).sort().forEach(mac => {
-    lines.push(`\n[${mac}]`);
-    (macros[mac] || []).slice(0, 8).forEach(hit => {
-      lines.push(`  ${hit.file}:${hit.line}  ${hit.text}`);
-    });
-  });
-  return lines.join("\n");
-}
-
-function formatPortCheck(r) {
-  if (!r || !r.ok) return (r && r.message) || "尚未体检（点顶栏「换板体检」；需先选工程目录）";
-  const lines = [];
-  const s = r.summary || {};
-  lines.push(`=== 换板体检（KC536→CH04 经验）===  error=${s.error||0}  warn=${s.warn||0}  total=${s.total||0}`);
-  lines.push(`periph: ${r.periph || ""}`);
-  lines.push(`sdk: ${r.sdk || "(未定位)"}`);
-  lines.push(`feat: logo_ledc=${!!(r.feat||{}).logo_ledc}  has_key_c0=${!!(r.feat||{}).has_key_c0}`);
-  lines.push("");
-  const order = ["B/D", "B", "C", "D", "E"];
-  const byStage = {};
-  (r.items || []).forEach(it => {
-    (byStage[it.stage] = byStage[it.stage] || []).push(it);
-  });
-  order.forEach(st => {
-    const list = byStage[st];
-    if (!list) return;
-    lines.push(`--- 阶段 ${st} ---`);
-    list.forEach(it => {
-      const mark = it.pass ? "PASS" : it.level.toUpperCase();
-      lines.push(`[${mark}] ${it.title}`);
-      if (it.detail) lines.push(`       ${it.detail}`);
-    });
-    lines.push("");
-  });
-  Object.keys(byStage).filter(k => !order.includes(k)).forEach(st => {
-    lines.push(`--- 阶段 ${st} ---`);
-    byStage[st].forEach(it => {
-      const mark = it.pass ? "PASS" : it.level.toUpperCase();
-      lines.push(`[${mark}] ${it.title}`);
-      if (it.detail) lines.push(`       ${it.detail}`);
-    });
-  });
-  lines.push("说明：本体检只报告缺口，不自动改业务；A/B 脚位仍用「生成/校验」+「写入工程」。");
-  return lines.join("\n");
-}
-
-function formatGoldenInv(r) {
-  if (r && r.text) return r.text;
-  if (!r || !r.ok) {
-    return (r && r.message) ||
-      "尚未对比。流程：选工程目录 → 选金机 →「金机清单」或「目录对比」/「导出.diff」\n" +
-      "目录对比调用本机 E:\\tools\\compare（可用环境变量 OM_COMPARE_ROOT）。";
-  }
-  return JSON.stringify(r, null, 2);
-}
 
 /** mouse_demo 里已知会引用的宏契约（静态检查用） */
 const CODE_CONTRACTS = [
@@ -937,15 +951,28 @@ function conflicts() {
 
 /* ========== 布局：QFN 四边引脚 ========== */
 function pinPositions() {
-  /* 与手册 Figure1.1 / assets/om6239_pinout.png 同向 */
+  /* 与手册 Figure1.1 / assets/om6239_pinout.png 同向，随容器等比缩放。 */
+  const wrap = document.getElementById("chipWrap");
+  const W = wrap ? wrap.clientWidth : 440;
+  const H = wrap ? wrap.clientHeight : 440;
+  const widthCss = getComputedStyle(document.documentElement);
+  const designW = parseFloat(widthCss.getPropertyValue("--chip-width")) || 509;
+  const designH = parseFloat(widthCss.getPropertyValue("--chip-height")) || 340;
+  const pinW = parseFloat(widthCss.getPropertyValue("--pin-width")) || 30;
+  const pinH = parseFloat(widthCss.getPropertyValue("--pin-height")) || 17;
+  const margin = parseFloat(widthCss.getPropertyValue("--chip-margin")) || 7;
+  const gap = parseFloat(widthCss.getPropertyValue("--pin-gap")) || 1;
+  /* 横向拉长封装：上下脚紧贴长边，左右脚沿短边均匀排列。 */
+  const scaleX = W / designW, scaleY = H / designH;
   const pos = {};
-  const W = 440, H = 440, margin = 6, span = 300, start = 70;
+  const topStart = 92, topSpan = designW - 184 - gap * 7;
+  const sideStart = 50, sideSpan = designH - 100 - gap * 7;
   for (const p of CHIP.package_pins) {
     const i = p.idx;
-    if (p.side === "left") pos[p.name] = { x: margin, y: start + i * (span / 7) };
-    else if (p.side === "bottom") pos[p.name] = { x: start + i * (span / 7), y: H - 36 };
-    else if (p.side === "right") pos[p.name] = { x: W - 62, y: start + i * (span / 7) };
-    else if (p.side === "top") pos[p.name] = { x: start + i * (span / 7), y: margin };
+    if (p.side === "left") pos[p.name] = { x: margin * scaleX, y: (sideStart + i * (sideSpan / 7)) * scaleY };
+    else if (p.side === "bottom") pos[p.name] = { x: (topStart + i * (topSpan / 7)) * scaleX, y: H - (pinH + margin) * scaleY };
+    else if (p.side === "right") pos[p.name] = { x: W - (pinW + margin) * scaleX, y: (sideStart + i * (sideSpan / 7)) * scaleY };
+    else if (p.side === "top") pos[p.name] = { x: (topStart + i * (topSpan / 7)) * scaleX, y: margin * scaleY };
   }
   return pos;
 }
@@ -1012,11 +1039,12 @@ function renderChip() {
   const positions = pinPositions();
   const conf = new Set(conflicts().map(([p]) => p));
 
-  let html = `<div class="chip-body"><div class="name">OM6239</div><div class="pkg">QFN32 · DataSheet</div></div>`;
+  let html = `<div class="chip-body"><div class="name">OM6239</div><div class="pkg">QFN32 · DataSheet</div><div class="chip-pass" id="chipPass">校验通过</div></div>`;
   for (const pin of CHIP.package_pins) {
     const { x, y } = positions[pin.name] || { x: 0, y: 0 };
+    const sideClass = pin.side === "top" || pin.side === "bottom" ? ` ${pin.side}` : "";
     if (pin.special) {
-      html += `<div class="pin special" style="left:${x}px;top:${y}px;background:${COLORS.special}" title="封装脚${pin.pkg} ${pin.name}（非 GPIO）">
+      html += `<div class="pin special${sideClass}" style="left:${x}px;top:${y}px;background:${COLORS.special}" title="封装脚${pin.pkg} ${pin.name}（非 GPIO）">
         <span class="pname">${pin.name}</span>
         <span class="plabel">#${pin.pkg}</span>
       </div>`;
@@ -1028,6 +1056,7 @@ function renderChip() {
     const alt = (pin.alt || []).join("/");
     const label = owners.length ? shortLabel(owners[0]) : alt;
     const cls = ["pin"];
+    if (pin.side === "top" || pin.side === "bottom") cls.push(pin.side);
     if (conf.has(pin.name)) cls.push("conflict");
     if (state.activeRole && state.pins[state.activeRole] === pin.name) cls.push("selected");
     html += `<div class="${cls.join(" ")}" data-pin="${pin.name}" style="left:${x}px;top:${y}px;background:${color}" title="#${pin.pkg} ${pin.name}${alt ? " / "+alt : ""}${owners.length ? " → "+owners.join(",") : ""}">
@@ -1047,6 +1076,14 @@ function renderChip() {
 
   deriveMux();
   renderConflicts();
+  const pass = document.getElementById("chipPass");
+  if (pass) {
+    const issues = runValidation();
+    const errors = issues.filter(i => i.level === "error").length;
+    const warns = issues.filter(i => i.level === "warn").length;
+    pass.textContent = errors ? `${errors} 个错误` : warns ? `${warns} 个警告` : "校验通过";
+    pass.style.color = errors ? "#ffb4b4" : warns ? "#ffe0a0" : "#b4ffb4";
+  }
 }
 
 function renderConflicts() {
@@ -1207,10 +1244,8 @@ function applyPreset(name, opts) {
   const hintEl = document.getElementById("schematicHint");
   if (hintEl) hintEl.textContent = p.hint || (name === "BD319" ? "对照 BD319 原理图 + OM6239 手册填 Pxx" : "");
   state.lastBoard = name;
-  policyState = {};
   renderAll();
-  reloadPolicyCatalog();
-  if (persist) hostCall("save_session", JSON.stringify({ board: name }));
+    if (persist) hostCall("save_session", JSON.stringify({ board: name }));
 }
 
 function parseUserConfigH(text) {
@@ -1242,14 +1277,14 @@ function parseUserConfigH(text) {
   const verM = text.match(/#define\s+iREAL_VERSION_ID\s+(\d+)/);
   const dirM = text.match(/#define\s+SENSOR_DIR_DEFINE\s+(SENSOR_DIR_CLOCK_\d)/);
   const muxM = text.match(/#define\s+WHEEL_IO_SELECT\s+(\w+)/);
-  const softM = text.match(/#define\s+WHEEL_SOFT_GPIO\s+/);
+  const softM = text.match(/#define\s+WHEEL_SOFT_GPIO\s+(0|1)\b/);
   if (nameM) document.getElementById("projName").value = nameM[1];
   if (consM) document.getElementById("consumerName").value = consM[1];
   if (idLM) document.getElementById("projIdL").value = idLM[1];
   if (idHM) document.getElementById("projIdH").value = idHM[1];
   if (verM) document.getElementById("verId").value = verM[1];
   if (dirM) document.getElementById("sensorDir").value = dirM[1];
-  if (softM) document.getElementById("wheelMux").value = "SOFT_GPIO";
+  if (softM && softM[1] === "1") document.getElementById("wheelMux").value = "SOFT_GPIO";
   else if (muxM) document.getElementById("wheelMux").value = muxM[1];
 
   // 极性启发式：led_r_on 是否 gpio_clear
@@ -1300,6 +1335,7 @@ function generateH(o) {
     lines.push("#define WHEEL_IO_SELECT         ENCODER_PINMUX_SEL_IO_00_01");
     lines.push("#endif");
   } else {
+    lines.push("#define WHEEL_SOFT_GPIO         0");
     lines.push(`#define WHEEL_IO_SELECT         ${o.wheelMux}`);
   }
   lines.push("");
@@ -1371,6 +1407,10 @@ function generateH(o) {
     if (p("LEDC_PIN")) lines.push(`#define LEDC_PIN                (${p("LEDC_PIN")})`);
     lines.push(`#define LEDC_RGB_NUMBER         6`);
     lines.push(`#define LEDC_RGB_DATA_SIZE      LEDC_RGB_NUMBER*3`);
+    lines.push("/* 兼容旧 RGB 业务代码：LEDC 板仍提供 LED_R/G/B 别名指向模式灯脚 */");
+    lines.push(`#define LED_R_PIN               LED_MODE_R_PIN`);
+    lines.push(`#define LED_G_PIN               LED_MODE_G_PIN`);
+    lines.push(`#define LED_B_PIN               LED_MODE_B_PIN`);
   } else {
     for (const id of ["LED_R_PIN","LED_G_PIN","LED_B_PIN"]) {
       if (p(id)) lines.push(`#define ${pad(id, 22)} (${p(id)})`);
@@ -1565,7 +1605,10 @@ function runValidation() {
     }
   }
 
-  // 5) LVD 宏联动
+  if (!o.wheelMux || !["ENCODER_PINMUX_SEL_IO_00_01", "ENCODER_PINMUX_SEL_IO_20_21", "ENCODER_PINMUX_SEL_IO_24_25", "SOFT_GPIO"].includes(o.wheelMux)) {
+    issues.push({ level: "error", code: "WHEEL_SOFT_GPIO_VALUE", msg: "WHEEL_SOFT_GPIO 只能由滚轮模式生成 0/1，禁止写入 GPIO 名称" });
+  }
+
   if (p("LVD_PIN")) {
     add("info", "LVD_INDEX", `LVD_CHECK_INDEX 应使用 POF_LVD_PIN_${p("LVD_PIN")}`);
   }
@@ -1611,10 +1654,7 @@ function runValidation() {
     }
   }
 
-  // 8) 换板手改清单（阶段提示）
-  add("info", "CHECKLIST", "A/B 完成后：点「换板体检」扫 C/D（ledc 文件、RTE、polling、SEL≠滚轮）");
-  add("info", "CHECKLIST", "有金机时：选金机 →「金机清单」/「目录对比」(E:\\tools\\compare) 对照 DIFF 与仅金机文件");
-  add("info", "CHECKLIST", "合并后请人工核对: periph_gpio_sleep_set / key_io 扫描 / 无线改灯用 Cmd_Idle_Cfg");
+  // 引脚配置检查：复用关系、固定脚、宏契约和 GPIO 初值。
   if (o.logoRgb) add("info", "CHECKLIST", "RGB LOGO 板：确认工程未再编译依赖 LEDC_PIN 的 ledc 动画路径，或加 BOARD_LOGO_LEDC 开关");
   if (o.modeSingle) add("info", "CHECKLIST", "单模式脚板：sleep/模式扫描应使用 MODE_BLE_24G_PIN，不要再读 MODE_24G/BLE");
 
@@ -1639,13 +1679,16 @@ function generateValidateReport() {
   lines.push(`项目: ${opts().projName}  chip: OM6239`);
   lines.push("");
   if (!issues.filter(i => i.level === "error" || i.level === "warn").length) {
-    lines.push("✓ 无 error / warn（仍请看 info 清单）");
+    lines.push("✓ 无 error / warn");
     lines.push("");
   }
   for (const i of issues) {
     const tag = i.level === "error" ? "[ERR ]" : i.level === "warn" ? "[WARN]" : "[INFO]";
     lines.push(`${tag} ${i.code}: ${i.msg}`);
   }
+  lines.push("");
+  lines.push("--- 复用推导 ---");
+  for (const line of deriveMux().lines) lines.push(`[MUX] ${line}`);
   lines.push("");
   lines.push("--- Features 快照 ---");
   const f = featuresOf(opts());
@@ -1759,10 +1802,6 @@ function generateCode() {
   else if (state.tab === "c") text = generateCTable();
   else if (state.tab === "feat") text = generateFeaturesH();
   else if (state.tab === "sleep") text = generateSleepTemplate();
-  else if (state.tab === "refs") text = formatBizScan(lastBizScan);
-  else if (state.tab === "port") text = formatPortCheck(lastPortCheck);
-  else if (state.tab === "golden") text = formatGoldenInv(lastGoldenInv);
-  else if (state.tab === "synth") text = formatSynthTab();
   else text = generateDiff();
   document.getElementById("codeOut").value = text;
   updateConflictBanner();
@@ -1770,6 +1809,7 @@ function generateCode() {
 
 function updateConflictBanner() {
   const box = document.getElementById("conflictBox");
+  if (!box) return;
   const issues = runValidation();
   const nErr = issues.filter(i => i.level === "error").length;
   const nWarn = issues.filter(i => i.level === "warn").length;
@@ -1857,32 +1897,20 @@ document.getElementById("btnGen").addEventListener("click", () => {
   const warnings = issues.filter(item => item.level === "warn").length;
   setStatus(`校验完成：${errors} error，${warnings} warn`, errors ? "error" : warnings ? "warn" : "ok");
 });
+document.getElementById("btnHelp").addEventListener("click", () => {
+  document.getElementById("helpBackdrop").classList.add("open");
+});
+document.getElementById("btnHelpClose").addEventListener("click", () => {
+  document.getElementById("helpBackdrop").classList.remove("open");
+});
+document.getElementById("helpBackdrop").addEventListener("click", event => {
+  if (event.target.id === "helpBackdrop") event.currentTarget.classList.remove("open");
+});
+
 document.getElementById("btnClearPin").addEventListener("click", () => {
   if (!state.activeRole) return;
   delete state.pins[state.activeRole];
   renderAll();
-});
-
-document.getElementById("btnCopy").addEventListener("click", async () => {
-  await navigator.clipboard.writeText(document.getElementById("codeOut").value);
-  alert("已复制到剪贴板");
-});
-
-function download(name, content) {
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([content], { type: "text/plain" }));
-  a.download = name;
-  a.click();
-  URL.revokeObjectURL(a.href);
-}
-document.getElementById("btnDlH").addEventListener("click", () => download("user_config_pins.h", generateH(opts())));
-document.getElementById("btnDlC").addEventListener("click", () => download("gpio_config_table.c", generateCTable()));
-document.getElementById("btnDlFeat").addEventListener("click", () => download("board_features.h", generateFeaturesH()));
-document.getElementById("btnDlSleep").addEventListener("click", () => download("periph_gpio_sleep_set.c", generateSleepTemplate()));
-
-document.getElementById("btnExportJson").addEventListener("click", () => {
-  const data = buildBoardDesc();
-  download(`${data.meta.projName || "board"}_board_desc.json`, JSON.stringify(data, null, 2));
 });
 
 function updateProjBindBar(info) {
@@ -1890,16 +1918,8 @@ function updateProjBindBar(info) {
   if (!el) return;
   if (info) lastProjInfo = Object.assign({}, lastProjInfo || {}, info);
   const i = lastProjInfo || info || {};
-  const parts = [];
-  if (i.periph) parts.push(`目标: ${i.periph}`);
-  else if (i.root) parts.push(`目标: ${i.root}`);
-  else parts.push("目标: 未绑定（选工程目录）");
-  if (i.golden_root) parts.push(`金机: ${i.golden_root}`);
-  else parts.push("金机: 未选");
-  if (i.donor_root) parts.push(`供体: ${i.donor_root}`);
-  else parts.push("供体: 未选");
-  if (i.compare_root) parts.push(`compare: ${i.compare_root}`);
-  el.textContent = parts.join("  |  ");
+  const text = i.periph ? `?????${i.periph}` : i.root ? `?????${i.root}` : "????????????";
+  el.textContent = text;
   el.style.color = i.periph ? "var(--ok, #3dd68c)" : "";
   refreshStatusMeta();
 }
@@ -1926,77 +1946,6 @@ document.getElementById("btnPickProj").addEventListener("click", async () => {
   }
 });
 
-document.getElementById("btnScanBiz").addEventListener("click", async () => {
-  const r = await hostCallArgs("scan_biz_refs");
-  lastBizScan = r;
-  state.tab = "refs";
-  document.querySelectorAll(".tabs button").forEach(b => {
-    b.classList.toggle("active", b.dataset.tab === "refs");
-  });
-  generateCode();
-  setStatus(r && r.ok ? `业务引用扫描完成：${r.ref_count} 处` : "业务引用扫描失败", r && r.ok ? "ok" : "error");
-  if (r && r.ok) {
-    const issueN = (r.issues || []).length;
-    alert(`扫描完成：${r.ref_count} 处引用` + (issueN ? `，${issueN} 条契约提示` : "") + "\n见右侧「业务引用」页");
-  } else {
-    alert((r && r.message) || "扫描失败");
-  }
-});
-
-document.getElementById("btnPortCheck").addEventListener("click", async () => {
-  const feat = bizFeaturesOf(opts());
-  const r = await hostCallArgs("scan_port_checklist", JSON.stringify(feat));
-  lastPortCheck = r;
-  state.tab = "port";
-  document.querySelectorAll(".tabs button").forEach(b => {
-    b.classList.toggle("active", b.dataset.tab === "port");
-  });
-  generateCode();
-  if (r && r.ok) {
-    const s = r.summary || {};
-    alert((r.message || "体检完成") + `\nerror=${s.error||0} warn=${s.warn||0}\n见右侧「换板体检」页`);
-  } else {
-    alert((r && r.message) || "体检失败");
-  }
-});
-
-function showGoldenTab(r) {
-  lastGoldenInv = r;
-  state.tab = "golden";
-  document.querySelectorAll(".tabs button").forEach(b => {
-    b.classList.toggle("active", b.dataset.tab === "golden");
-  });
-  generateCode();
-}
-
-document.getElementById("btnPickGolden").addEventListener("click", async () => {
-  const r = await hostCallArgs("pick_golden_dir");
-  if (r && r.ok) {
-    updateProjBindBar({ golden_root: r.golden_root });
-    alert(r.message || "已选金机");
-  } else {
-    alert((r && r.message) || "选择失败");
-  }
-});
-
-document.getElementById("btnInvGolden").addEventListener("click", async () => {
-  const r = await hostCallArgs("inventory_golden");
-  showGoldenTab(r);
-  alert((r && r.message) || (r && r.ok ? "清单完成" : "清单失败"));
-});
-
-document.getElementById("btnOpenCompare").addEventListener("click", async () => {
-  const r = await hostCallArgs("open_golden_compare");
-  if (r && r.compare_root) updateProjBindBar({ compare_root: r.compare_root });
-  alert((r && r.message) || "无法打开目录对比");
-});
-
-document.getElementById("btnExportDiff").addEventListener("click", async () => {
-  const r = await hostCallArgs("export_golden_diff", "");
-  if (r && r.ok) showGoldenTab(r);
-  alert((r && r.message) || "导出失败");
-});
-
 document.getElementById("btnSaveBoard").addEventListener("click", async () => {
   const name = document.getElementById("presetSelect").value;
   if (!name || name === "blank") {
@@ -2005,91 +1954,6 @@ document.getElementById("btnSaveBoard").addEventListener("click", async () => {
   }
   const r = await hostCallArgs("save_board_json", name, JSON.stringify(buildBoardDesc()));
   alert((r && r.message) || "保存失败");
-});
-
-document.getElementById("btnPickDonor").addEventListener("click", async () => {
-  const r = await hostCallArgs("pick_donor_dir");
-  if (r && r.ok) updateProjBindBar({ donor_root: r.donor_root });
-  alert((r && r.message) || "已取消");
-});
-
-document.getElementById("btnSynthGolden").addEventListener("click", async () => {
-  const name = document.getElementById("presetSelect").value;
-  if (!name || name === "blank") {
-    alert("请先选择板名");
-    return;
-  }
-  const r = await hostCallArgs("synth_golden_board", name, "");
-  lastSynthResult = r;
-  state.tab = "synth";
-  document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === "synth"));
-  generateCode();
-  await reloadPolicyCatalog();
-  alert((r && r.message) || "生成失败");
-});
-
-document.getElementById("btnInvSynth").addEventListener("click", async () => {
-  const name = document.getElementById("presetSelect").value;
-  const r = await hostCallArgs("inventory_synth", name || "");
-  lastSynthInv = r;
-  state.tab = "synth";
-  document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === "synth"));
-  generateCode();
-  alert((r && r.message) || "对照失败");
-});
-
-document.getElementById("btnReloadPolicy").addEventListener("click", async () => {
-  policyState = {};
-  await reloadPolicyCatalog();
-});
-
-document.getElementById("btnApplyPack").addEventListener("click", async () => {
-  const name = document.getElementById("presetSelect").value;
-  if (!name || name === "blank") {
-    alert("请先选择板名");
-    return;
-  }
-  if (!confirm("将先「写入工程」脚位，再按策略应用板级包。继续？")) return;
-  // 先写脚位
-  generateCode();
-  const o = opts();
-  const syncBiz = document.getElementById("syncBizOnWrite").checked;
-  const payload = {
-    pins_h: generateH(o),
-    gpio_c: generateCTable(),
-    meta: {
-      projName: o.projName,
-      consumerName: o.consumerName,
-      projIdL: o.projIdL,
-      projIdH: o.projIdH,
-      verId: o.verId
-    },
-    write_features: true,
-    features_h: generateFeaturesH(),
-    write_sleep: true,
-    sleep_c: generateSleepTemplate(),
-    sync_biz: syncBiz,
-    biz_features: bizFeaturesOf(o)
-  };
-  const wr = await hostCallArgs("write_user_config", JSON.stringify(payload));
-  if (!wr || !wr.ok) {
-    alert((wr && wr.message) || "写入脚位失败，已中止板级包");
-    return;
-  }
-  const packPayload = {
-    board: name,
-    policy: collectPolicy(),
-    features_h: generateFeaturesH(),
-    dry_run: false
-  };
-  const r = await hostCallArgs("apply_board_pack", JSON.stringify(packPayload));
-  if (r && r.checklist) {
-    lastPortCheck = r.checklist;
-    state.tab = "port";
-    document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === "port"));
-    generateCode();
-  }
-  alert((r && r.message) || "板级包失败");
 });
 
 document.getElementById("btnWriteProj").addEventListener("click", async () => {
@@ -2122,9 +1986,6 @@ document.getElementById("btnWriteProj").addEventListener("click", async () => {
   };
   const r = await hostCallArgs("write_user_config", JSON.stringify(payload));
   if (r && r.ok) {
-    if (r.scan) {
-      lastBizScan = r.scan;
-    }
     alert(r.message || "写入成功");
   } else {
     alert((r && r.message) || "写入失败");
@@ -2139,6 +2000,62 @@ document.getElementById("btnStatusValidate").addEventListener("click", () => {
   document.getElementById("btnGen").click();
 });
 
+function bindPaneResizer(resizerId, cssVariable, fromRight = false) {
+  const resizer = document.getElementById(resizerId);
+  if (!resizer) return;
+  resizer.addEventListener("pointerdown", event => {
+    event.preventDefault();
+    resizer.classList.add("dragging");
+    resizer.setPointerCapture(event.pointerId);
+    const onMove = move => {
+      const width = fromRight ? window.innerWidth - move.clientX : move.clientX;
+      const next = Math.max(180, Math.min(460, width));
+      document.documentElement.style.setProperty(cssVariable, `${next}px`);
+      renderChip();
+    };
+    const onEnd = () => {
+      resizer.classList.remove("dragging");
+      resizer.removeEventListener("pointermove", onMove);
+      resizer.removeEventListener("pointerup", onEnd);
+      resizer.removeEventListener("pointercancel", onEnd);
+    };
+    resizer.addEventListener("pointermove", onMove);
+    resizer.addEventListener("pointerup", onEnd);
+    resizer.addEventListener("pointercancel", onEnd);
+  });
+}
+
+bindPaneResizer("leftResizer", "--left-pane");
+bindPaneResizer("rightResizer", "--right-pane", true);
+
+function bindOutputResizer() {
+  const resizer = document.getElementById("outputResizer");
+  const center = document.querySelector(".center");
+  if (!resizer || !center) return;
+  resizer.addEventListener("pointerdown", event => {
+    event.preventDefault();
+    resizer.classList.add("dragging");
+    resizer.setPointerCapture(event.pointerId);
+    const onMove = move => {
+      const bounds = center.getBoundingClientRect();
+      const height = Math.max(110, Math.min(bounds.height - 150, bounds.bottom - move.clientY));
+      document.documentElement.style.setProperty("--output-pane", `${height}px`);
+    };
+    const onEnd = () => {
+      resizer.classList.remove("dragging");
+      resizer.removeEventListener("pointermove", onMove);
+      resizer.removeEventListener("pointerup", onEnd);
+      resizer.removeEventListener("pointercancel", onEnd);
+    };
+    resizer.addEventListener("pointermove", onMove);
+    resizer.addEventListener("pointerup", onEnd);
+    resizer.addEventListener("pointercancel", onEnd);
+  });
+}
+
+bindOutputResizer();
+window.addEventListener("resize", () => renderChip());
+
 [
   "projName","consumerName","projIdL","projIdH","verId","sensorDir","wheelMux",
   "hasKeyC0","hasExtraKeys","hasDpiPair","hasSensorNcs","hasLedLow"
@@ -2147,17 +2064,12 @@ document.getElementById("btnStatusValidate").addEventListener("click", () => {
 });
 document.querySelectorAll('input[name="modePins"],input[name="logoType"],input[name="ledPolarity"]').forEach(el => {
   el.addEventListener("change", () => {
-    if (el.name === "logoType") {
-      policyState = {};
-      reloadPolicyCatalog();
-    }
     renderAll();
   });
 });
 
 /* 启动：先空白（不写会话）；宿主就绪后再恢复上次选板 */
 applyPreset("blank", { persist: false });
-reloadPolicyCatalog();
 document.getElementById("schematicHint").textContent =
   "流程：原理图网名 → 左侧功能 → 点 QFN32 脚。复用(编码器/LEDC/LVD)自动推导。归档样例仅作参考。";
 

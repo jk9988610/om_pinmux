@@ -14,6 +14,7 @@ import json
 import os
 import re
 import shutil
+import operations
 import sys
 import threading
 import traceback
@@ -838,6 +839,9 @@ class WindowApi:
 
         pins_h = (data.get("pins_h") or "").strip()
         gpio_c = (data.get("gpio_c") or "").strip()
+        soft_wheel = re.findall(r"^#define\s+WHEEL_SOFT_GPIO\s+([^\s/]+)", pins_h, flags=re.M)
+        if soft_wheel and any(value not in {"0", "1"} for value in soft_wheel):
+            return {"ok": False, "message": "WHEEL_SOFT_GPIO 只能写入 0 或 1，禁止写入 GPIO 名称"}
         meta = data.get("meta") or {}
         written = []
         biz_actions = []
@@ -846,10 +850,10 @@ class WindowApi:
         try:
             # backup
             stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            bak_dir = os.path.join(self._periph, f"_pinmux_bak_{stamp}")
-            os.makedirs(bak_dir, exist_ok=True)
-            shutil.copy2(h_path, os.path.join(bak_dir, "user_config.h"))
-            shutil.copy2(c_path, os.path.join(bak_dir, "user_config.c"))
+            transaction = operations.FileTransaction.create(self._periph, "pinmux", stamp=stamp)
+            bak_dir = str(transaction.backup_root)
+            transaction.backup(h_path)
+            transaction.backup(c_path)
 
             h_text = open(h_path, encoding="utf-8", errors="replace").read()
             # 去掉生成块里的项目 ID 行，改用 patch_project_id 改原文件宏
@@ -864,6 +868,7 @@ class WindowApi:
             h_text = _dedupe_pin_section(h_text)
             h_text = patch_project_id(h_text, meta)
             open(h_path, "w", encoding="utf-8", newline="\n").write(h_text)
+            transaction.backup(h_path)
             written.append(h_path)
 
             c_text = open(c_path, encoding="utf-8", errors="replace").read()
@@ -877,15 +882,18 @@ class WindowApi:
             )
             c_text = _dedupe_gpio_table(c_text)
             open(c_path, "w", encoding="utf-8", newline="\n").write(c_text)
+            transaction.backup(c_path)
             written.append(c_path)
 
             if data.get("write_features") and data.get("features_h"):
                 feat = os.path.join(self._periph, "board_features.h")
+                transaction.backup(feat)
                 open(feat, "w", encoding="utf-8", newline="\n").write(data["features_h"])
                 written.append(feat)
 
             if data.get("write_sleep") and data.get("sleep_c"):
                 sleep_path = os.path.join(self._periph, "periph_gpio_sleep_set.pinmux.c")
+                transaction.backup(sleep_path)
                 open(sleep_path, "w", encoding="utf-8", newline="\n").write(data["sleep_c"])
                 written.append(sleep_path)
 
@@ -899,14 +907,26 @@ class WindowApi:
 
             if data.get("sync_biz", True) and biz_sync is not None:
                 feat_biz = data.get("biz_features") or {}
+                # Pre-register biz_sync target files so the transaction captures their original state
+                for fname in ("key_io.h", "key_io.c", "user_config.c", "led.c", "ledc.c", "ledc.h", "ledc_mode.c", "ledc_mode.h"):
+                    biz_path = os.path.join(self._periph, fname)
+                    if os.path.isfile(biz_path):
+                        transaction.backup(biz_path)
+                rte_path = os.path.join(self._periph, "..", "config", "RTE_om6239.h")
+                if os.path.isfile(rte_path):
+                    try:
+                        transaction.backup(rte_path)
+                    except ValueError:
+                        pass  # RTE is outside periph; biz_sync backs it up separately
                 sync_r = biz_sync.sync_board_contracts(self._periph, feat_biz, bak_dir)
                 biz_actions = sync_r.get("actions") or []
                 for p in sync_r.get("written") or []:
                     if p not in written:
                         written.append(p)
 
+            manifest = transaction.commit()
             self._persist()
-            msg = "已写入:\n" + "\n".join(written) + f"\n备份: {bak_dir}"
+            msg = "已写入:\n" + "\n".join(written) + f"\n备份: {bak_dir}\n回滚 manifest: {manifest}"
             applied = [a for a in biz_actions if a.get("applied")]
             if applied:
                 msg += "\n\n业务契约同步:\n" + "\n".join(
@@ -921,6 +941,7 @@ class WindowApi:
                 "ok": True,
                 "message": msg,
                 "backup": bak_dir,
+                "manifest": str(manifest),
                 "written": written,
                 "biz_actions": biz_actions,
                 "scan": scan_preview,
