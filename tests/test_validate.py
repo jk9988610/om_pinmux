@@ -11,7 +11,7 @@ def _load(name: str) -> dict:
 
 
 def test_all_templates_pass():
-    for name in ("KC536", "BD319", "CH04"):
+    for name in ("KC536", "CH04"):
         report = validate.validate_config(_load(name))
         assert report.ok, [issue.render() for issue in report.errors]
 
@@ -25,7 +25,8 @@ def test_duplicate_pin_is_error():
 
 
 def test_led_alias_pair_is_allowed():
-    config = _load("BD319")
+    config = _load("CH04")
+    config["pins"]["LED_R_PIN"] = config["pins"]["LED_MODE_R_PIN"]
     report = validate.validate_config(config)
     assert report.ok
 

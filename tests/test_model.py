@@ -6,7 +6,7 @@ CONFIGS = Path(__file__).resolve().parent.parent / "configs"
 
 
 def test_all_templates_load():
-    for name in ("KC536", "BD319", "CH04"):
+    for name in ("KC536", "CH04"):
         config = model.load_config(CONFIGS / f"{name}.omcfg")
         assert config["schema"] == model.SCHEMA
 
@@ -40,8 +40,9 @@ def test_ch04_derived_values():
     assert model.uart_pin(config) == "KEY_R2_PIN"
 
 
-def test_bd319_has_no_pair_and_dual_mode():
-    config = model.load_config(CONFIGS / "BD319.omcfg")
+def test_dual_mode_without_pair_only_wakes_matrix_keys():
+    config = model.load_config(CONFIGS / "CH04.omcfg")
+    del config["pins"]["KEY_PAIR_PIN"]
     pins = model.pin_entries(config)
     assert "KEY_PAIR_PIN" not in pins
     assert model.mode_pins(config, pins) == ["MODE_24G_PIN", "MODE_BLE_PIN"]

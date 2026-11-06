@@ -1,7 +1,7 @@
 # 轻量 CubeMX 式配置工具：指导文档（Plan）
 
 > 目标：把 om_pinmux 收敛成“一个配置源 → 校验 → 生成代码/工程”的轻量工具，像 CubeMX 一样直白，但只服务 OM6239 一颗芯片、一套鼠标 SDK。
-> 本文只定方向与实施计划，不含代码改动。实测依据来自 2026-11-06 的源码与运行记录（见 `docs/om_pinmux-OVERVIEW.md`）。
+> 本文只定方向与实施计划，不含代码改动。实测依据来自 2026-11-06 的源码与运行记录。
 
 ---
 
@@ -103,9 +103,9 @@ schema: om6239-project/v1
 chip: OM6239
 
 project:
-  name: BD319
-  customer: App
-  ble_names: ["BD319 Bt1", "BD319 Bt2"]     # 可选；new 命令改写 BLE 广播名
+  name: KC536
+  customer: BYC
+  ble_names: ["KC536 Bt1", "KC536 Bt2"]     # 可选；new 命令改写 BLE 广播名
   id: { low: 0x0485, high: 0x071, version: 1 }
   usb: { vid: 0x1234, pid: 0x5678 }        # 仅当 usb.enabled
 
@@ -171,7 +171,7 @@ codegen:
 | `pins.*` | `pins.*` | 直接搬（键名保留 C 宏名） |
 | `derived.LVD_CHECK_INDEX / WHEEL_IO_SELECT / WHEEL_SOFT_GPIO` | 无 | **删**：派生 |
 | `nets` / `unused_package_gpio` / `source` / `notes` | 无 | 删；`notes` 可转成模板顶部注释 |
-| `gpio`（BD319 里每脚的默认模式） | `pins.*.gpio` | 直接搬 |
+| `gpio`（板描述里每脚的默认模式） | `pins.*.gpio` | 直接搬 |
 
 ---
 
@@ -238,18 +238,18 @@ configs/*.omcfg ──┴→ model.py → validate.py → generate/ + targets/
 - 新增 `omcfg/`：`model.py`、`validate.py`、`generate/`、`transaction.py`、`cli.py`；
 - 只做 4 类产物：`user_config.h`、`user_config.c`、`board_features.h`、`periph_gpio_sleep_set.pinmux.c`；P2 起睡眠实现并入 `user_config.c`（见 P2 决策记录），只剩 3 个文件；
 - 只做 3 类配置：`pins`、`board`、`project`；
-- 迁移 BD319 与 CH04 两块板做模板；其余 5 块先不动；
+- 迁移 KC536 与 CH04 两块板做模板；其余板先不动；
 - 旧 GUI **冻结只读**（不再生成/写入），避免双实现。
 - 删除/停用：`golden_diff`、`synth_golden`、`port_apply` 全链路（它们不参与 P1）。
 
 **验收（可执行）**
 ```bat
 :: 1) schema + 规则，0 error
-python -m omcfg check configs\BD319.omcfg
+python -m omcfg check configs\KC536.omcfg
 :: 2) 生成预览（只输出 unified diff，不落盘）
-python -m omcfg gen --config configs\BD319.omcfg --sdk <真实SDK副本> --dry-run
+python -m omcfg gen --config configs\KC536.omcfg --sdk <真实SDK副本> --dry-run
 :: 3) 落盘（走 transaction，产出 manifest）
-python -m omcfg gen --config configs\BD319.omcfg --sdk <真实SDK副本> --apply
+python -m omcfg gen --config configs\KC536.omcfg --sdk <真实SDK副本> --apply
 :: 4) 只改标记块：diff 里除标记块外为空
 git -C <真实SDK副本> diff --stat
 :: 5) 能编过（Keil 命令行；无 CLI 则 uVision 手工编译并保存日志）
@@ -292,7 +292,7 @@ python -m pytest                              :: 全绿
 
 **P3 决策记录：先做变异清单，再决定配置面（2026-11-06）**
 
-对 6 个真实 SDK 家族（20 份 `user_config.h`、22 份 `usb_descriptor.h`，含 CH04/KC536/BD319/V196/S205/BJ2017/LJ-V08）做宏级对比，结论：
+对多个真实 SDK 家族（20 份 `user_config.h`、22 份 `usb_descriptor.h`）做宏级对比，结论：
 
 - **进配置**：
   - `board.sensor.bus: spi_4wire` 完整生成 `SENSOR_MOSI_PIN`、`SENSOR_MISO_PIN`、`SENSOR_NCS_PIN`（5 块真实板/6 个工程；原生成器只输出 NCS，属“配置项存在但生成不完整”）；
@@ -399,6 +399,16 @@ python -m pytest                              :: 全绿
   范围，仍由 `new` 的 `project.ble_names` 控制；`configs/` 不自动落盘，需要复用时手工
   从 SDK 的 `project.omcfg` 复制。
 
+**P8：移除 BD319 参考对象（2026-11-06）**
+
+- **原因**：BD319 目录并非真实 BD319 工程（实测其 `user_config.h` 与 KC536 一致），继续
+  作为模板只会制造“假基线”；且用户明确不再以 BD319 为参考。
+- **清理**：删除 `configs/BD319.omcfg`、`boards/BD319.json`、`archive/pinmux_state.json`，
+  以及已废弃且以 BD319 为取证对象的 `docs/om_pinmux-OVERVIEW.md`；README、ROADMAP
+  和测试中的 BD319 示例改用 `CH04`（LEDC/双模式）与 `KC536`（RGB/单模式）。
+- **验收**：`check --all configs` 只剩 CH04/KC536 且 0 error 0 warning；`pytest`、
+  `ruff` 全绿。
+
 ---
 
 ## 5. 砍并清单（逐项去留）
@@ -413,7 +423,7 @@ python -m pytest                              :: 全绿
 | `board_pack.py` | 18.5 KB，13 策略 | **归档；只抽 3 个文本补丁到 `compat.py`** | donor 拷贝与 13 项策略是“KC536→CH04 一次性迁移”，不是配置器能力；补丁保留是因为真实踩坑（12BIT/栈/usb flag） |
 | `port_apply.py` | 16.4 KB | **删除；uvproj 逻辑重写进 `targets/uvprojx.py`** | 其核心是“整包拷金机”，与“配置生成”冲突；且已实测无条件注入 `ledc.c` 造成工程引用缺失文件 |
 | `golden_diff.py` | 11.4 KB | **删除** | 与 `git diff` 重复；白名单只认 `key_io.h`，实测把 `key_io.c/user_config.c` 误报为异常 |
-| `synth_golden.py` + `synth/BD319` | 13.8 KB + 6 产物 | **删除（可 git 归档）** | 期望脚位写成裸 `26`，SDK 是 `(P26)`，实测 `SAME=0 DIFF=22`，作为基线不可用 |
+| `synth_golden.py` + `synth/` | 13.8 KB + 6 产物 | **删除（可 git 归档）** | 期望脚位写成裸 `26`，SDK 是 `(P26)`，实测 `SAME=0 DIFF=22`，作为基线不可用 |
 | `reports/` | 60 KB | **归档/删除** | 历史一次性取证；保留会让人误以为有持续基线 |
 | `survey.py` + `survey/` | 18.1 KB + 57 问 | **归档** | 问卷是“没有配置器时的替代品”；有了 `.omcfg` + GUI 表单就没有存在意义 |
 | `index.html` | 91.6 KB | **重写为 `web/`（目标 <20 KB HTML+JS）** | 现在它同时是 UI + 第二校验器 + 生成器 + 模板库；必须只留视图 |
@@ -431,7 +441,7 @@ python -m pytest                              :: 全绿
 ## 6. 实施顺序建议（可直接照做）
 
 1. 新建 `omcfg/` 包与 `schemas/omcfg-v1.schema.json`；把 `chip/om6239.json` 读进 `model.py`（此时不删任何旧文件）。
-2. 写 `configs/BD319.omcfg`、`configs/CH04.omcfg`（按 §2.4 迁移），跑 `check`，把规则差异（`wired`、同脚冲突）补进 `validate.py`。
+2. 写 `configs/KC536.omcfg`、`configs/CH04.omcfg`（按 §2.4 迁移），跑 `check`，把规则差异（`wired`、同脚冲突）补进 `validate.py`。
 3. 写 4 个 Jinja2 模板 + 标记块替换 + `--dry-run` diff；在真实 SDK 副本上 `--apply` 并编译。
 4. 通过后，删 `index.html` 的生成/校验/常量段，接 `api.py`；再删金机/移植/问卷三套文件。
 5. 最后做 `.uvprojx` 生成与外设参数，并补测试与 CI。

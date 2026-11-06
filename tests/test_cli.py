@@ -157,7 +157,7 @@ def test_rollback_command(tmp_path):
     sdk_root = _make_sdk(tmp_path)
     assert (
         cli.main(
-            ["gen", "--config", str(CONFIGS / "BD319.omcfg"), "--sdk", str(sdk_root), "--apply"]
+            ["gen", "--config", str(CONFIGS / "KC536.omcfg"), "--sdk", str(sdk_root), "--apply"]
         )
         == 0
     )
@@ -235,7 +235,7 @@ def test_rollback_accepts_backup_dir(tmp_path):
     sdk_root = _make_sdk(tmp_path)
     assert (
         cli.main(
-            ["gen", "--config", str(CONFIGS / "BD319.omcfg"), "--sdk", str(sdk_root), "--apply"]
+            ["gen", "--config", str(CONFIGS / "KC536.omcfg"), "--sdk", str(sdk_root), "--apply"]
         )
         == 0
     )

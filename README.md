@@ -92,8 +92,8 @@ robocopy "E:\M_2026\0_T\software\trunk\SE71M_0023_KC536_V1_20260909" "D:\work\KC
 python -m omcfg check --all configs
 ```
 
-预期：`configs/CH04.omcfg`、`configs/KC536.omcfg` 各 `errors: 0`；`configs/BD319.omcfg`
-有 1 条 `KEY_PAIR` 历史 warning（不是 error）。全部通过时退出码 0。
+预期：`configs/CH04.omcfg`、`configs/KC536.omcfg` 各 `errors: 0`、`warnings: 0`。
+全部通过时退出码 0。
 
 ### 2. 初始化副本（一次性）
 

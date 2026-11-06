@@ -10,11 +10,12 @@ CONFIGS = Path(__file__).resolve().parent.parent / "configs"
 
 
 def _spi_config() -> dict:
-    config = copy.deepcopy(model.load_config(CONFIGS / "BD319.omcfg"))
+    config = copy.deepcopy(model.load_config(CONFIGS / "CH04.omcfg"))
     config["board"]["sensor"] = {"bus": "spi_4wire", "dir_clock": 6, "v2_en": True}
     del config["pins"]["SENSOR_SDIO_PIN"]
+    config["pins"]["SENSOR_NCS_PIN"] = "P06"
     config["pins"]["SENSOR_MOSI_PIN"] = "P13"
-    config["pins"]["SENSOR_MISO_PIN"] = "P34"
+    config["pins"]["SENSOR_MISO_PIN"] = "P10"
     return config
 
 
