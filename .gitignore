@@ -12,7 +12,6 @@ htmlcov/
 venv/
 
 # Local application state
-pinmux_state.json
 launch.log
 
 # Editor-local state

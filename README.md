@@ -89,6 +89,8 @@ pins:
 
 - `chip/om6239.json`：芯片引脚与复用约束，校验器只读它。
 - `boards/*.json`：历史板档案，运行时不读取。
+- `archive/pinmux_state.json`：旧 `launch.py` 的本地窗口/路径状态，已归档；
+  P2 做 GUI 运行参数持久化时再启用。
 - `docs/ROADMAP-LIGHTWEIGHT-CUBEMX.md`：重构路线与阶段验收。
 
 ## 测试

@@ -1,5 +1,10 @@
 # om_pinmux 项目概览（OM6239 PinMux / 换板助手）
 
+> **已废弃（2026-11-06）**：本文描述的是旧链路（`launch.py`、`index.html`、`survey/`、
+> 金机对照等），相关模块已在 P1 中删除。现行方案与验收请以
+> [ROADMAP-LIGHTWEIGHT-CUBEMX.md](ROADMAP-LIGHTWEIGHT-CUBEMX.md) 为准；
+> 本文仅作历史参考，不再维护。
+
 - 代码位置：`E:\tools\om_pinmux`
 - 版本：`0.1.0`（[pyproject.toml](pyproject.toml)）
 - 本文档基于 2026-11-06 的源码阅读与实机运行结果；只描述现状，不提出未经验证的能力。
