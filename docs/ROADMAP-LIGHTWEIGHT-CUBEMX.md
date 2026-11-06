@@ -47,7 +47,7 @@
 | 时钟 | 只做“有数据支撑的部分”：系统时钟频率、传感器时钟相位；**不做 PLL 求解器**（芯片数据里没有完整时钟树，先别假装有） |
 | 冲突与合法性校验 | 每次保存/生成前跑同一套规则：脚不存在、独占冲突、模式脚组合、编码器对、LEDC SEL 撞滚轮、USB 固定脚、外设依赖（启用 UART 但没填 TX/RX） |
 | 配置文件唯一真相源 | 一个 `project.omcfg`（YAML），GUI/CLI/生成器都只读它；模板只是“另存为”的起点，运行时不参与合并 |
-| 生成初始化代码 | `user_config.h`（脚位宏 + 唤醒掩码）、`user_config.c`（gpio 表）、`board_features.h`、`periph_gpio_sleep_set.pinmux.c`；全部写进带标记的块 |
+| 生成初始化代码 | `user_config.h`（脚位宏 + 唤醒掩码）、`user_config.c`（gpio 表 + 睡眠初始化函数）、`board_features.h`；全部写进带标记的块；睡眠函数在 `user_config.c` 内是唯一强定义，不再另起 `.pinmux.c` |
 | 生成/更新 Keil 工程 | 从模板生成 `.uvprojx`：源文件分组、include 路径、宏定义按配置增删；不再“无条件追加 ledc” |
 | 用户代码保护区 | 生成文件里固定 `/* USER CODE BEGIN x */ … /* USER CODE END x */`；生成器只改标记外内容，标记缺失/重复直接报错退出，**不再用 fallback 锚点猜位置** |
 
@@ -230,7 +230,7 @@ configs/*.omcfg ──┴→ model.py → validate.py → generate/ + targets/
 
 **范围**
 - 新增 `omcfg/`：`model.py`、`validate.py`、`generate/`、`transaction.py`、`cli.py`；
-- 只做 4 类产物：`user_config.h`、`user_config.c`、`board_features.h`、`periph_gpio_sleep_set.pinmux.c`；
+- 只做 4 类产物：`user_config.h`、`user_config.c`、`board_features.h`、`periph_gpio_sleep_set.pinmux.c`；P2 起睡眠实现并入 `user_config.c`（见 P2 决策记录），只剩 3 个文件；
 - 只做 3 类配置：`pins`、`board`、`project`；
 - 迁移 BD319 与 CH04 两块板做模板；其余 5 块先不动；
 - 旧 GUI **冻结只读**（不再生成/写入），避免双实现。
@@ -257,6 +257,9 @@ UV4 -b <uvprojx> -o build.log
 
 **范围**
 - `targets/uvprojx.py`：用模板生成 `.uvprojx`（源分组、include 路径、宏），按 `board.logo`/`peripherals` 增删源文件；**不再无条件加 ledc**；
+- 睡眠初始化实现并入 `user_config.c` 的 `/* OMCFG BEGIN sleep */` 块，由配置生成**唯一强定义**；`periph_gpio_sleep_set.pinmux.c` 退场：不再生成、从 `.uvprojx` periph 组移除，旧副本中的遗留文件改写成指向 `user_config.c` 的注释；
+- 禁止用 `#if 0` 或另起源文件绕过重复符号；板型差异（LOGO、双/单模式脚）在生成阶段展开，最终产物里不得靠预处理器屏蔽来通过编译；
+- 用户代码保护区：`user_config.h/.c` 与 `board_features.h` 固定 `/* USER CODE BEGIN x */ … /* USER CODE END x */`；缺失 → 报错并提示 `omcfg init`；
 - 标记块规范：`/* OMCFG BEGIN <name> */` … `/* OMCFG END <name> */`；缺失/重复 → 报错退出，不猜锚点；
 - `api.py` + `web/`：前端瘦身到“封装图 + 表单 + issues + diff”，所有动作调后端；
 - 迁移剩余 5 块板（MW650 的 `wired` 必须在校验器中被正式支持，否则不迁）；
@@ -272,6 +275,12 @@ python -m pytest                              :: 全绿
 - **diff 验收**：生成的 `.uvprojx` 与仓库里现有那份，差异只能是“源文件/路径/宏”；不出现“引用不存在文件”（P1 实测过的 `ledc.c` 问题必须消失）。
 - **GUI 一致性验收**：同一配置在 GUI 保存后，CLI 再次 `gen --dry-run` 输出“无变化”。
 - **本阶段延后**：外设参数（UART/SPI/USB）、兼容补丁、时钟页。
+
+**P2 决策记录：睡眠初始化函数的归属（取代 `#if 0` 过渡方案）**
+- 问题：`periph_gpio_sleep_set()` 只在 `user_config.c` 中定义；把参考实现放进独立 `.pinmux.c` 会重复符号，`#if 0` 只是屏蔽编译、不是解决归属。
+- 结论：函数体由 `templates.render_sleep()` 按 `board.logo` / `board.mode_pins` / `LED_LOW_PIN` 展开，写入 `user_config.c` 的 `OMCFG sleep` 块；`omcfg init` 把 SDK 原有手写实现（含文档注释）原样包进该块，重生成后成为唯一强定义。
+- 生成内容逐行复刻两块板既有写法：KC536 的 `user_config.c` 除新增标记行外零差异；CH04 同样是零功能差异。
+- `periph_gpio_sleep_set.pinmux.c` 不再生成、不再列入 `.uvprojx`；旧副本残留文件由 `gen` 改写为一行退场说明。禁止再以 `#if 0` 或另起源文件的方式恢复该文件。
 
 ### P3：外设参数与 opt-in 兼容补丁（收尾）
 
