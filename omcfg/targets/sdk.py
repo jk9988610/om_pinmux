@@ -19,7 +19,7 @@ KEIL_PROJECT = Path("projects/mouse_demo/keil5/SE71M.uvprojx")
 USER_CODE_H = "user_config_h"
 USER_CODE_C = "user_config_c"
 USER_CODE_FEATURES = "board_features_h"
-USER_CODE_SLEEP = "sleep_reference"
+SLEEP_BLOCK = "sleep"
 
 
 class TargetError(RuntimeError):
@@ -188,6 +188,56 @@ def append_user_code(text: str, name: str, path: Path) -> str:
         return text
     prefix = text if text.endswith("\n") or not text else text + "\n"
     return prefix + begin + "\n" + end + "\n"
+
+
+def wrap_function_block(text: str, name: str, signature: str, path: Path) -> str:
+    """把 user_config.c 里已有的函数（连同紧邻的文档注释）包进 OMCFG 标记块。
+
+    只插标记行、不改正文；函数不存在时在文件末尾补一个空块，交给 gen 填写。
+    """
+    if marker_begin(name) in text or marker_end(name) in text:
+        find_block(text, name, path)
+        return text
+    lines = text.splitlines(keepends=True)
+    decl = next((i for i, line in enumerate(lines) if signature in line), None)
+    if decl is None:
+        prefix = text if text.endswith("\n") or not text else text + "\n"
+        return prefix + marker_begin(name) + "\n" + marker_end(name) + "\n"
+    end = _brace_end(lines, decl, path)
+    start = _doc_comment_start(lines, decl)
+    return (
+        "".join(lines[:start])
+        + marker_begin(name)
+        + "\n"
+        + "".join(lines[start : end + 1])
+        + marker_end(name)
+        + "\n"
+        + "".join(lines[end + 1 :])
+    )
+
+
+def _brace_end(lines: list[str], decl: int, path: Path) -> int:
+    depth = 0
+    opened = False
+    for index in range(decl, len(lines)):
+        for char in lines[index]:
+            if char == "{":
+                depth += 1
+                opened = True
+            elif char == "}":
+                depth -= 1
+                if opened and depth == 0:
+                    return index
+    raise TargetError(f"{path} 中函数声明后找不到配对的大括号，拒绝插入 '{SLEEP_BLOCK}' 标记")
+
+
+def _doc_comment_start(lines: list[str], decl: int) -> int:
+    index = decl - 1
+    if index < 0 or lines[index].strip() != "*/":
+        return decl
+    while index >= 0 and not lines[index].lstrip().startswith("/*"):
+        index -= 1
+    return index if index >= 0 else decl
 
 
 def resolve_sdk(sdk_root: Path | str) -> Path:

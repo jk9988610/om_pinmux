@@ -13,7 +13,7 @@ from . import templates
 BLOCKS_H = ("pins", "project_ids", "project_version", "project_names")
 BLOCK_C = "gpio_table"
 BLOCK_FEATURES = "features"
-BLOCK_SLEEP = "sleep"
+BLOCK_SLEEP = sdk.SLEEP_BLOCK
 
 
 @dataclass
@@ -103,6 +103,7 @@ def build_outputs(config: dict, sdk_root: Path | str) -> list[GeneratedFile]:
     if sdk.legacy_markers(source_c.text):
         raise sdk.TargetError(f"{source_c.path} 仍含旧 OM_PINMUX_GENERATED 标记，请先人工迁移")
     text_c = sdk.replace_block(source_c.text, BLOCK_C, table, source_c.path)
+    text_c = sdk.replace_block(text_c, BLOCK_SLEEP, sleep, source_c.path)
     sdk.check_user_code(source_c.text, sdk.USER_CODE_C, source_c.path)
     sdk.ensure_encodable(text_c, source_c.encoding)
     outputs.append(
@@ -118,29 +119,43 @@ def build_outputs(config: dict, sdk_root: Path | str) -> list[GeneratedFile]:
         )
     )
 
-    for relative, block, user_code, payload in (
-        (sdk.BOARD_FEATURES_H, BLOCK_FEATURES, sdk.USER_CODE_FEATURES, features),
-        (sdk.SLEEP_TEMPLATE, BLOCK_SLEEP, sdk.USER_CODE_SLEEP, sleep),
-    ):
-        path = root / relative
-        if path.is_file():
-            src = sdk.read_source(path)
-            if sdk.legacy_markers(src.text):
-                raise sdk.TargetError(f"{src.path} 仍含旧 OM_PINMUX_GENERATED 标记，请先人工迁移")
-            after = sdk.replace_block(src.text, block, payload, path)
-            sdk.check_user_code(src.text, user_code, path)
-            outputs.append(
-                GeneratedFile(
-                    path, src.text, after, src.encoding, src.newline, src.bom, True, [block]
-                )
+    path = root / sdk.BOARD_FEATURES_H
+    if path.is_file():
+        src = sdk.read_source(path)
+        if sdk.legacy_markers(src.text):
+            raise sdk.TargetError(f"{src.path} 仍含旧 OM_PINMUX_GENERATED 标记，请先人工迁移")
+        after = sdk.replace_block(src.text, BLOCK_FEATURES, features, path)
+        sdk.check_user_code(src.text, sdk.USER_CODE_FEATURES, path)
+        outputs.append(
+            GeneratedFile(
+                path, src.text, after, src.encoding, src.newline, src.bom, True, [BLOCK_FEATURES]
             )
-        else:
-            after = _wrap(block, payload) + "\n\n" + _empty_user_code(user_code)
-            outputs.append(
-                GeneratedFile(
-                    path, "", after, header.encoding, header.newline, header.bom, False, [block]
-                )
+        )
+    else:
+        after = _wrap(BLOCK_FEATURES, features) + "\n\n" + _empty_user_code(sdk.USER_CODE_FEATURES)
+        outputs.append(
+            GeneratedFile(
+                path,
+                "",
+                after,
+                header.encoding,
+                header.newline,
+                header.bom,
+                False,
+                [BLOCK_FEATURES],
             )
+        )
+
+    retired = root / sdk.SLEEP_TEMPLATE
+    if retired.is_file():
+        src = sdk.read_source(retired)
+        pointer = (
+            "/* 本文件已退场：periph_gpio_sleep_set() 由 omcfg 生成到 user_config.c 的"
+            " OMCFG sleep 块，不再参与编译。 */\n"
+        )
+        outputs.append(
+            GeneratedFile(retired, src.text, pointer, src.encoding, src.newline, src.bom, True, [])
+        )
 
     project = uvprojx.project_path(config, root)
     if project is not None:

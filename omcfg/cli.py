@@ -95,13 +95,16 @@ def _init_header(text: str, path: Path) -> str:
 
 
 def _init_source(text: str, path: Path) -> str:
-    return _insert_block(
+    text = _insert_block(
         text,
         path,
         generator.BLOCK_C,
         "const user_gpio_config_t gpio_config_table[] = {",
         "};",
         starts=False,
+    )
+    return sdk.wrap_function_block(
+        text, sdk.SLEEP_BLOCK, "void periph_gpio_sleep_set", path
     )
 
 
@@ -153,10 +156,7 @@ def cmd_init(args: argparse.Namespace) -> int:
             else:
                 print(f"标记已存在: {path}")
 
-        for relative, user_code in (
-            (sdk.BOARD_FEATURES_H, sdk.USER_CODE_FEATURES),
-            (sdk.SLEEP_TEMPLATE, sdk.USER_CODE_SLEEP),
-        ):
+        for relative, user_code in ((sdk.BOARD_FEATURES_H, sdk.USER_CODE_FEATURES),):
             path = root / relative
             if not path.is_file():
                 continue
@@ -271,7 +271,7 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument("paths", nargs="*")
     check.add_argument("--all", metavar="DIR", help="检查目录下所有 *.omcfg")
 
-    gen = sub.add_parser("gen", help="生成 4 个文件；默认 dry-run")
+    gen = sub.add_parser("gen", help="生成配置代码与 Keil 工程；默认 dry-run")
     gen.add_argument("--config")
     gen.add_argument("--sdk", required=True)
     gen.add_argument("--dry-run", action="store_true", help="只打印 diff（默认行为）")

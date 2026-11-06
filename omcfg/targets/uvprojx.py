@@ -25,9 +25,10 @@ INCLUDE_RE = re.compile(r"(<IncludePath>)([^<]*)(</IncludePath>)")
 PERIPH_REQUIRED = (
     ("user_config.c", "1"),
     ("board_features.h", "5"),
-    ("periph_gpio_sleep_set.pinmux.c", "1"),
 )
 LEDC_SOURCES = ("ledc.c", "ledc_mode.c")
+# 睡眠实现已并入 user_config.c 的 OMCFG sleep 块，旧模板文件不再参与构建。
+ALWAYS_REMOVE = ("periph_gpio_sleep_set.pinmux.c",)
 
 
 def project_path(config: dict, sdk_root: Path | str) -> Path | None:
@@ -98,7 +99,9 @@ def _rewrite_group(group_text: str, config: dict, path: Path) -> str:
     blocks = FILE_RE.findall(files.group("inner"))
     file_indent, child_indent = _indents(blocks)
 
-    removals = set() if model.board(config).get("logo") == "ledc" else set(LEDC_SOURCES)
+    removals = set(ALWAYS_REMOVE)
+    if model.board(config).get("logo") != "ledc":
+        removals.update(LEDC_SOURCES)
     kept: list[str] = []
     seen: set[str] = set()
     for block in blocks:

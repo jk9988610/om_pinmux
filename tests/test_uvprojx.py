@@ -60,6 +60,11 @@ UVPROJX = """<?xml version="1.0" encoding="UTF-8" standalone="no"?>
               <FileType>1</FileType>
               <FilePath>..\\periph\\ledc_mode.c</FilePath>
             </File>
+            <File>
+              <FileName>periph_gpio_sleep_set.pinmux.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\\periph\\periph_gpio_sleep_set.pinmux.c</FilePath>
+            </File>
           </Files>
         </Group>
       </Groups>
@@ -97,6 +102,9 @@ SOURCE = "\n".join(
         "old",
         "/* OMCFG END gpio_table */",
         "};",
+        "/* OMCFG BEGIN sleep */",
+        "old",
+        "/* OMCFG END sleep */",
         "/* USER CODE BEGIN user_config_c */",
         "/* USER CODE END user_config_c */",
         "",
@@ -113,7 +121,7 @@ def test_ledc_board_adds_generated_files(tmp_path):
     path.write_text(UVPROJX, encoding="utf-8")
     after = uvprojx.update_project(UVPROJX, _config(), path)
     assert "<FileName>board_features.h</FileName>" in after
-    assert "<FileName>periph_gpio_sleep_set.pinmux.c</FileName>" in after
+    assert "<FileName>periph_gpio_sleep_set.pinmux.c</FileName>" not in after
     assert "<FileType>5</FileType>" in after
     assert "<FileName>ledc.c</FileName>" in after
     assert "<FileName>ledc_mode.c</FileName>" in after
@@ -126,6 +134,7 @@ def test_rgb_board_removes_ledc_sources(tmp_path):
     after = uvprojx.update_project(UVPROJX, _config("KC536.omcfg"), path)
     assert "<FileName>ledc.c</FileName>" not in after
     assert "<FileName>ledc_mode.c</FileName>" not in after
+    assert "<FileName>periph_gpio_sleep_set.pinmux.c</FileName>" not in after
     assert "<FileName>user_config.c</FileName>" in after
     assert "<FileName>board_features.h</FileName>" in after
 
@@ -160,7 +169,28 @@ def test_generator_wires_project_file(tmp_path):
     project = outputs["SE71M.uvprojx"]
     assert project.changed
     assert "<FileName>board_features.h</FileName>" in project.after
-    assert "<FileName>periph_gpio_sleep_set.pinmux.c</FileName>" in project.after
+    assert "<FileName>periph_gpio_sleep_set.pinmux.c</FileName>" not in project.after
+
+    source = outputs["user_config.c"]
+    assert "void periph_gpio_sleep_set()" in source.after
+    assert "#if" not in source.after
+    assert "periph_gpio_sleep_set.pinmux.c" not in outputs
+
+
+def test_retired_sleep_file_becomes_pointer(tmp_path):
+    root = tmp_path / "sdk"
+    periph = root / "projects/mouse_demo/periph"
+    periph.mkdir(parents=True)
+    (periph / "user_config.h").write_text(HEADER, encoding="utf-8")
+    (periph / "user_config.c").write_text(SOURCE, encoding="utf-8")
+    stale = periph / "periph_gpio_sleep_set.pinmux.c"
+    stale.write_text("#if 0\nvoid periph_gpio_sleep_set() {}\n#endif\n", encoding="utf-8")
+
+    outputs = {item.path.name: item for item in generator.build_outputs(_config(), root)}
+    retired = outputs["periph_gpio_sleep_set.pinmux.c"]
+    assert retired.changed
+    assert "已退场" in retired.after
+    assert "#if" not in retired.after
 
 
 def test_ledc_rgb_number_reads_config():

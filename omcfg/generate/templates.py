@@ -328,66 +328,51 @@ def render_features(config: dict, pins: dict[str, dict[str, str]]) -> str:
 
 
 def render_sleep(config: dict, pins: dict[str, dict[str, str]]) -> str:
-    name = model.project(config).get("name", "")
+    """生成 user_config.c 的 periph_gpio_sleep_set() 实现（唯一强定义）。
+
+    逐行复刻 SDK 既有写法：板型之间只差模式脚/LOGO 分支，避免无意义的整段
+    重排。该 payload 写进 user_config.c 的 OMCFG sleep 块，不再生成独立 .c。
+    """
     b = model.board(config)
     lines = [
-        '#include "board_features.h"',
-        "",
         "/**",
-        " * periph_gpio_sleep_set() 板型参考实现 — 由 omcfg 生成，请合并进 user_config.c",
-        f" * board: {name}",
-        " * SDK 的 user_config.c 已定义同名函数；本文件以 #if 0 包住参考实现，避免重复符号。",
-        " * 合并完成后把 #if 0 改为 1，或直接删除本文件。",
+        " * @brief 外设IO口配置，休眠前调用，避免漏电",
+        " * ",
         " */",
-        "#if 0",
         "void periph_gpio_sleep_set()",
         "{",
-        "    gpio_set_pad_buffer(LVD_PIN, PAD_IN_BUFFER_OFF);",
+        "    gpio_set_pad_buffer(LVD_PIN,PAD_IN_BUFFER_OFF);     "
+        "/* 关掉LVD的输入BUFFER，避免漏电 */",
         "",
         "    gpio_set_pd(WHEEL_A_PIN);",
         "    gpio_set_pd(WHEEL_B_PIN);",
         "",
     ]
-    if b.get("logo") == "ledc":
+    if b.get("logo") == "ledc" and "LEDC_PIN" in pins:
+        lines += ["    gpio_dir_in(LEDC_PIN);", "    gpio_set_pd(LEDC_PIN);"]
+        if "LED_LOW_PIN" in pins:
+            lines.append("    led_low_off();")
+        lines.append("")
+    mode = b.get("mode_pins")
+    if mode == "dual":
         lines += [
-            "#if BOARD_LOGO_LEDC",
-            "    gpio_dir_in(LEDC_PIN);",
-            "    gpio_set_pd(LEDC_PIN);",
-            "#endif",
-        ]
-    if "LED_LOW_PIN" in pins:
-        lines += ["#if BOARD_HAS_LED_LOW", "    led_low_off();", "#endif"]
-    lines.append("")
-    if b.get("mode_pins") == "dual":
-        lines += [
-            "#if BOARD_MODE_DUAL_PIN",
             "    if (gpio_read(MODE_24G_PIN))",
-            "        gpio_set_pu(MODE_24G_PIN, PU_30K);",
+            "        gpio_set_pu(MODE_24G_PIN,PU_30K);",
             "    else",
             "        gpio_set_pd(MODE_24G_PIN);",
             "    if (gpio_read(MODE_BLE_PIN))",
-            "        gpio_set_pu(MODE_BLE_PIN, PU_30K);",
+            "        gpio_set_pu(MODE_BLE_PIN,PU_30K);",
             "    else",
             "        gpio_set_pd(MODE_BLE_PIN);",
-            "#endif",
+            "    ",
+            "    ",
         ]
-    else:
+    elif mode == "single":
         lines += [
-            "#if BOARD_MODE_SINGLE_PIN",
-            "    if (MODE_BLE_CHECK == gpio_read(MODE_BLE_24G_PIN))",
+            "    if(MODE_BLE_CHECK == gpio_read(MODE_BLE_24G_PIN))",
             "        gpio_set_pd(MODE_BLE_24G_PIN);",
             "    else",
-            "        gpio_set_pu(MODE_BLE_24G_PIN, PU_30K);",
-            "#endif",
+            "        gpio_set_pu(MODE_BLE_24G_PIN,PU_30K);",
         ]
-    if b.get("logo") == "rgb":
-        off_call = "gpio_clear" if b.get("led_polarity") == "active_high" else "gpio_set"
-        lines += [
-            "",
-            "#if BOARD_LOGO_RGB",
-            "    /* RGB LOGO：按原理图决定休眠时拉低/浮空，以下为常见关灯写法 */",
-            f"    // {off_call}(LED_R_PIN); {off_call}(LED_G_PIN); {off_call}(LED_B_PIN);",
-            "#endif",
-        ]
-    lines += ["", "    OM_RCC->CLKGATE = 0x0742;", "}", "#endif"]
+    lines += ["    OM_RCC->CLKGATE = 0x0742;", "}"]
     return "\n".join(lines)
