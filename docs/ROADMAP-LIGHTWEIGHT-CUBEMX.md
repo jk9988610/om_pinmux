@@ -310,6 +310,31 @@ python -m pytest                              :: 全绿
 - CH04 改 `ledc_rgb_number: 6 → 10` 后重生成，diff 仅 `LEDC_RGB_NUMBER` 一行；重新编译 0 Error，且 Code/ZI 变化，证明字段被真实使用而非空壳。
 - `pytest`、`ruff`、`check --all` 全绿；保护区手写行重生成后保留。
 
+**P4：常规路径打磨（SDIO 3 线板，2026-11-06）**
+
+目标是把“日常使用链路”做扎实，不扩功能面；4 线板（HYC-275QLH）明确延后。
+
+- **CLI**：`init/check/gen/rollback` 均有带示例的 `--help`；错误统一为
+  `[ERROR] 现象 + 提示: 可照做的下一步`。退出码固定为 0 成功、1 校验失败、
+  2 环境/标记块/manifest 错误、3 写盘失败；4 为历史预留，不再返回。
+- **回滚入口**：`rollback --manifest` 同时接受 `manifest.json` 和它所在的
+  `.omcfg_bak_*` 目录；manifest/备份缺失、JSON 损坏均给出定位提示，返回 2。
+- **配置与板不匹配**：比较 `project.name/customer` 与 SDK 现有
+  `iPROJECT_NAME/iCONSUMER_NAME`，只报 warning、不阻断——因为“在副本上换板”是
+  合法用法；提示要求确认 `--sdk/--config` 配对。
+- **GUI 薄视图**：新增唯一后端方法 `Api.save_pins()`，前端只把脚位 `<input>` 的
+  值提交回来；校验、YAML 文本精确替换（保留注释与排版）、事务写入都在 Python。
+  实测闭环：打开 → 改 `KEY_R0_PIN` → 保存 → 预览 diff → 应用。禁止把校验或
+  生成逻辑搬回 JS。
+- **事务目录**：时间戳增加微秒，避免同秒内 `init` 后紧跟 `gen --apply` 时目录
+  冲突；manifest 位置与保留策略不变（不自动清理）。
+- **验收**：CH04/KC536 副本 `check → init → gen --apply → UV4 -r` 均
+  `0 Error / 0 Warning`（CH04 Code=39428，KC536 Code=38580）；`rollback` 后
+  4 个文件的 SHA1 与 apply 前一致、新建文件被删除，二次 `gen --dry-run` 输出与
+  apply 前逐字节相同；失败路径 8 种均有退出码与提示记录；`pytest`、`ruff`、
+  `check --all` 全绿。
+- **不做**：4 线板模板、新工程一键生成（复制 SDK + init + 编译）。
+
 ---
 
 ## 5. 砍并清单（逐项去留）
@@ -329,7 +354,7 @@ python -m pytest                              :: 全绿
 | `survey.py` + `survey/` | 18.1 KB + 57 问 | **归档** | 问卷是“没有配置器时的替代品”；有了 `.omcfg` + GUI 表单就没有存在意义 |
 | `index.html` | 91.6 KB | **重写为 `web/`（目标 <20 KB HTML+JS）** | 现在它同时是 UI + 第二校验器 + 生成器 + 模板库；必须只留视图 |
 | `launch.py` | 50.7 KB | **拆为 `api.py`(薄) + `app.py`(启动)** | 里面混了 golden/synth/apply_pack 等已删能力的入口，路由不清理会继续绑死旧链路 |
-| `om_pinmux.py` | 7 个子命令 | **改为 `omcfg/cli.py`：`init/check/gen/write/ui`** | `port/compare/rollback` 中只有 rollback 保留（并入 write 的 `--rollback`） |
+| `om_pinmux.py` | 7 个子命令 | **改为 `omcfg/cli.py`：`init/check/gen/rollback`（GUI 由 `app.py` 启动）** | 旧 `port/compare` 删除；rollback 独立成子命令，退出码与 manifest 语义更清晰 |
 | `layout_lab.html` | 9.2 KB | **删除** | 布局实验页，无功能价值 |
 | `assets/` | 空目录 | **删除** | 无内容 |
 | `schemas/board-desc-v2.schema.json` | 0 字节 | **删除，新增 `schemas/omcfg-v1.schema.json`（实文件）** | 0 字节 schema 是“有形式无实质”的证据 |
@@ -369,6 +394,6 @@ python -m pytest                              :: 全绿
 
 - **结论**：改进（结构性重构）。保留数据/事务/契约改写/GUI 壳，重写模型-校验-生成-CLI，删除金机/供体/问卷。
 - **唯一源**：`<SDK>/projects/mouse_demo/project.omcfg`；模板只是起点。
-- **核心命令**：`python -m omcfg check|gen --dry-run|gen --apply|init|ui`。
+- **核心命令**：`python -m omcfg check|init|gen --dry-run|gen --apply|rollback`。
 - **验收三件套**：`check` 0 error、`UV4 -b` 0 error、`git diff` 只动标记块。
-- **首阶段只做**：pins + board + project → 4 个生成文件 → 真实 SDK 副本编译通过。
+- **首阶段只做**：pins + board + project → 3 个源码文件 + Keil 工程条目 → 真实 SDK 副本编译通过。
