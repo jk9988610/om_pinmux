@@ -17,7 +17,10 @@
     "ledPolarity": "active_high",
     "sensorDir": "SENSOR_DIR_CLOCK_6",
     "wheelMux": "ENCODER_PINMUX_SEL_IO_24_25",
-    "wheelNote": "ZWHA/ZWHB=P24/P25 → 硬件 ENCODER_PINMUX_SEL_IO_24_25"
+    "wheelNote": "ZWHA/ZWHB=P24/P25 → 硬件 ENCODER_PINMUX_SEL_IO_24_25",
+    "sensorBus": "spi_4wire_or_sdio_review",
+    "pairing24g": "none",
+    "hasKeyPair": false
   },
   "features": {
     "BOARD_HAS_KEY_C0": false,
@@ -86,7 +89,12 @@
     "SCK": "P11",
     "SDIO": "P12"
   },
-  "unused_package_gpio": ["P13", "P22", "P23", "P34"],
+  "unused_package_gpio": [
+    "P13",
+    "P22",
+    "P23",
+    "P34"
+  ],
   "derived": {
     "LVD_CHECK_INDEX": "POF_LVD_PIN_P33",
     "WHEEL_IO_SELECT": "ENCODER_PINMUX_SEL_IO_24_25",
@@ -94,7 +102,10 @@
   },
   "notes": [
     "无 KEY_PAIR：key_io 需 #ifdef KEY_PAIR_PIN",
-    "双模式脚：key_io/user_config sleep 用 MODE_24G_PIN + MODE_BLE_PIN，不要 MODE_BLE_24G_PIN"
+    "双模式脚：key_io/user_config sleep 用 MODE_24G_PIN + MODE_BLE_PIN，不要 MODE_BLE_24G_PIN",
+    "Engineering user_config uses 4-wire MOSI/MISO; if driver is drv_senscan switch to SDIO only",
+    "No first_24g_auto and PAIR commented: weak 24G first-pair path — enable in survey",
+    "Use survey/QUESTIONNAIRE.md for bring-up; do not copy neighbor board blindly"
   ],
   "source": "E:/M_2026_T/description/BD319 (mcu_om6239_main + modules)"
 }

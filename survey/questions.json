@@ -1,0 +1,134 @@
+{
+  "schema": "om6239-bringup-questions/v1",
+  "title": "OM6239 鼠标开板调查表（非业务）",
+  "purpose": "只收集脚位/拓扑/配对策略/冲突风险，生成 boards/*.json，再交给 om_pinmux 写入 user_config。不改 RF/HID 业务协议。",
+  "workflow": [
+    "1. python survey.py blank  → 填 answers",
+    "2. python survey.py check --answers survey/answers_<板名>.json",
+    "3. python survey.py export --answers ...  → boards/<板名>.json",
+    "4. 打开 launch.ps1 选板 → 校验 → 写入工程",
+    "5. 按冒烟清单：键控灯 / 滚轮 / 传感器 / USB HID / 24G·BLE 配对"
+  ],
+  "sections": [
+    {
+      "id": "identity",
+      "title": "A. 项目身份",
+      "items": [
+        {"id": "proj_name", "type": "string", "label": "板名/工程短名", "help": "如 BD319、HTW17，将作为 boards/<Name>.json 文件名", "default": "NEWBOARD", "required": true},
+        {"id": "consumer_name", "type": "string", "label": "客户简称", "default": "App"},
+        {"id": "proj_id_l", "type": "string", "label": "项目号低字 (projIdL)", "help": "如 0x0486", "default": "0x0000"},
+        {"id": "proj_id_h", "type": "string", "label": "项目号高字 (projIdH)", "default": "0x071"},
+        {"id": "ver_id", "type": "int", "label": "版本号 verId", "default": 1},
+        {"id": "golden_hint", "type": "enum", "label": "建议金机/底包参考", "options": ["KC536", "CH04", "A02", "BD316", "BD319", "MW650", "HTW17", "OTHER"], "default": "CH04", "help": "RGB 板勿整包 port_apply CH04 LEDC；有线/灯带板可参考 CH04/MW650"}
+      ]
+    },
+    {
+      "id": "mode",
+      "title": "B. 模式开关拓扑",
+      "items": [
+        {"id": "mode_topology", "type": "enum", "label": "模式脚拓扑", "options": ["single", "dual", "wired"], "default": "dual", "help": "single=MODE_BLE_24G 一脚; dual=MODE_24G+MODE_BLE; wired=仅 MODE_WIRED（如 MW650）"},
+        {"id": "mode_single", "type": "pin", "label": "MODE_BLE_24G_PIN", "default": "", "when": {"mode_topology": "single"}},
+        {"id": "mode_24g", "type": "pin", "label": "MODE_24G_PIN", "default": "", "when": {"mode_topology": "dual"}},
+        {"id": "mode_ble", "type": "pin", "label": "MODE_BLE_PIN", "default": "", "when": {"mode_topology": "dual"}},
+        {"id": "mode_wired", "type": "pin", "label": "MODE_WIRED_PIN", "default": "", "when": {"mode_topology": "wired"}},
+        {"id": "mode_ble_check", "type": "enum", "label": "MODE_BLE_CHECK 有效值", "options": [0, 1], "default": 0, "help": "读脚==此值判为 BLE；HTW17 曾出现两端 CHECK 同为 1，需核原理图"},
+        {"id": "mode_24g_check", "type": "enum", "label": "MODE_24G_CHECK 有效值", "options": [0, 1], "default": 1}
+      ]
+    },
+    {
+      "id": "keys",
+      "title": "C. 按键",
+      "items": [
+        {"id": "key_l", "type": "pin", "label": "左键 KEY_R0", "default": "", "required": true},
+        {"id": "key_r", "type": "pin", "label": "右键 KEY_R1", "default": "", "required": true},
+        {"id": "key_m", "type": "pin", "label": "中键 KEY_R2", "default": "", "required": true},
+        {"id": "has_extra_keys", "type": "bool", "label": "有前进/后退侧键", "default": true},
+        {"id": "key_4", "type": "pin", "label": "侧键4 KEY_B", "default": "", "when": {"has_extra_keys": true}},
+        {"id": "key_5", "type": "pin", "label": "侧键5 KEY_P", "default": "", "when": {"has_extra_keys": true}},
+        {"id": "key_dpi", "type": "pin", "label": "DPI 键", "default": ""},
+        {"id": "has_dpi_pair", "type": "bool", "label": "有 DPI+/- 双键", "default": false},
+        {"id": "has_pair", "type": "bool", "label": "有独立配对键 KEY_PAIR", "default": false, "help": "无独立键时勿占用 DPI 同脚；依赖自动配对策略"},
+        {"id": "key_pair", "type": "pin", "label": "KEY_PAIR_PIN", "default": "", "when": {"has_pair": true}},
+        {"id": "has_key_c0", "type": "bool", "label": "有 KEY_C0（CH04 类）", "default": false},
+        {"id": "key_c0", "type": "pin", "label": "KEY_C0_PIN", "default": "", "when": {"has_key_c0": true}},
+        {"id": "uart_alias", "type": "enum", "label": "UART_PIN 复用哪颗键", "options": ["NONE", "KEY_R0", "KEY_R1", "KEY_R2"], "default": "NONE", "help": "复用后 uart_tx 会弄坏该键"}
+      ]
+    },
+    {
+      "id": "wheel",
+      "title": "D. 滚轮编码器",
+      "items": [
+        {"id": "wheel_a", "type": "pin", "label": "WHEEL_A", "default": "", "required": true},
+        {"id": "wheel_b", "type": "pin", "label": "WHEEL_B", "default": "", "required": true},
+        {"id": "wheel_mux", "type": "enum", "label": "硬件 ENCODER mux", "options": ["ENCODER_PINMUX_SEL_IO_00_01", "ENCODER_PINMUX_SEL_IO_05_06", "ENCODER_PINMUX_SEL_IO_20_21", "ENCODER_PINMUX_SEL_IO_24_25"], "default": "ENCODER_PINMUX_SEL_IO_20_21", "help": "只能是这四对：00/01、05/06、20/21、24/25"},
+        {"id": "wheel_soft_gpio", "type": "bool", "label": "软件 GPIO 滚轮（非硬件 encoder）", "default": false}
+      ]
+    },
+    {
+      "id": "sensor",
+      "title": "E. 光学传感器",
+      "items": [
+        {"id": "sensor_bus", "type": "enum", "label": "传感器总线", "options": ["sdio_3wire", "spi_4wire"], "default": "sdio_3wire", "help": "3线=SDIO+SCLK(+可选NCS)；4线=NCS/SCLK/MOSI/MISO。不可混宏"},
+        {"id": "motion", "type": "pin", "label": "MOTION", "default": "P07"},
+        {"id": "sclk", "type": "pin", "label": "SCLK", "default": "P11"},
+        {"id": "sdio", "type": "pin", "label": "SDIO", "default": "P12", "when": {"sensor_bus": "sdio_3wire"}},
+        {"id": "ncs", "type": "pin", "label": "NCS", "default": "P10", "when": {"sensor_bus": "spi_4wire"}},
+        {"id": "mosi", "type": "pin", "label": "MOSI", "default": "P12", "when": {"sensor_bus": "spi_4wire"}},
+        {"id": "miso", "type": "pin", "label": "MISO", "default": "P13", "when": {"sensor_bus": "spi_4wire"}},
+        {"id": "sensor_dir", "type": "enum", "label": "SENSOR_DIR", "options": ["SENSOR_DIR_CLOCK_0", "SENSOR_DIR_CLOCK_3", "SENSOR_DIR_CLOCK_6", "SENSOR_DIR_CLOCK_9"], "default": "SENSOR_DIR_CLOCK_6"}
+      ]
+    },
+    {
+      "id": "led",
+      "title": "F. 指示灯 / LOGO",
+      "items": [
+        {"id": "logo_type", "type": "enum", "label": "LOGO 类型", "options": ["rgb", "ledc", "none"], "default": "rgb"},
+        {"id": "led_polarity", "type": "enum", "label": "模式灯极性", "options": ["active_high", "active_low"], "default": "active_low", "help": "active_low: on=gpio_clear；active_high: on=gpio_set"},
+        {"id": "led_r", "type": "pin", "label": "LED_MODE_R", "default": ""},
+        {"id": "led_g", "type": "pin", "label": "LED_MODE_G", "default": ""},
+        {"id": "led_b", "type": "pin", "label": "LED_MODE_B", "default": ""},
+        {"id": "has_led_low", "type": "bool", "label": "有电量低灯 LED_LOW", "default": false},
+        {"id": "led_low", "type": "pin", "label": "LED_LOW_PIN", "default": "", "when": {"has_led_low": true}},
+        {"id": "ledc", "type": "pin", "label": "LEDC_PIN", "default": "", "when": {"logo_type": "ledc"}},
+        {"id": "ledc_ctrl", "type": "pin", "label": "LEDC_CTRL_PIN", "default": "", "when": {"logo_type": "ledc"}}
+      ]
+    },
+    {
+      "id": "power",
+      "title": "G. 电源检测",
+      "items": [
+        {"id": "usb_5v", "type": "pin", "label": "USB_5V 检测", "default": ""},
+        {"id": "bat_chg", "type": "pin", "label": "BAT_CHG", "default": ""},
+        {"id": "lvd", "type": "pin", "label": "LVD", "default": "P33", "help": "常见 P23/P33"}
+      ]
+    },
+    {
+      "id": "pairing",
+      "title": "H. 配对策略（无业务协议，只定触发）",
+      "items": [
+        {"id": "pairing_24g", "type": "enum", "label": "2.4G 配对触发", "options": ["first_24g_auto", "pair_key_longpress", "none"], "default": "first_24g_auto", "help": "A02/BD316/HTW17 有 first_24g_con；BD319/KC536/CH04/MW650 无"},
+        {"id": "pairing_ble", "type": "enum", "label": "BLE 配对触发", "options": ["ble_id_ff_auto", "pair_key_longpress", "reset_connect_flag"], "default": "ble_id_ff_auto", "help": "ble_id==0xFF 或 reset_connect 位自动进 bom6239_conning"}
+      ]
+    },
+    {
+      "id": "smoke",
+      "title": "I. 写入后冒烟（人工勾选，工具只提示）",
+      "items": [
+        {"id": "smoke_key_led", "type": "bool", "label": "计划做：按键控灯自测", "default": true},
+        {"id": "smoke_wheel", "type": "bool", "label": "计划做：滚轮 HID", "default": true},
+        {"id": "smoke_sensor", "type": "bool", "label": "计划做：光流/Cursor 移动", "default": true},
+        {"id": "smoke_usb", "type": "bool", "label": "计划做：USB HID 按键位", "default": true},
+        {"id": "smoke_pair", "type": "bool", "label": "计划做：24G/BLE 配对", "default": true}
+      ]
+    }
+  ],
+  "lessons_from_boards": [
+    {"id": "SENSOR_MIX", "from": ["BD319", "BD316"], "text": "user_config 同时留 SDIO 与 MOSI/MISO 会与驱动不一致，编译过了也跑挂"},
+    {"id": "UART_KEY", "from": ["BD319", "A02", "KC536"], "text": "UART_PIN 常复用某键；调试打印后该键失效"},
+    {"id": "DPI_PAIR", "from": ["A02", "BD319"], "text": "DPI 与 PAIR 同脚时必须注释 PAIR，改走自动配对"},
+    {"id": "LEDC_WHEEL", "from": ["CH04", "chip lessons"], "text": "LEDC_SEL 脚不可与 WHEEL 重叠"},
+    {"id": "RGB_VS_CH04", "from": ["BD319"], "text": "RGB 板禁止 CH04 整包 port_apply"},
+    {"id": "FIRST_24G", "from": ["A02", "BD316", "HTW17"], "text": "无 PAIR 时 24G 首次配对靠 first_24g_con"},
+    {"id": "MODE_CHECK", "from": ["HTW17"], "text": "两端 CHECK 同值时模式判定需人工复核"}
+  ]
+}

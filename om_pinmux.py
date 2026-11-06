@@ -1,9 +1,10 @@
-"""Unified command-line entry point for OM6239 PinMux services."""
+﻿"""Unified command-line entry point for OM6239 PinMux services."""
 from __future__ import annotations
 
 import argparse
 import json
 import sys
+from pathlib import Path
 from typing import Any
 
 import board_pack
@@ -12,6 +13,7 @@ import operations
 import port_apply
 import synth_golden
 import validation
+import survey
 
 EXIT_OK = 0
 EXIT_VALIDATION = 1
@@ -79,8 +81,30 @@ def main(argv: list[str] | None = None) -> int:
     rollback_cmd.add_argument("--manifest", required=True)
     rollback_cmd.add_argument("--json", action="store_true")
 
+    survey_cmd = sub.add_parser("survey", help="开板调查表 blank/check/export")
+    survey_cmd.add_argument("survey_action", choices=["blank", "check", "export"])
+    survey_cmd.add_argument("--answers", default="")
+    survey_cmd.add_argument("--out", default="")
+    survey_cmd.add_argument("--force", action="store_true")
+    survey_cmd.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
     try:
+        if args.command == "survey":
+            if args.survey_action == "blank":
+                path = survey.write_blank(Path(args.out) if args.out else None)
+                result = {"ok": True, "path": str(path), "message": f"空白调查表: {path}"}
+            elif args.survey_action == "check":
+                if not args.answers:
+                    parser.error("survey check 需要 --answers")
+                result = survey.check_answers(Path(args.answers))
+            else:
+                if not args.answers:
+                    parser.error("survey export 需要 --answers")
+                result = survey.export_board(Path(args.answers), Path(args.out) if args.out else None, force=args.force)
+                if "board" in result:
+                    result = {k: v for k, v in result.items() if k != "board"}
+            _print_result(result, args.json)
+            return _exit_code(result, write_operation=(args.survey_action == "export" and result.get("ok")))
         if args.command == "validate":
             if not args.all and not args.board:
                 parser.error("validate 需要 --board 或 --all")
@@ -124,3 +148,4 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

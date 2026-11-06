@@ -1,0 +1,70 @@
+{
+  "schema": "om6239-board-desc/v2",
+  "chip": "OM6239",
+  "meta": {
+    "projName": "MW650",
+    "consumerName": "App",
+    "projIdL": "0x0489",
+    "projIdH": "0x071",
+    "verId": 1,
+    "modePins": "wired",
+    "logoType": "ledc",
+    "hasKeyPair": true,
+    "hasExtraKeys": true,
+    "hasSensorNcs": true,
+    "ledPolarity": "active_high",
+    "sensorBus": "spi_4wire",
+    "wheelMux": "ENCODER_PINMUX_SEL_IO_05_06",
+    "pairing24g": "none",
+    "uartAlias": "KEY_R2",
+    "sensorDir": "SENSOR_DIR_CLOCK_6"
+  },
+  "features": {
+    "BOARD_MODE_WIRED_PIN": true,
+    "BOARD_LOGO_LEDC": true,
+    "BOARD_LED_ACTIVE_HIGH": true,
+    "BOARD_SENSOR_SPI_4WIRE": true,
+    "BOARD_HAS_KEY_PAIR": true,
+    "BOARD_HAS_SENSOR_NCS": true
+  },
+  "pins": {
+    "KEY_DPI_PIN": "P27",
+    "KEY_PAIR_PIN": "P30",
+    "WHEEL_A_PIN": "P05",
+    "WHEEL_B_PIN": "P06",
+    "MODE_WIRED_PIN": "P31",
+    "SENSOR_NCS_PIN": "P10",
+    "SENSOR_SCLK_PIN": "P11",
+    "SENSOR_MOSI_PIN": "P12",
+    "SENSOR_MISO_PIN": "P13",
+    "SENSOR_MOTION_PIN": "P07",
+    "LED_MODE_R_PIN": "P21",
+    "LED_MODE_G_PIN": "P20",
+    "LED_MODE_B_PIN": "P36",
+    "LEDC_CTRL_PIN": "P22",
+    "LEDC_PIN": "P01",
+    "USB_5V": "P04",
+    "BAT_CHG_PIN": "P24",
+    "LVD_PIN": "P23",
+    "USB_DN_PIN": "P02",
+    "USB_DP_PIN": "P03",
+    "FLASH_CS_PIN": "P17",
+    "FLASH_SCLK_PIN": "P15",
+    "FLASH_MOSI_PIN": "P16",
+    "FLASH_MISO_PIN": "P14",
+    "KEY_R0_PIN": "P33",
+    "KEY_R1_PIN": "P00",
+    "KEY_R2_PIN": "P32",
+    "KEY_B_PIN": "P25",
+    "KEY_P_PIN": "P26"
+  },
+  "derived": {
+    "LVD_CHECK_INDEX": "POF_LVD_PIN_P23",
+    "WHEEL_IO_SELECT": "ENCODER_PINMUX_SEL_IO_05_06"
+  },
+  "notes": [
+    "MODE_WIRED + LEDC; fill L/R/M from schematic in survey",
+    "LEDC must not overlap wheel"
+  ],
+  "source": "D:/SE71M_0489_MW650_V1_20260918_orign"
+}
