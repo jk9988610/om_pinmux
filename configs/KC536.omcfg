@@ -1,0 +1,56 @@
+# OM6239 项目配置 — KC536（当前 SDK 基线，用于验证生成结果与现状一致）
+schema: om6239-project/v1
+chip: OM6239
+
+project:
+  name: KC536
+  customer: BYC
+  id:
+    low: "0x0023"
+    high: "0x071"
+    version: 5
+
+board:
+  mode_pins: single
+  logo: rgb
+  led_polarity: active_low
+  sensor:
+    bus: sdio_3wire
+    dir_clock: 6
+  wheel: ENCODER_PINMUX_SEL_IO_20_21
+
+pins:
+  KEY_R0_PIN: P34
+  KEY_R1_PIN: P07
+  KEY_R2_PIN: P10
+  KEY_B_PIN: P22
+  KEY_P_PIN: P25
+  KEY_DPI_PIN: P31
+  KEY_PAIR_PIN: P27
+  WHEEL_A_PIN: P21
+  WHEEL_B_PIN: P20
+  MODE_BLE_24G_PIN:
+    pin: P26
+    gpio: { mode: input_pullup, pull: pu_30k, init: high }
+  SENSOR_MOTION_PIN: P13
+  SENSOR_SCLK_PIN: P11
+  SENSOR_SDIO_PIN: P12
+  LED_MODE_R_PIN: { pin: P32, gpio: { mode: output_pp, pull: pu_30k, init: high } }
+  LED_MODE_G_PIN: { pin: P00, gpio: { mode: output_pp, pull: pu_30k, init: high } }
+  LED_MODE_B_PIN: { pin: P01, gpio: { mode: output_pp, pull: pu_30k, init: high } }
+  LED_R_PIN: P04
+  LED_G_PIN: P05
+  LED_B_PIN: P06
+  USB_5V: P24
+  BAT_CHG_PIN: P30
+  LVD_PIN: P23
+  USB_DN_PIN: P02
+  USB_DP_PIN: P03
+  FLASH_CS_PIN: P17
+  FLASH_SCLK_PIN: P15
+  FLASH_MOSI_PIN: P16
+  FLASH_MISO_PIN: P14
+
+codegen:
+  output: periph
+  keil_project: projects/mouse_demo/keil5/SE71M.uvprojx

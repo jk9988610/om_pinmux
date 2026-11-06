@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://om_pinmux.local/schemas/omcfg-v1.schema.json",
+  "title": "OM6239 project.omcfg",
+  "type": "object",
+  "required": ["schema", "chip", "project", "board", "pins"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "om6239-project/v1" },
+    "chip": { "const": "OM6239" },
+    "project": {
+      "type": "object",
+      "required": ["name", "customer", "id"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "customer": { "type": "string", "minLength": 1 },
+        "id": {
+          "type": "object",
+          "required": ["low", "high", "version"],
+          "additionalProperties": false,
+          "properties": {
+            "low": { "type": ["integer", "string"] },
+            "high": { "type": ["integer", "string"] },
+            "version": { "type": ["integer", "string"] }
+          }
+        }
+      }
+    },
+    "board": {
+      "type": "object",
+      "required": ["mode_pins", "logo", "led_polarity", "sensor", "wheel"],
+      "additionalProperties": false,
+      "properties": {
+        "mode_pins": { "enum": ["single", "dual", "wired"] },
+        "logo": { "enum": ["rgb", "ledc", "none"] },
+        "led_polarity": { "enum": ["active_high", "active_low"] },
+        "sensor": {
+          "type": "object",
+          "required": ["bus", "dir_clock"],
+          "additionalProperties": false,
+          "properties": {
+            "bus": { "enum": ["sdio_3wire", "spi_4wire"] },
+            "dir_clock": { "enum": [0, 3, 6, 9] }
+          }
+        },
+        "wheel": { "type": "string", "minLength": 1 }
+      }
+    },
+    "pins": {
+      "type": "object",
+      "minProperties": 1,
+      "patternProperties": {
+        "^(KEY|WHEEL|MODE|SENSOR|LED|USB|BAT|LVD|FLASH|UART)[A-Z0-9_]*$": {
+          "oneOf": [
+            { "type": "string", "pattern": "^P[0-9]{2}$" },
+            {
+              "type": "object",
+              "required": ["pin"],
+              "additionalProperties": false,
+              "properties": {
+                "pin": { "type": "string", "pattern": "^P[0-9]{2}$" },
+                "gpio": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "mode": { "enum": ["input_floating", "input_pullup", "input_pulldown", "output_pp"] },
+                    "pull": { "enum": ["pu_none", "pu_30k", "pu_150k", "pd_150k"] },
+                    "init": { "enum": ["high", "low"] }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "codegen": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "output": { "type": "string" },
+        "keil_project": { "type": "string" },
+        "compat": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

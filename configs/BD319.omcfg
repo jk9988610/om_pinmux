@@ -1,0 +1,55 @@
+# OM6239 项目配置 — BD319（双模式脚 + RGB，无 KEY_PAIR）
+schema: om6239-project/v1
+chip: OM6239
+
+project:
+  name: BD319
+  customer: App
+  id:
+    low: "0x0485"
+    high: "0x071"
+    version: 1
+
+board:
+  mode_pins: dual
+  logo: rgb
+  led_polarity: active_high
+  sensor:
+    bus: sdio_3wire
+    dir_clock: 6
+  wheel: ENCODER_PINMUX_SEL_IO_24_25
+
+pins:
+  KEY_R0_PIN: P26
+  KEY_R1_PIN: P20
+  KEY_R2_PIN: P21
+  KEY_B_PIN: P00
+  KEY_P_PIN: P01
+  KEY_DPI_PIN: P36
+  WHEEL_A_PIN: P24
+  WHEEL_B_PIN: P25
+  MODE_24G_PIN: P27
+  MODE_BLE_PIN: P30
+  SENSOR_MOTION_PIN: P07
+  SENSOR_NCS_PIN: P10
+  SENSOR_SCLK_PIN: P11
+  SENSOR_SDIO_PIN: P12
+  LED_MODE_R_PIN: P04
+  LED_MODE_G_PIN: P05
+  LED_MODE_B_PIN: P06
+  LED_R_PIN: P04
+  LED_G_PIN: P05
+  LED_B_PIN: P06
+  USB_5V: P32
+  BAT_CHG_PIN: P31
+  LVD_PIN: P33
+  USB_DN_PIN: P02
+  USB_DP_PIN: P03
+  FLASH_CS_PIN: P17
+  FLASH_SCLK_PIN: P15
+  FLASH_MOSI_PIN: P16
+  FLASH_MISO_PIN: P14
+
+codegen:
+  output: periph
+  keil_project: projects/mouse_demo/keil5/SE71M.uvprojx
