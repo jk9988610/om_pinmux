@@ -1,5 +1,6 @@
 const $ = (id) => document.getElementById(id);
 let busy = false;
+let editingAllowed = false;
 
 function setStatus(text, error = false) {
   const node = $("status");
@@ -7,9 +8,23 @@ function setStatus(text, error = false) {
   node.classList.toggle("error", error);
 }
 
+function updateButtons() {
+  for (const id of ["load", "check", "init"]) $(id).disabled = busy;
+  for (const id of ["save", "preview", "apply"]) $(id).disabled = busy || !editingAllowed;
+}
+
 function setBusy(value) {
   busy = value;
-  for (const id of ["load", "check", "save", "preview", "apply"]) $(id).disabled = value;
+  updateButtons();
+}
+
+function setEditing(value) {
+  editingAllowed = value;
+  updateButtons();
+}
+
+function showInit(show) {
+  $("init-panel").classList.toggle("hidden", !show);
 }
 
 function renderPins(pins) {
@@ -68,16 +83,56 @@ function renderDiff(diffs) {
     : "没有文件变化";
 }
 
+function renderNeedsInit(data) {
+  setEditing(false);
+  showInit(true);
+  $("init-hint").textContent = data.hint || "";
+  const missing = $("init-missing");
+  missing.innerHTML = "";
+  for (const item of data.missing || []) {
+    const li = document.createElement("li");
+    li.className = "warning";
+    li.textContent = item;
+    missing.appendChild(li);
+  }
+  const options = $("config-options");
+  options.innerHTML = "";
+  const configInput = $("config");
+  const savedKey = `omcfg.config:${data.sdk || ""}`;
+  const current = localStorage.getItem(savedKey) || data.suggested || data.config || "";
+  configInput.value = current;
+  for (const item of data.configs || []) {
+    const option = document.createElement("option");
+    option.value = item.path;
+    option.label = item.suggested ? `${item.name}（自动匹配）` : item.name;
+    options.appendChild(option);
+  }
+  $("summary").textContent = "未初始化";
+  renderPins([]);
+  renderIssues([]);
+  $("diff").textContent = "尚未初始化";
+  const detail = data.hint ? `${data.error}；${data.hint}` : data.error;
+  setStatus(detail || "工程尚未初始化", true);
+}
+
 function render(data, action) {
   if (!data) return;
-  if (data.error) {
-    setStatus(data.error, true);
+  if (data.needs_init) {
+    renderNeedsInit(data);
     return;
   }
+  showInit(false);
+  if (data.error) {
+    setEditing(false);
+    const detail = data.hint ? `${data.error}；${data.hint}` : data.error;
+    setStatus(detail, true);
+    return;
+  }
+  setEditing(Boolean(data.ok));
   $("summary").textContent = data.summary || "";
   renderPins(data.pins);
   renderIssues(data.issues);
-  if (data.diffs) renderDiff(data.diffs);
+  renderDiff(data.diffs || []);
   const count = data.issues ? data.issues.length : 0;
   const message = data.message || `${action}完成；问题 ${count} 条`;
   setStatus(message, !data.ok);
@@ -109,11 +164,30 @@ async function run(method, action, payload) {
   }
 }
 
+function startInitialize() {
+  const sdk = $("sdk").value.trim();
+  const config = $("config").value.trim();
+  if (!sdk) {
+    setStatus("请先填写 SDK 根目录", true);
+    return;
+  }
+  if (!config) {
+    setStatus("请先选择或填写一份 .omcfg 配置", true);
+    return;
+  }
+  if (!confirm(`用以下配置初始化工程？\n${config}\n\n会安装 project.omcfg 并插入 OMCFG/USER CODE 标记，不改引脚正文。`)) {
+    return;
+  }
+  localStorage.setItem(`omcfg.config:${sdk}`, config);
+  run("initialize", "初始化", config);
+}
+
 let initialized = false;
 
 function init() {
   if (initialized) return;
   initialized = true;
+  setEditing(false);
   const saved = localStorage.getItem("omcfg.sdk") || "";
   $("sdk").value = saved;
   $("sdk").addEventListener("keydown", (event) => {
@@ -121,6 +195,10 @@ function init() {
   });
   $("load").addEventListener("click", () => run("load", "打开"));
   $("check").addEventListener("click", () => run("check", "检查"));
+  $("init").addEventListener("click", startInitialize);
+  $("config").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") startInitialize();
+  });
   $("save").addEventListener("click", () => run("save_pins", "保存引脚", collectPins()));
   $("preview").addEventListener("click", () => run("preview", "预览"));
   $("apply").addEventListener("click", () => {

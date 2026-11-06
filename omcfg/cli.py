@@ -15,6 +15,7 @@ import yaml
 
 from . import model, newproject, validate
 from .generate import generator
+from .initproject import init_project
 from .targets import sdk, uvprojx
 from .transaction import FileTransaction, rollback_manifest
 
@@ -95,127 +96,6 @@ def cmd_check(args: argparse.Namespace) -> int:
     return EXIT_VALIDATION if failed else EXIT_OK
 
 
-def _anchor_index(lines: list[str], needle: str, starts: bool, path: Path, block: str) -> int:
-    hits = [
-        i
-        for i, line in enumerate(lines)
-        if (line.startswith(needle) if starts else line.strip() == needle)
-    ]
-    if len(hits) != 1:
-        raise sdk.TargetError(
-            f"{path} 中定位 '{needle}' 命中 {len(hits)} 次，拒绝插入 '{block}' 标记"
-        )
-    return hits[0]
-
-
-def _insert_block(
-    text: str, path: Path, block: str, start_needle: str, end_needle: str, starts: bool = True
-) -> str:
-    if sdk.marker_begin(block) in text or sdk.marker_end(block) in text:
-        if sdk.marker_begin(block) in text and sdk.marker_end(block) in text:
-            return text
-        raise sdk.TargetError(f"{path} 的 '{block}' 标记只出现一半，请人工修掉后再 init")
-    lines = text.split("\n")
-    start = _anchor_index(lines, start_needle, starts, path, block)
-    end = _anchor_index(lines[start:], end_needle, starts, path, block) + start
-    lines.insert(end + 1, sdk.marker_end(block))
-    lines.insert(start, sdk.marker_begin(block))
-    return "\n".join(lines)
-
-
-def _init_header(text: str, path: Path) -> str:
-    text = _insert_block(text, path, "pins", "//* 按键配置 */", "#define UART_PIN")
-    text = _insert_block(
-        text, path, "project_ids", "#define iPROJECT_ID_H", "#define iPROJECT_ID_L"
-    )
-    text = _insert_block(
-        text, path, "project_version", "#define iREAL_VERSION_ID", "#define iREAL_VERSION_ID"
-    )
-    text = _insert_block(
-        text, path, "project_names", "#define iCONSUMER_NAME", "#define iPROJECT_NAME"
-    )
-    return text
-
-
-def _init_source(text: str, path: Path) -> str:
-    text = _insert_block(
-        text,
-        path,
-        generator.BLOCK_C,
-        "const user_gpio_config_t gpio_config_table[] = {",
-        "};",
-        starts=False,
-    )
-    return sdk.wrap_function_block(text, sdk.SLEEP_BLOCK, "void periph_gpio_sleep_set", path)
-
-
-def _init_project(
-    root: Path, config_source: Path, force: bool, announce_next: bool = True
-) -> int:
-    """安装配置并插入标记；init 与 new 共用，出错抛 sdk.TargetError。"""
-    transaction = FileTransaction.create(root, "omcfg_init")
-    config_target = model.default_config_path(root)
-    if config_target.is_file():
-        if config_target.read_bytes() != config_source.read_bytes():
-            if not force:
-                raise sdk.TargetError(
-                    f"{config_target} 已存在且内容不同；确认覆盖请加 --force"
-                )
-        else:
-            print(f"配置已存在且一致: {config_target}")
-    if not config_target.is_file() or config_target.read_bytes() != config_source.read_bytes():
-        transaction.write_bytes(config_target, config_source.read_bytes(), "安装唯一配置源")
-
-    for relative, handler, user_code in (
-        (sdk.USER_CONFIG_H, _init_header, sdk.USER_CODE_H),
-        (sdk.USER_CONFIG_C, _init_source, sdk.USER_CODE_C),
-    ):
-        path = root / relative
-        source = sdk.read_source(path)
-        if sdk.legacy_markers(source.text):
-            raise sdk.TargetError(f"{path} 仍含旧 OM_PINMUX_GENERATED 标记，请先人工迁移")
-        before = source.text
-        after = handler(before, path)
-        if sdk.strip_marker_lines(after) != sdk.strip_marker_lines(before):
-            raise sdk.TargetError(f"{path} 插入标记后正文发生变化，已中止")
-        after = sdk.append_user_code(after, user_code, path)
-        if after != before:
-            sdk.ensure_encodable(after, source.encoding)
-            transaction.write_bytes(
-                path,
-                sdk.SourceFile(path, after, source.encoding, source.newline, source.bom).render(),
-                "插入 OMCFG/USER CODE 标记",
-            )
-            print(f"已插入标记: {path}")
-        else:
-            print(f"标记已存在: {path}")
-
-    for relative, user_code in ((sdk.BOARD_FEATURES_H, sdk.USER_CODE_FEATURES),):
-        path = root / relative
-        if not path.is_file():
-            continue
-        source = sdk.read_source(path)
-        if sdk.legacy_markers(source.text):
-            raise sdk.TargetError(f"{path} 仍含旧 OM_PINMUX_GENERATED 标记，请先人工迁移")
-        after = sdk.append_user_code(source.text, user_code, path)
-        if after != source.text:
-            sdk.ensure_encodable(after, source.encoding)
-            transaction.write_bytes(
-                path,
-                sdk.SourceFile(path, after, source.encoding, source.newline, source.bom).render(),
-                "补 USER CODE 保护区",
-            )
-            print(f"已补 USER CODE 保护区: {path}")
-    if transaction.actions:
-        manifest = transaction.commit()
-        print(f"事务 manifest: {manifest}")
-    else:
-        print("没有文件变化")
-    if announce_next:
-        print(f"下一步: python -m omcfg gen --sdk {root} --dry-run")
-    return EXIT_OK
-
-
 def cmd_init(args: argparse.Namespace) -> int:
     try:
         root = sdk.resolve_sdk(args.sdk)
@@ -240,7 +120,8 @@ def cmd_init(args: argparse.Namespace) -> int:
         if not report.ok:
             _print_report(report, config)
             return EXIT_VALIDATION
-        return _init_project(root, config_source, args.force)
+        init_project(root, config_source, args.force)
+        return EXIT_OK
     except sdk.TargetError as exc:
         print(f"[ERROR] {exc}", file=sys.stderr)
         return EXIT_ENVIRONMENT
@@ -409,7 +290,7 @@ def cmd_new(args: argparse.Namespace) -> int:
         config_target.parent.mkdir(parents=True, exist_ok=True)
         config_target.write_bytes(config_payload)
         rewrites = newproject.rewrite_identity(target, config)
-        _init_project(target, config_target, force=False, announce_next=False)
+        init_project(target, config_target, force=False, verbose=False, announce_next=False)
         outputs = generator.build_outputs(config, target)
         code, _manifest = _apply_outputs(target, outputs, "omcfg_new")
         if code != EXIT_OK:

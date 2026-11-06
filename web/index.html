@@ -17,6 +17,17 @@
     <button id="apply" class="primary">应用</button>
   </header>
   <div id="status" class="status">输入 SDK 路径后回车；配置文件固定为 projects/mouse_demo/project.omcfg</div>
+  <section id="init-panel" class="card init-panel hidden">
+    <div class="card-head"><h2>初始化工程</h2><span>未检测到 OMCFG 标记块</span></div>
+    <p id="init-hint" class="hint"></p>
+    <div class="init-row">
+      <label for="config">配置</label>
+      <input id="config" list="config-options" placeholder="configs\KC536.omcfg 或配置文件绝对路径">
+      <datalist id="config-options"></datalist>
+      <button id="init" class="primary">初始化</button>
+    </div>
+    <ul id="init-missing" class="issues"></ul>
+  </section>
   <main>
     <section class="card">
       <div class="card-head"><h2>引脚</h2><span id="summary"></span></div>

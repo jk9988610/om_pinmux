@@ -187,23 +187,65 @@ python -m omcfg rollback --manifest D:\work\KC536_copy\.omcfg_bak_20261106_12554
 3. `gen --dry-run` 确认 diff 只落在预期字段。
 4. `gen --apply`，再编译。
 
-## 图形界面（薄视图）
+## 图形界面：打开 → 初始化 → 改引脚 → 预览 → 应用
 
 ```powershell
 launch.bat
 ```
 
-界面只做展示与提交：打开 SDK → 改引脚 → 保存引脚 → 预览 diff → 应用。所有校验、
-生成、事务都由后端 `omcfg` 完成，前端不拼宏、不复制规则。
+界面只做展示与提交，所有校验、初始化、生成、事务都由后端 `omcfg` 完成，前端不拼宏、
+不复制规则。直接打开**未初始化**的真实 SDK 也不会再让你回命令行。
 
-已在 Windows + pywebview/WebView2 环境实测通过一次完整闭环（KC536 副本，28 个引脚）：
+### 1. 打开工程
+
+在顶部输入 SDK 根目录（示例 `D:\work\SE71M_0023_KC536_V1_20260909`），回车或点「打开」。
+
+- 已初始化：直接显示 28 个引脚与问题列表。
+- 未初始化：弹出「初始化工程」面板，列出缺失项（缺 `project.omcfg`、缺哪个标记块）。
+
+### 2. 初始化（仅未初始化时出现）
+
+- 配置框会自动匹配仓库 `configs/` 里与 SDK 目录名同名的模板（如目录含 `KC536`
+  就建议 `configs\KC536.omcfg`），也可以下拉选其它模板或直接填绝对路径。
+- 点「初始化」并确认：安装 `project.omcfg`、插入 `OMCFG`/`USER CODE` 标记，
+  **不改引脚正文**，随后自动进入正常编辑界面。
+- 重复初始化是幂等的；再次打开同一工程不再出现该面板。
+- 若失败，面板保留并给出可照做的提示，例如：
 
 ```text
-打开完成；问题 0 条
-KEY_R0_PIN: P34 -> P36
-已保存 project.omcfg；接着点「预览 diff」
-预览完成；问题 0 条（diff 含 KEY_R0_PIN）
-已写入 3 个文件
+...\user_config.h 的 'pins' 标记只出现一半，请人工修掉后再 init；
+检查文件是否只读/被 Keil 占用；若提示标记块残缺，请按上方缺失项人工修掉后重试
+```
+
+### 3. 改引脚并保存
+
+在引脚表把 `KEY_R0_PIN` 从 `P34` 改为 `P36`，点「保存引脚」；只写
+`project.omcfg`，不碰源码。
+
+### 4. 预览 diff
+
+点「预览 diff」，右侧显示待写入文件的统一 diff；确认改动只落在目标引脚。
+
+### 5. 应用
+
+点「应用」，按标记块写回源码并生成 `.omcfg_bak_*` manifest。
+
+### 6. 回滚
+
+GUI 保持薄视图，没有回滚按钮；用「应用」后生成的 manifest 走 CLI：
+
+```powershell
+python -m omcfg rollback --manifest D:\work\SE71M_0023_KC536_V1_20260909\.omcfg_bak_<时间戳>
+```
+
+### 实测记录（真实 KC536 副本，2026-11-06）
+
+```text
+打开未初始化副本 → 面板出现，缺失项 8 条，建议配置自动带出 KC536.omcfg
+点初始化 → 面板关闭，引脚 28 行，状态“初始化完成”
+KEY_R0_PIN: P34 -> P36 → 保存 → 预览（diff 含 KEY_R0_PIN）→ 应用（已写入 3 个文件）
+再次打开 → 不再提示初始化
+UV4 -r → 0 Error(s), 0 Warning(s)，Code=38580
 ```
 
 若启动时报 WebView2 缺失，请安装 Microsoft Edge WebView2 Runtime；后端 CLI 不受影响。

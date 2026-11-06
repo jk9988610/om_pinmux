@@ -362,6 +362,19 @@ python -m pytest                              :: 全绿
   副本 `check → init → gen --apply → UV4 -r` 仍为 `0 Error / 0 Warning`。
 - **边界**：`gen` 不负责 BLE 广播名；生成后再改 `ble_names` 需重跑 `new` 或手工改。
 
+**P6：GUI 打开未初始化 SDK（2026-11-06）**
+
+- 初始化逻辑从 `cli.py` 抽到 `omcfg/initproject.py`：`missing_markers()` 检测配置与
+  `OMCFG`/`USER CODE` 标记完整性，`init_project()` 供 CLI、`new`、GUI 三处共用。
+- `Api.load()` 未初始化时返回 `needs_init + missing + configs + suggested`，不再只报
+  “先运行 omcfg init”；`Api.initialize()` 选配置后原地完成初始化并重新 `load`。
+- 配置候选来自仓库 `configs/*.omcfg`；按 SDK 目录名做**大小写无关的子串匹配**给出
+  建议项（如目录含 `KC536` → `configs/KC536.omcfg`），只做预选，必须用户点确认。
+- GUI 新增「初始化工程」面板：缺什么列什么，初始化按钮调用后端；失败保留面板与
+  提示，不弹栈/不白屏；编辑/保存/预览/应用在初始化前禁用。
+- 边界：不从工程现状反向推导 `.omcfg`（成本高），只允许选现成配置或填绝对路径；
+  GUI 不提供回滚按钮，回滚仍走 CLI manifest。
+
 ---
 
 ## 5. 砍并清单（逐项去留）
