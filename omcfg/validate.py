@@ -132,6 +132,29 @@ def validate_config(config: dict, chip: dict | None = None) -> Report:
         report.add_error(
             "project.customer", "不能为空", "补 project.customer（如 BYC），可对照 configs/*.omcfg"
         )
+    if "ble_names" in proj:
+        names = proj.get("ble_names")
+        if not isinstance(names, list) or not 1 <= len(names) <= 2:
+            report.add_error(
+                "project.ble_names",
+                "必须是 1~2 个字符串的列表",
+                "例如 ble_names: [\"BT5.1Mouse\"]；BT0/BT1 两个广播名各占一项",
+            )
+        else:
+            for index, name in enumerate(names):
+                text = str(name)
+                if not text.strip():
+                    report.add_error(f"project.ble_names[{index}]", "不能为空")
+                elif len(text) > 28:
+                    report.add_error(
+                        f"project.ble_names[{index}]",
+                        "超过 MOUSE_NAME_MAX_LEN-1（28 字符），会被截断",
+                    )
+                elif '"' in text or "\\" in text or "\n" in text:
+                    report.add_error(
+                        f"project.ble_names[{index}]",
+                        "不能包含双引号、反斜杠或换行（会破坏 C 字符串）",
+                    )
     pid = model.project_id(config)
     for key, maximum in (("low", 0xFFFF), ("high", 0xFFFF), ("version", 0x7F)):
         number = _as_int(pid.get(key))

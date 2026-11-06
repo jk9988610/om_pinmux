@@ -5,6 +5,7 @@ chip: OM6239
 project:
   name: KC536
   customer: BYC
+  ble_names: ["BT5.1Mouse"]
   id:
     low: "0x0023"
     high: "0x071"

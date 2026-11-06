@@ -13,6 +13,67 @@
 - 编译验证需要 Keil `UV4.exe`（默认 `C:\Keil_v5\UV4\UV4.exe`）。
 - 准备一份 **SDK 副本**。工具会直接改副本里的源码，原工程请保持不变。
 
+## 新工程一键生成（推荐）
+
+从源 SDK + 一份配置直接生成**可编译的新工程**，不再手工 `robocopy` 再逐文件改。
+
+### 1. 准备新配置
+
+```powershell
+copy configs\KC536.omcfg myboard.omcfg
+```
+
+编辑 `myboard.omcfg` 的工程标识；引脚/板型保持与源 SDK 一致即可：
+
+```yaml
+project:
+  name: KC536X
+  customer: BYC
+  ble_names: ["KC536X Bt1"]   # 可选；BT0/BT1 双广播名可写 2 项
+  id: { low: "0x0101", high: "0x071", version: 6 }
+```
+
+### 2. 一条命令生成
+
+```powershell
+python -m omcfg new --sdk E:\SDK\KC536 --target D:\work\KC536X --config myboard.omcfg
+```
+
+它依次完成：复制骨架（剔除产物）→ 安装 `project.omcfg` → 改写工程标识 →
+插入 `OMCFG`/`USER CODE` 标记 → `gen --apply`。实测输出：
+
+```text
+新工程: D:\work\KC536X（复制 202 个文件）
+不复制: out/, _build/, lib_build/, ..., .omcfg_bak_*/, *.dep, *.uvoptx, ...
+标识改写（源 -> 新）:
+  projects/mouse_demo/periph/user_config.h  iPROJECT_NAME  '"KC536"' -> '"KC536X"'
+  projects/mouse_demo/periph/user_config.h  iPROJECT_ID_L  '0x0023' -> '0x0101'
+  projects/mouse_demo/periph/user_config.h  iREAL_VERSION_ID  '5' -> '6'
+  projects/mouse_demo/main/mouse_hw.c  mouse_name  'BT5.1Mouse' -> 'KC536X Bt1'
+```
+
+> SDK 里 `periph\userdefined_key_20260724.o`、`mode_24g\rf_protocol_20260704.o` 是
+> `.uvprojx` 直接引用的预编译输入，会保留；它们不是本次编译产物，删除会导致链接失败。
+
+- **目标必须不存在**：已存在直接 `[ERROR] 目标路径已存在`，退出码 2，不覆盖任何文件。
+- 源工程与配置的 `project.name` 不一致是正常输入；命令结束后会列出实际改写项。
+- `--name X` 可覆盖 `project.name`；配置未写 `ble_names` 时按 `X Bt1`/`X Bt2` 派生。
+  配置里显式写了 `ble_names` 时以配置为准。
+- 除生成区外，BLE 广播名落在 `main/mouse_hw.c`（`mouse_name` 初值）和
+  `main/ex2_app_mouse.c`（`memcpy(mouse_name, ...)`，CH04 双名）；`gen` 不会改这两处，
+  后续改名请重新执行 `new` 或手工修改。
+
+### 3. 编译
+
+```powershell
+python -m omcfg check D:\work\KC536X\projects\mouse_demo\project.omcfg
+UV4 -r D:\work\KC536X\projects\mouse_demo\keil5\SE71M.uvprojx -o build.log
+```
+
+实测：KC536 → KC536X 生成后 `0 Error(s), 0 Warning(s)`，Code=38576；
+`user_config.h/.c` 与源工程相比，除标记/保护区行外只有 `iPROJECT_NAME`、
+`iPROJECT_ID_L`、`iREAL_VERSION_ID` 三行不同，`user_config.c` 正文零差异。
+
 ## 从零到编译：5 步
 
 以下 `<副本>` 替换为你的 SDK 副本根目录，例如 `D:\work\KC536_copy`。
@@ -153,6 +214,7 @@ KEY_R0_PIN: P34 -> P36
 
 ```powershell
 python -m omcfg --help
+python -m omcfg new --help
 python -m omcfg init --help
 python -m omcfg check --help
 python -m omcfg gen --help
@@ -161,6 +223,7 @@ python -m omcfg rollback --help
 
 | 命令 | 关键参数 | 行为 |
 |---|---|---|
+| `new` | `--sdk DIR --target DIR --config FILE [--name NAME]` | 复制骨架并剔除产物 → 改工程标识 → `init` → `gen --apply`；目标必须不存在 |
 | `init` | `--config FILE --sdk DIR [--force]` | 安装 `project.omcfg`，插入 `OMCFG`/`USER CODE` 标记；一次性 |
 | `check` | `FILE...` 或 `--all DIR` | 只校验，不写盘；有 error 返回 1 |
 | `gen` | `--sdk DIR [--config FILE] [--dry-run\|--apply]` | 默认 dry-run；`--apply` 走事务并产出 manifest |
@@ -179,6 +242,8 @@ python -m omcfg rollback --help
 | 配置缺字段（如 `project.name`） | 1 | `[ERROR] project.name: 不能为空` + `提示: 补 project.name（如 KC536），可对照 configs/*.omcfg`，并汇总 `errors: 1` |
 | YAML 语法错误 | 2 | `[ERROR] ...: YAML 解析失败: ...` + `提示: 检查缩进、冒号和引号；可对照 configs/KC536.omcfg` |
 | 配置与 SDK 不是同一块板 | 0（warning） | `[WARNING] project: 配置与 SDK 现有工程不一致：project.name=CH04，SDK 现有 iPROJECT_NAME="KC536"` + `提示: 若是在副本上换板可继续；否则确认 --sdk/--config 配对` |
+| `new` 目标已存在 | 2 | `[ERROR] 目标路径已存在: ...` + `提示: new 不覆盖任何现有目录；换一个不存在的路径，或确认旧目录无用后手工删除再执行` |
+| `new` 目标位于源 SDK 内 | 2 | `[ERROR] 目标路径不能位于源 SDK 内: ...` + `提示: 把 --target 换到源 SDK 之外，避免复制自身造成递归` |
 | `--dry-run` 与 `--apply` 同时给 | 2 | `omcfg gen: error: argument --apply: not allowed with argument --dry-run` |
 | `check` 路径不存在 | 2 | `[ERROR] 配置不存在: ...` + `提示: 确认路径；仓库内的板模板在 configs/*.omcfg` |
 
@@ -203,6 +268,7 @@ chip: OM6239
 project:
   name: KC536
   customer: BYC
+  ble_names: ["BT5.1Mouse"]   # 可选：new 命令据此改写 BLE 广播名
   id: { low: "0x0023", high: "0x071", version: 5 }
 board:
   mode_pins: single
@@ -249,6 +315,8 @@ pins:
   前后 SHA1 与校验结果；新建文件 `existed=false`，回滚时删除。
 - 策略：**不自动清理**。确认编译通过后可手工删除旧 `.omcfg_bak_*`；回滚按时间倒序
   （先撤 `apply`，再撤 `init`）即可停在任一步。备份只在 SDK 副本内产生，不碰原工程。
+- 唯一例外：`new` 在成功生成后会删除它自己刚产生的 `.omcfg_bak_*`，让新工程基线
+  不携带历史备份；源工程里已有的 `.omcfg_bak_*` 本来就不会被复制。
 
 ## 数据与文档
 
@@ -267,5 +335,5 @@ python -m omcfg check --all configs
 ## 明确不在本轮范围
 
 - 4 线板（HYC-275QLH）模板与端到端支持：延后。
-- 新工程一键生成（复制 SDK + init + 编译）：延后。
+- `new` 之后再次修改 `ble_names` 不会自动同步 BLE 源文件（需重跑 `new` 或手工改）。
 - 业务协议（RF/HID 映射）改写：不在本工具范围。

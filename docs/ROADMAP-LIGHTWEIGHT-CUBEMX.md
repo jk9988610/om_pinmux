@@ -82,7 +82,7 @@
 
 **只放“项目级可变参数”**：
 
-- 芯片型号（固定 OM6239）、项目身份（名/客户/ID/版本）；
+- 芯片型号（固定 OM6239）、项目身份（名/客户/ID/版本/BLE 广播名）；
 - 板型事实（模式脚组合、LOGO 类型、LED 极性、传感器总线与时钟相位、滚轮 mux）；
 - 每个功能脚的 `Pxx` + GPIO 模式/上下拉/初始电平；
 - 外设启用与参数（UART/SPI/USB/LEDC）；
@@ -105,6 +105,7 @@ chip: OM6239
 project:
   name: BD319
   customer: App
+  ble_names: ["BD319 Bt1", "BD319 Bt2"]     # 可选；new 命令改写 BLE 广播名
   id: { low: 0x0485, high: 0x071, version: 1 }
   usb: { vid: 0x1234, pid: 0x5678 }        # 仅当 usb.enabled
 
@@ -147,6 +148,7 @@ codegen:
 |---|---|---|---|
 | `schema` / `chip` | string | 是 | 固定值，版本化 |
 | `project.name` / `customer` | string | 是 | 生成宏 `iPROJECT_NAME` / `iCONSUMER_NAME` |
+| `project.ble_names` | list[str] | 否 | 1~2 个；仅 `new` 改写 `mouse_hw.c`/`ex2_app_mouse.c` 的广播名 |
 | `project.id.low/high/version` | int(0x)/int | 是 | 生成 `iPROJECT_ID_L/H`、`iREAL_VERSION_ID` |
 | `board.mode_pins` | enum | 是 | 决定生成 `MODE_24G_PIN+MODE_BLE_PIN` 或 `MODE_BLE_24G_PIN` 或无线关闭 |
 | `board.logo` / `led_polarity` | enum | 是 | 决定 RGB/LEDC 宏与 `led_*_on/off` 极性 |
@@ -188,6 +190,7 @@ E:\tools\om_pinmux\
 │  ├─ targets/
 │  │  ├─ sdk.py               # 定位 projects/mouse_demo/periph、校验目录结构
 │  │  └─ uvprojx.py           # 从模板生成/更新 Keil 工程（源分组/include/宏）
+│  ├─ newproject.py           # 新工程一键生成：骨架复制排除、标识改写、备份清理
 │  ├─ contracts.py            # 由 biz_sync 收敛而来：只改 key_io.h/c + sleep
 │  ├─ compat.py               # 3 个 opt-in 文本补丁（senscan_12bit/stack_240/usb_tx_flag）
 │  ├─ transaction.py          # 由 operations.py 平移
@@ -335,6 +338,30 @@ python -m pytest                              :: 全绿
   `check --all` 全绿。
 - **不做**：4 线板模板、新工程一键生成（复制 SDK + init + 编译）。
 
+**P5：新工程一键生成（2026-11-06）**
+
+- 新增 `omcfg new --sdk <源SDK> --target <新目录> --config <配置> [--name <名>]`，
+  一次完成“复制骨架 → 安装配置 → 改工程标识 → `init` → `gen --apply`”。
+- **复制排除**（`newproject.py` 的固定清单）：`out/`、`_build/`、`lib_build/`、
+  `.git/`、`.vscode/`、`.cache/`、`.omcfg_bak_*/`、`*.dep/d/crf/axf/hex/bin/lst/map/lnp/htm`、
+  `*.uvoptx`、`*.uvguix.*`、`*.log`、`JLinkLog.txt`、`JLinkSettings.ini`、
+  `compile_commands.json`、`SE71M.BAT`（Keil 生成，含本机绝对路径）。**例外**：SDK 自带的 `userdefined_key_20260724.o`、
+  `rf_protocol_20260704.o` 是 `.uvprojx` 直接引用的预编译输入，必须保留，否则链接失败。
+- **工程标识改写**：
+  - `user_config.h` 的 `iPROJECT_NAME`、`iCONSUMER_NAME`、`iPROJECT_ID_H/L`、
+    `iREAL_VERSION_ID` 由既有生成块按配置落盘；
+  - `main/mouse_hw.c` 的 `mouse_name` 初值、`main/ex2_app_mouse.c` 的
+    `memcpy(mouse_name, ...)` 由 `project.ble_names` 精确改写（不猜锚点）。
+  - 源工程与配置的 `project.name` 不同是**正常输入**；命令结束打印每条
+    `文件 宏/变量 '旧' -> '新'` 证据。
+- **安全边界**：目标已存在或位于源 SDK 内 → 拒绝并给可操作提示，退出码 2，绝不覆盖；
+  成功后删除本次生成产生的 `.omcfg_bak_*`，新工程不携带历史事务目录。
+- **验收**：KC536 → KC536X 新工程 `UV4 -r` 为 `0 Error / 0 Warning`；新工程
+  `user_config.h/.c` 与源工程去掉标记/保护区行后，仅 3 行标识不同，`.c` 正文零差异；
+  目录清单无 `out/`、`.dep`、`.omcfg_bak_*`；同一目标重复执行返回 2；CH04/KC536
+  副本 `check → init → gen --apply → UV4 -r` 仍为 `0 Error / 0 Warning`。
+- **边界**：`gen` 不负责 BLE 广播名；生成后再改 `ble_names` 需重跑 `new` 或手工改。
+
 ---
 
 ## 5. 砍并清单（逐项去留）
@@ -394,6 +421,6 @@ python -m pytest                              :: 全绿
 
 - **结论**：改进（结构性重构）。保留数据/事务/契约改写/GUI 壳，重写模型-校验-生成-CLI，删除金机/供体/问卷。
 - **唯一源**：`<SDK>/projects/mouse_demo/project.omcfg`；模板只是起点。
-- **核心命令**：`python -m omcfg check|init|gen --dry-run|gen --apply|rollback`。
+- **核心命令**：`python -m omcfg new|check|init|gen --dry-run|gen --apply|rollback`。
 - **验收三件套**：`check` 0 error、`UV4 -b` 0 error、`git diff` 只动标记块。
 - **首阶段只做**：pins + board + project → 3 个源码文件 + Keil 工程条目 → 真实 SDK 副本编译通过。

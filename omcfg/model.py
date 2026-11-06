@@ -316,6 +316,14 @@ def sensor_bus(config: dict[str, Any]) -> str:
     return str(sensor(config).get("bus") or "")
 
 
+def ble_names(config: dict[str, Any]) -> list[str]:
+    """BLE 广播名：仅 project.ble_names 显式配置时改写，缺省不改源工程。"""
+    value = project(config).get("ble_names")
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if str(item).strip()]
+
+
 def project_id(config: dict[str, Any]) -> dict[str, str]:
     value = project(config).get("id") or {}
     if not isinstance(value, dict):

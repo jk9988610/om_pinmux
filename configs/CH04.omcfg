@@ -5,6 +5,7 @@ chip: OM6239
 project:
   name: CH04
   customer: App
+  ble_names: ["CH-04 Bt1", "CH-04 Bt2"]
   id:
     low: "0x0457"
     high: "0x071"

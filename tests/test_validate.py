@@ -66,6 +66,15 @@ def test_usb_fixed_pins():
     assert any("USB 固定脚" in issue.message for issue in report.errors)
 
 
+def test_ble_names_validation():
+    config = _load("KC536")
+    for bad in ([], ["x" * 29], ['bad"name']):
+        config["project"]["ble_names"] = bad
+        report = validate.validate_config(config)
+        assert not report.ok, bad
+        assert any("ble_names" in issue.path for issue in report.errors)
+
+
 def test_report_is_detached_from_input():
     config = _load("KC536")
     snapshot = copy.deepcopy(config)

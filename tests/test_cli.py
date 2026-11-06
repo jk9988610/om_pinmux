@@ -169,7 +169,7 @@ def test_rollback_command(tmp_path):
 
 
 def test_subcommand_help_is_usable(capsys):
-    for command in ("init", "check", "gen", "rollback"):
+    for command in ("init", "check", "gen", "new", "rollback"):
         with pytest.raises(SystemExit) as info:
             cli.main([command, "--help"])
         assert info.value.code == 0
