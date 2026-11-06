@@ -112,7 +112,7 @@ board:
   mode_pins: dual          # single | dual | wired
   logo: rgb                # rgb | ledc | none
   led_polarity: active_high
-  sensor: { bus: sdio_3wire, dir_clock: 6 }  # sdio_3wire | spi_4wire
+  sensor: { bus: sdio_3wire, dir_clock: 6, v2_en: false }  # sdio_3wire | spi_4wire
   wheel: ENCODER_PINMUX_SEL_IO_24_25         # 或 SOFT_GPIO
 
 # 键名直接沿用 C 宏名，生成时不再做名字映射
@@ -129,6 +129,7 @@ pins:
   USB_5V: { pin: P32 }
 
 peripherals:
+  # P3 变异清单结论：以下段暂不落地（真实工程取值无差异，见 P3 决策记录）
   usb:  { enabled: true }                       # 脚固定 P02/P03
   uart: { enabled: false, tx: null, rx: null, baud: 115200 }
   spi:  { enabled: false, sck: null, miso: null, mosi: null, cs: null }
@@ -149,7 +150,7 @@ codegen:
 | `project.id.low/high/version` | int(0x)/int | 是 | 生成 `iPROJECT_ID_L/H`、`iREAL_VERSION_ID` |
 | `board.mode_pins` | enum | 是 | 决定生成 `MODE_24G_PIN+MODE_BLE_PIN` 或 `MODE_BLE_24G_PIN` 或无线关闭 |
 | `board.logo` / `led_polarity` | enum | 是 | 决定 RGB/LEDC 宏与 `led_*_on/off` 极性 |
-| `board.sensor` | object | 是 | `bus` 决定 SCLK/SDIO 或 MOSI/MISO 校验 |
+| `board.sensor` | object | 是 | `bus` 决定校验 SDIO 还是 MOSI/MISO/NCS；`v2_en` 为真时生成 `SENSOR_2V_IN_EN` |
 | `board.wheel` | enum | 是 | 决定 `WHEEL_IO_SELECT`；`SOFT_GPIO` 时要求成对脚 |
 | `pins.*.pin` | `Pxx` | 是 | 必须在封装 GPIO 白名单 |
 | `pins.*.gpio` | object | 否 | 缺省按“按键=上拉输入/灯=推挽输出”给默认值 |
@@ -282,22 +283,32 @@ python -m pytest                              :: 全绿
 - 生成内容逐行复刻两块板既有写法：KC536 的 `user_config.c` 除新增标记行外零差异；CH04 同样是零功能差异。
 - `periph_gpio_sleep_set.pinmux.c` 不再生成、不再列入 `.uvprojx`；旧副本残留文件由 `gen` 改写为一行退场说明。禁止再以 `#if 0` 或另起源文件的方式恢复该文件。
 
-### P3：外设参数与 opt-in 兼容补丁（收尾）
+### P3：外设参数（按真实变异收敛）
 
-**范围**
-- `peripherals` 段落地：UART/SPI/USB/LEDC 的启用与参数、依赖校验、生成初始化片段；
-- `compat.py`：3 个文本补丁（`senscan_12bit`、`stack_240`、`usb_tx_flag`），必须在配置里显式声明；**noop 必须报 warning**，不许静默；
-- 时钟：只做 `sys_clk` 数值校验 + 传感器时钟相位；不做 PLL 求解；
-- 文档：一份快速上手（`docs/QUICKSTART.md`）+ 一份配置字段说明。
+**P3 决策记录：先做变异清单，再决定配置面（2026-11-06）**
 
-**验收**
-```bat
-python -m omcfg check configs\BD319_uart_spi.omcfg      :: 依赖错误能被指出
-python -m omcfg gen --config ... --apply
-UV4 -b ... -o build.log                                  :: 0 error
-```
-- 两块板（一块 RGB、一块 LEDC）+ 两种外设组合编过；生成的 `user_config.c/h` 与 P1 基线 diff 可解释。
-- **永久不做**：middleware、RTOS、多芯片、金机 diff、donor 拷贝、问卷。
+对 6 个真实 SDK 家族（20 份 `user_config.h`、22 份 `usb_descriptor.h`，含 CH04/KC536/BD319/V196/S205/BJ2017/LJ-V08）做宏级对比，结论：
+
+- **进配置**：
+  - `board.sensor.bus: spi_4wire` 完整生成 `SENSOR_MOSI_PIN`、`SENSOR_MISO_PIN`、`SENSOR_NCS_PIN`（5 块真实板/6 个工程；原生成器只输出 NCS，属“配置项存在但生成不完整”）；
+  - `board.sensor.v2_en`（布尔，默认 false）→ 生成 `SENSOR_2V_IN_EN (1<<7|1<<6)`（与 SPI 4-wire 板型同步出现，`sensor.c` 直接使用该宏）；
+  - `board.ledc_rgb_number` 沿用 P2 字段，真实取值为 6/7/10，默认 6。
+- **不进配置**（有差异但无复用价值）：
+  - USB VID/PID：22/22 均为 `0x32C2`/`0x0024`，序列号字符串也一致；只有厂商文案有 2 种写法，不是电气/协议差异；
+  - `RF_RATE`/`RF_PROTOCOL`/`RF_CONN`/`iAPP_ID_H`：20 个工程取值一致；
+  - 休眠策略：`MOUSE_ENTER_SLEEP_TIME_MINUTE=60`、二级休眠计数 10，22/22 一致；
+  - DPI 档位：`iDPI_MODE0..4_VLAUE` 22/22 全为 2，`DEFAULT_DPI_GRADE` 仅 1 个工程为 2；
+  - LED 灯效索引：`iLED_*` 常量一致，极性已由 `board.led_polarity` 表达；
+  - UART：只有调试脚 `UART_PIN`（已配置），无独立 TX/RX 板型，波特率无差异；
+  - `OLED_POWER_PIN`/`LOGO_CTRL_PIN`/`LED_MODE_CD` 等：单工程出现，无复用价值。
+- **黑名单**：
+  - `peripherals` 段（UART/SPI/USB/LEDC 启用与参数）**不做**：没有真实取值差异，落地只会变成“配置项存在但没人用”的空壳（与 P1“一次覆盖所有外设”的警告一致）；
+  - `compat.py` 三项补丁（`senscan_12bit`/`stack_240`/`usb_tx_flag`）**不做**：属于 KC536→CH04 一次性迁移残留，不是产品维度。
+
+**验收（已完成）**
+- CH04/KC536 副本 `check → init → gen --apply → UV4 -b` 均 0 Error / 0 Warning；KC536 `user_config.h/.c` 正文零差异（仅新增 10/6 行标记与保护区行）。
+- CH04 改 `ledc_rgb_number: 6 → 10` 后重生成，diff 仅 `LEDC_RGB_NUMBER` 一行；重新编译 0 Error，且 Code/ZI 变化，证明字段被真实使用而非空壳。
+- `pytest`、`ruff`、`check --all` 全绿；保护区手写行重生成后保留。
 
 ---
 
