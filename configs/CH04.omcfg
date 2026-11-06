@@ -13,6 +13,7 @@ project:
 board:
   mode_pins: dual
   logo: ledc
+  ledc_rgb_number: 6
   led_polarity: active_high
   sensor:
     bus: sdio_3wire

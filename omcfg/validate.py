@@ -142,6 +142,10 @@ def validate_config(config: dict, chip: dict | None = None) -> Report:
         report.add_error("board.mode_pins", f"只允许 {sorted(model.MODE_ENUM)}")
     if b.get("logo") not in model.LOGO_ENUM:
         report.add_error("board.logo", f"只允许 {sorted(model.LOGO_ENUM)}")
+    if b.get("ledc_rgb_number") is not None:
+        number = _as_int(b.get("ledc_rgb_number"))
+        if number is None or not 1 <= number <= 64:
+            report.add_error("board.ledc_rgb_number", "必须是 1..64 的整数")
     if b.get("led_polarity") not in model.POLARITY_ENUM:
         report.add_error("board.led_polarity", f"只允许 {sorted(model.POLARITY_ENUM)}")
     wheel = str(b.get("wheel") or "")

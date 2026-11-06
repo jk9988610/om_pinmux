@@ -143,7 +143,7 @@ def render_pins(config: dict, pins: dict[str, dict[str, str]]) -> str:
             lines.append(pin_line("LEDC_CTRL_PIN", pins["LEDC_CTRL_PIN"]["pin"], 24))
         if "LEDC_PIN" in pins:
             lines.append(pin_line("LEDC_PIN", pins["LEDC_PIN"]["pin"], 24))
-        lines.append(f"#define {pad('LEDC_RGB_NUMBER', 24)}6")
+        lines.append(f"#define {pad('LEDC_RGB_NUMBER', 24)}{model.ledc_rgb_number(config)}")
         lines.append(f"#define {pad('LEDC_RGB_DATA_SIZE', 24)}LEDC_RGB_NUMBER*3")
     else:
         for role in ("LED_R_PIN", "LED_G_PIN", "LED_B_PIN"):
@@ -331,10 +331,15 @@ def render_sleep(config: dict, pins: dict[str, dict[str, str]]) -> str:
     name = model.project(config).get("name", "")
     b = model.board(config)
     lines = [
+        '#include "board_features.h"',
+        "",
         "/**",
-        " * periph_gpio_sleep_set() 板型模板 — 由 omcfg 生成，请合并进 user_config.c",
+        " * periph_gpio_sleep_set() 板型参考实现 — 由 omcfg 生成，请合并进 user_config.c",
         f" * board: {name}",
+        " * SDK 的 user_config.c 已定义同名函数；本文件以 #if 0 包住参考实现，避免重复符号。",
+        " * 合并完成后把 #if 0 改为 1，或直接删除本文件。",
         " */",
+        "#if 0",
         "void periph_gpio_sleep_set()",
         "{",
         "    gpio_set_pad_buffer(LVD_PIN, PAD_IN_BUFFER_OFF);",
@@ -384,5 +389,5 @@ def render_sleep(config: dict, pins: dict[str, dict[str, str]]) -> str:
             f"    // {off_call}(LED_R_PIN); {off_call}(LED_G_PIN); {off_call}(LED_B_PIN);",
             "#endif",
         ]
-    lines += ["", "    OM_RCC->CLKGATE = 0x0742;", "}"]
+    lines += ["", "    OM_RCC->CLKGATE = 0x0742;", "}", "#endif"]
     return "\n".join(lines)

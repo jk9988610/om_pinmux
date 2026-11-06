@@ -289,6 +289,14 @@ def uart_pin(config: dict[str, Any]) -> str:
     return str(board(config).get("uart_pin") or "KEY_R0_PIN")
 
 
+def ledc_rgb_number(config: dict[str, Any]) -> int:
+    """LEDC LOGO 的像素数，缺省 6 保持既有工程行为。"""
+    try:
+        return int(board(config).get("ledc_rgb_number"))
+    except (TypeError, ValueError):
+        return 6
+
+
 def mode_pins(config: dict[str, Any], pins: dict[str, dict[str, str]] | None = None) -> list[str]:
     pins = pins or pin_entries(config)
     mode = board(config).get("mode_pins")
