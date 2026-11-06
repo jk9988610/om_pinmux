@@ -25,6 +25,9 @@
       <input id="config" list="config-options" placeholder="configs\KC536.omcfg 或配置文件绝对路径">
       <datalist id="config-options"></datalist>
       <button id="init" class="primary">初始化</button>
+      <button id="derive" title="读取当前 user_config.h/.c 推导引脚，生成 project.omcfg 并初始化">
+        从工程现状生成配置
+      </button>
     </div>
     <ul id="init-missing" class="issues"></ul>
   </section>

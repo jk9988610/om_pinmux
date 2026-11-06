@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import tempfile
 from pathlib import Path
 
-from . import initproject, model, validate
+from . import derive, initproject, model, validate
 from .generate import generator
 from .targets import sdk
 from .transaction import FileTransaction
@@ -37,17 +38,32 @@ def _config_candidates(root: Path) -> list[dict[str, object]]:
 
 def _needs_init(root: Path, missing: list[str]) -> dict:
     configs = _config_candidates(root)
-    suggested = next((item["path"] for item in configs if item["suggested"]), "")
+    target = model.default_config_path(root)
+    existing = str(target) if target.is_file() else ""
+    suggested = next((str(item["path"]) for item in configs if item["suggested"]), "")
+    # 初始化后写入的位置不能当输入配置：只预填真实存在的文件。
+    prefill = existing or suggested
+    if suggested:
+        hint = f"已按目录名匹配 {Path(suggested).name}；确认后点「初始化」，或改用其它配置"
+    elif existing:
+        hint = "工程内已有 project.omcfg，可直接用它初始化（只补标记块）"
+    else:
+        hint = (
+            "该工程尚无可用配置：从 configs/ 选择 .omcfg 后点「初始化」，"
+            "或点「从工程现状生成配置初稿」"
+        )
     return {
         "ok": False,
         "needs_init": True,
         "sdk": str(root),
-        "config": str(model.default_config_path(root)),
+        "config": str(target),
+        "existing_config": existing,
+        "prefill": prefill,
         "missing": missing,
         "configs": configs,
         "suggested": suggested,
         "error": "工程尚未初始化（缺少 OMCFG 标记块或配置）",
-        "hint": "选择配置后点「初始化」；初始化只插入标记并安装 project.omcfg，不改引脚正文",
+        "hint": hint,
     }
 
 
@@ -107,11 +123,23 @@ class Api:
                 "检查 projects/mouse_demo/project.omcfg 的 YAML 缩进与字段",
             )
 
+    def _init_error(self, root: Path, message: str, hint: str) -> dict:
+        """初始化失败时保留初始化面板，避免界面回到空白。"""
+        try:
+            missing = initproject.missing_markers(root)
+        except Exception:
+            missing = []
+        result = _needs_init(root, missing)
+        result["error"] = message
+        result["hint"] = hint
+        return result
+
     def initialize(self, sdk_path: str, config_path: str) -> dict:
         """GUI 初始化入口：选配置 → 插入标记/填保护区 → 自动回到正常编辑流程。"""
         if not str(config_path or "").strip():
             return _error(
-                "请选择一份 .omcfg 配置", "在配置下拉框选择，或直接填写配置文件的绝对路径"
+                "请选择一份 .omcfg 配置",
+                "在配置下拉框选择，或点「从工程现状生成配置初稿」",
             )
         try:
             root = sdk.resolve_sdk(sdk_path)
@@ -121,24 +149,28 @@ class Api:
                 "确认路径是 SDK 根目录（应包含 projects/mouse_demo/periph/user_config.h）",
             )
         source = Path(config_path).expanduser()
+        target = model.default_config_path(root)
         if not source.is_file():
-            return _error(
-                f"配置不存在: {source}", "从 configs/ 里选一份，或填写已存在的 .omcfg 路径"
-            )
+            try:
+                same_as_target = source.resolve() == target.resolve()
+            except OSError:
+                same_as_target = False
+            if same_as_target:
+                hint = (
+                    "该路径是初始化后写入 project.omcfg 的位置，不是输入配置；"
+                    "请从 configs/ 选择 .omcfg，或点「从工程现状生成配置初稿」"
+                )
+            else:
+                hint = "从 configs/ 选择 .omcfg，或点「从工程现状生成配置初稿」"
+            return self._init_error(root, f"配置不存在: {source}", hint)
         try:
             config = model.load_config(source)
             report = validate.validate_config(config)
             if not report.ok:
-                result = _payload(root, config, report)
-                result.update(
-                    {
-                        "needs_init": True,
-                        "configs": _config_candidates(root),
-                        "missing": initproject.missing_markers(root),
-                        "error": "配置校验未通过，未执行初始化",
-                        "hint": "修正配置里高亮的字段后重试",
-                    }
-                )
+                result = _needs_init(root, initproject.missing_markers(root))
+                result.update(_payload(root, config, report))
+                result["error"] = "配置校验未通过，未执行初始化"
+                result["hint"] = "修正配置里高亮的字段后重试"
                 return result
             # 用户已点「初始化」并明确选择配置：允许覆盖旧的 project.omcfg。
             initproject.init_project(root, source, force=True, verbose=False)
@@ -147,17 +179,64 @@ class Api:
                 result["message"] = "初始化完成，可以改引脚并预览 diff"
             return result
         except Exception as exc:
-            try:
-                missing = initproject.missing_markers(root)
-            except Exception:
-                missing = []
-            result = _needs_init(root, missing)
-            result["error"] = _first_line(exc)
-            result["hint"] = (
+            return self._init_error(
+                root,
+                _first_line(exc),
                 "检查文件是否只读/被 Keil 占用；若提示标记块残缺，"
-                "请按上方缺失项人工修掉后重试"
+                "请按上方缺失项人工修掉后重试",
             )
+
+    def initialize_derived(self, sdk_path: str) -> dict:
+        """新板首次接入：读 user_config.h/.c 推导配置初稿，再走同一套 init。"""
+        try:
+            root = sdk.resolve_sdk(sdk_path)
+        except Exception as exc:
+            return _error(
+                _first_line(exc),
+                "确认路径是 SDK 根目录（应包含 projects/mouse_demo/periph/user_config.h）",
+            )
+        try:
+            config = derive.derive_config(root)
+        except Exception as exc:
+            return self._init_error(
+                root,
+                f"无法从工程现状推导配置: {_first_line(exc)}",
+                "确认 user_config.h/.c 完整、未被占用；也可复制邻近板配置到 configs/ "
+                "后手工改引脚再初始化",
+            )
+        report = validate.validate_config(config)
+        if not report.ok:
+            result = _needs_init(root, initproject.missing_markers(root))
+            result.update(_payload(root, config, report))
+            result["error"] = "从工程现状推导的配置未通过校验，未执行初始化"
+            result["hint"] = "按上方 errors 调整 user_config.h/.c，或手工复制邻近板配置后再试"
             return result
+        try:
+            text = derive.render(config)
+            with tempfile.TemporaryDirectory(prefix="omcfg_derive_") as tmp:
+                source = Path(tmp) / "derived.omcfg"
+                source.write_text(text, encoding="utf-8")
+                initproject.init_project(root, source, force=True, verbose=False)
+            result = self.load(sdk_path)
+            if result.get("ok"):
+                target = model.default_config_path(root)
+                pins = len(model.pin_entries(config))
+                result["message"] = (
+                    f"已按工程现状生成配置初稿（{pins} 个引脚）并初始化；初稿写入 {target}"
+                )
+                result["derived"] = {
+                    "pins": pins,
+                    "project": model.project(config).get("name", ""),
+                    "config": str(target),
+                }
+            return result
+        except Exception as exc:
+            return self._init_error(
+                root,
+                f"初始化失败: {_first_line(exc)}",
+                "检查文件是否只读/被 Keil 占用；若提示标记块残缺，"
+                "请按上方缺失项人工修掉后重试",
+            )
 
     def check(self, sdk_path: str) -> dict:
         return self.load(sdk_path)

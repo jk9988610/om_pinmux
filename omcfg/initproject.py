@@ -40,7 +40,7 @@ def missing_markers(root: Path | str) -> list[str]:
     config_path = model.default_config_path(root_path)
     problems: list[str] = []
     if not config_path.is_file():
-        problems.append(f"缺少配置 {config_path}")
+        problems.append(f"工程尚无 project.omcfg（初始化后写入 {config_path}）")
 
     checks = (
         (sdk.USER_CONFIG_H, HEADER_BLOCKS, sdk.USER_CODE_H),

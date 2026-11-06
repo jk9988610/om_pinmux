@@ -191,6 +191,8 @@ E:\tools\om_pinmux\
 │  │  ├─ sdk.py               # 定位 projects/mouse_demo/periph、校验目录结构
 │  │  └─ uvprojx.py           # 从模板生成/更新 Keil 工程（源分组/include/宏）
 │  ├─ newproject.py           # 新工程一键生成：骨架复制排除、标识改写、备份清理
+│  ├─ initproject.py          # init 共有逻辑：缺标记检测、安装配置、插入标记块
+│  ├─ derive.py               # 从 user_config.h/.c 推导配置初稿（新板首次接入）
 │  ├─ contracts.py            # 由 biz_sync 收敛而来：只改 key_io.h/c + sleep
 │  ├─ compat.py               # 3 个 opt-in 文本补丁（senscan_12bit/stack_240/usb_tx_flag）
 │  ├─ transaction.py          # 由 operations.py 平移
@@ -372,8 +374,30 @@ python -m pytest                              :: 全绿
   建议项（如目录含 `KC536` → `configs/KC536.omcfg`），只做预选，必须用户点确认。
 - GUI 新增「初始化工程」面板：缺什么列什么，初始化按钮调用后端；失败保留面板与
   提示，不弹栈/不白屏；编辑/保存/预览/应用在初始化前禁用。
-- 边界：不从工程现状反向推导 `.omcfg`（成本高），只允许选现成配置或填绝对路径；
-  GUI 不提供回滚按钮，回滚仍走 CLI manifest。
+- 边界：不从工程现状反向推导 `.omcfg`（由 P7 补齐）；GUI 不提供回滚按钮，
+  回滚仍走 CLI manifest。
+
+**P7：配置预选修正 + 新板配置初稿推导（2026-11-06）**
+
+- **问题**：未初始化 SDK 的配置框回退到 `data.config`（即初始化后写入的
+  `projects/mouse_demo/project.omcfg`），把它当输入配置，形成鸡生蛋；E606 新板在
+  `configs/` 无模板时必然失败，且错误后初始化面板被隐藏，用户无从恢复。
+- **预选规则**：`Api.load()` 只预填真实存在的文件 —— 工程内已有 `project.omcfg` 优先，
+  其次 `configs/` 目录名匹配项；两者都没有则留空并提示选择/生成。`initialize()` 若收到
+  目标路径会明确说明“这是初始化后写入的位置，不是输入配置”，所有初始化失败都保留
+  `needs_init` 状态，面板不消失。
+- **新板正路径**：新增 `omcfg/derive.py`，只读 `user_config.h/.c`：
+  引脚宏 → `pins`；`gpio_config_table` → 模式/上下拉/电平；`iPROJECT_*`/`iCONSUMER_NAME`
+   → `project`；`MODE_*`/`LED_*`/`SENSOR_*`/`WHEEL_*`/`UART_PIN` → `board`。GUI 新增
+  「从工程现状生成配置」按钮，`Api.initialize_derived()` 推导→校验→临时文件→复用
+  `initproject.init_project()`，初稿落到 SDK 内 `project.omcfg`（不写仓库 `configs/`）。
+- **验收**：E606 真实副本 GUI 全流程通过；初始化后 `user_config.h/.c` 与现状零差异，
+  仅新增 `board_features.h` 并登记 uvprojx；改 `KEY_R0_PIN` 后预览/应用正常，
+  `gen --dry-run` 一致，`UV4 -r` 0/0；KC536/CH04 副本 GUI 回归通过；pytest/ruff/
+  `check --all` 全绿。
+- **边界**：推导是“现状快照”，不判断设计是否合理；`ble_names`（BLE 广播名）不在推导
+  范围，仍由 `new` 的 `project.ble_names` 控制；`configs/` 不自动落盘，需要复用时手工
+  从 SDK 的 `project.omcfg` 复制。
 
 ---
 

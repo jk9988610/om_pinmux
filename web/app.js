@@ -1,6 +1,7 @@
 const $ = (id) => document.getElementById(id);
 let busy = false;
 let editingAllowed = false;
+let lastConfig = "";
 
 function setStatus(text, error = false) {
   const node = $("status");
@@ -9,7 +10,7 @@ function setStatus(text, error = false) {
 }
 
 function updateButtons() {
-  for (const id of ["load", "check", "init"]) $(id).disabled = busy;
+  for (const id of ["load", "check", "init", "derive"]) $(id).disabled = busy;
   for (const id of ["save", "preview", "apply"]) $(id).disabled = busy || !editingAllowed;
 }
 
@@ -99,7 +100,9 @@ function renderNeedsInit(data) {
   options.innerHTML = "";
   const configInput = $("config");
   const savedKey = `omcfg.config:${data.sdk || ""}`;
-  const current = localStorage.getItem(savedKey) || data.suggested || data.config || "";
+  const saved = localStorage.getItem(savedKey) || "";
+  // data.config 是初始化后写入 project.omcfg 的位置，不能当输入配置预填。
+  const current = saved && saved !== data.config ? saved : (data.prefill || "");
   configInput.value = current;
   for (const item of data.configs || []) {
     const option = document.createElement("option");
@@ -129,6 +132,9 @@ function render(data, action) {
     return;
   }
   setEditing(Boolean(data.ok));
+  if (action === "初始化" && data.ok && data.sdk && lastConfig) {
+    localStorage.setItem(`omcfg.config:${data.sdk}`, lastConfig);
+  }
   $("summary").textContent = data.summary || "";
   renderPins(data.pins);
   renderIssues(data.issues);
@@ -178,8 +184,22 @@ function startInitialize() {
   if (!confirm(`用以下配置初始化工程？\n${config}\n\n会安装 project.omcfg 并插入 OMCFG/USER CODE 标记，不改引脚正文。`)) {
     return;
   }
-  localStorage.setItem(`omcfg.config:${sdk}`, config);
+  lastConfig = config;
   run("initialize", "初始化", config);
+}
+
+function startDerive() {
+  const sdk = $("sdk").value.trim();
+  if (!sdk) {
+    setStatus("请先填写 SDK 根目录", true);
+    return;
+  }
+  const message =
+    "从当前工程现状推导配置并初始化？\n"
+    + "会读取 user_config.h/.c 的引脚、模式、上下拉，写入 project.omcfg 并插入标记；"
+    + "不改引脚正文。";
+  if (!confirm(message)) return;
+  run("initialize_derived", "生成配置并初始化");
 }
 
 let initialized = false;
@@ -196,6 +216,7 @@ function init() {
   $("load").addEventListener("click", () => run("load", "打开"));
   $("check").addEventListener("click", () => run("check", "检查"));
   $("init").addEventListener("click", startInitialize);
+  $("derive").addEventListener("click", startDerive);
   $("config").addEventListener("keydown", (event) => {
     if (event.key === "Enter") startInitialize();
   });
