@@ -23,6 +23,8 @@
 python -m omcfg new --name KC536X
 # 或指定落点
 python -m omcfg new --name KC536X --target D:\work\KC536X
+# 手工指定项目号（默认按名称派生；碰到占用会拒绝并给出建议值）
+python -m omcfg new --name KC536X --id 0x0457
 ```
 
 它依次完成：读取 `baseline/sdk` + `baseline/project.omcfg` → 按名称派生 ID/BLE 名 →
@@ -49,7 +51,13 @@ BLE 广播名: KC536X Bt1 / KC536X Bt2
 - **不再需要 `--sdk` / `--config`**：新建只有一条路径。已有 SDK 首次接入仍用
   `init`（见下文“从零到编译”），两者不会并存。
 - 工程名限制：非空、≤24 字符、不含 `/ \ : * ? " < > |` 与换行、不以 `.` 开头。
-- ID 由名称的 CRC16 派生（避开 0x0000），高 16 位继承基线（`0x071`），版本固定 `1`。
+- 项目号默认按名称的 CRC32 低 16 位派生（`0x0000` 改用 `0x0001`），高 16 位继承
+  基线（`0x071`），版本固定 `1`；可用 `--id 0x0457`（或十进制）手工指定低 16 位。
+- 生成前先把 `(low, high, name)` 与 `baseline/project.omcfg`、`configs/*.omcfg`、
+  目标父目录下已生成的 `*/projects/mouse_demo/project.omcfg`、以及 `--scan` 目录
+  比对。重复时**一律拒绝**（退出码 1），列出占用者并给出未占用的 `--id` 建议。
+  理由：项目号用于烧录/配对身份区分，只警告会产出两块同 ID 实物，事后无法自动
+  分辨，只能返工；拒绝发生在写盘前，成本最低。
 - BLE 广播名固定派生为 `<NAME> Bt1` / `<NAME> Bt2`；除生成区外落在
   `main/mouse_hw.c`（`mouse_name` 初值）和 `main/ex2_app_mouse.c`
   （`memcpy(mouse_name, ...)`）。后续改名请重新执行 `new` 或手工修改。
@@ -189,7 +197,7 @@ launch.bat
 
 在顶部输入 SDK 根目录（示例 `D:\work\SE71M_0023_KC536_V1_20260909`），回车或点「打开」。
 
-- 已初始化：直接显示 28 个引脚与问题列表。
+- 已初始化：直接显示 32 行封装脚位表、6 个片内/保留脚与未分配功能列表。
 - 未初始化：弹出「初始化工程」面板，列出缺失项（缺 `project.omcfg`、缺哪个标记块）。
   配置框**只预填真实存在的文件**：工程内已有 `project.omcfg` 就预填它，否则匹配
   `configs/` 同名模板；两者都没有就留空并提示。
@@ -223,8 +231,25 @@ launch.bat
 
 ### 3. 改引脚并保存
 
-在引脚表把 `KEY_R0_PIN` 从 `P34` 改为 `P36`，点「保存引脚」；只写
-`project.omcfg`，不碰源码。
+引脚区以**封装脚号 1–32** 为主键（不是宏列表）：
+
+| 列 | 内容 |
+|---|---|
+| 脚号 / 脚名 / 边 | 来自 `chip/om6239.json` 的 `package_pins`，如 `1 / P32 / left` |
+| 当前功能 | 该脚已分配的角色（取自 `pins`），多角色时显示为只读 |
+| 可选功能 | 该脚在 `mux` 里具备的复用能力 + 当前可分配的角色下拉 |
+| 状态 | 空闲 / 已分配 / 固定（VDD、USB、Flash、XTAL 等）/ 复用受限 |
+
+副表「片内 / 保留脚」列出 `P14–P17`、`P35`、`P37` 及其固定用途；下方
+「未分配功能」列出配置里还没落脚的必需/可选角色，并提示缺少哪个。
+
+操作方式：在某个脚的下拉里选功能即可分配；同一角色被选到新脚时，旧脚的下拉
+自动清空（移动）；选「（解除）」即解除分配。必需角色可移动、但在别处未重新选择
+时不允许解除（提示“必需/驱动引用：可移动，不可解除”）。点「保存引脚」只写
+`project.omcfg` 的 `pins` 段，不碰源码；校验错误在保存时直接返回，不落盘。
+
+例如把 `KEY_R0_PIN` 从 `P32` 改到空闲的 `P10`：保存 → 预览 → 应用，源码侧
+只有 `user_config.h` 的一行 `#define KEY_R0_PIN (P10)` 变化。
 
 ### 4. 预览 diff
 
@@ -259,6 +284,82 @@ python -m omcfg rollback --manifest D:\work\SE71M_0023_KC536_V1_20260909\.omcfg_
 
 若启动时报 WebView2 缺失，请安装 Microsoft Edge WebView2 Runtime；后端 CLI 不受影响。
 
+## 引脚视图与冲突检测
+
+### 数据模型
+
+- **芯片事实**：`chip/om6239.json` 的 `package_pins`（脚号 ↔ `Pxx` ↔ `alt`）、
+  `mux`（`LEDC_SEL`/`ENCODER`/`LVD`/`USB` 的合法组合）、`reserved_pins`
+  （`P14–P17`、`P35`、`P37`）、`internal_flash`（`FLASH_CS/SCLK/MOSI/MISO` 的固定脚）。
+- **配置真相**：`.omcfg` 的 `pins`（角色 → `Pxx`）。界面上的脚位表只是它的投影，
+  不产生第二份数据；保存后仍由既有 `gen` 标记块链路写回源码。
+- **后端 `omcfg/pinmap.py`**：`rows()` 输出 32 个封装脚 + 片内脚 + 未分配角色；
+  `assignable_roles()` 给出某脚当前可分配的角色；`allowed_pins()` 给出某角色的
+  候选脚；`role_pin_problem()` 判断“该脚是否具备该功能”并给出原因。
+- **保存**：GUI 调 `Api.save_pinmap()`，可传全量或部分映射，`""` 表示解除；
+  一次校验、一个事务。`board.wheel` 由 `WHEEL_A/B` 的脚对自动回写，无需手填。
+
+### 四类冲突（`check` / GUI 保存 / `gen` 共用同一套校验）
+
+| 类型 | 真实输出（节选） | 退出码 |
+|---|---|---|
+| 同脚多功能 | `[ERROR] pins: P32 被重复分配: KEY_R0_PIN, KEY_R1_PIN` | 1 |
+| 缺必需脚 | `[ERROR] pins.MODE_BLE_PIN: 当前板型需要 MODE_BLE_PIN，但配置缺少` | 1 |
+| 复用矩阵非法 | `[ERROR] board.wheel: WHEEL_A/B 必须是 ENCODER 四对之一（当前 P00+P06）` | 1 |
+| 复用矩阵非法（LEDC） | `[ERROR] pins.A_LED_PIN.pin: P34 不具备 LEDC 功能（LEDC_SEL 只能 P01/P05/P21/P33）` | 1 |
+| 保留脚被占用 | `[ERROR] pins.SENSOR_SCLK_PIN.pin: P14 是片内 Flash 保留脚，只允许 FLASH_MISO_PIN` | 1 |
+| 固定脚被占用 | `[ERROR] pins.SENSOR_SDIO_PIN.pin: P02 固定为 USB 差分脚，不能接 SENSOR_SDIO_PIN` | 1 |
+
+固定脚/保留脚的具体集合直接读芯片数据：`USB_DN/DP = P02/P03`，`LVD ∈ P23/P33`，
+`LEDC_CTRL ∈ P01/P05/P21/P33`，`ENCODER` 四对 `P00/P01`、`P05/P06`、`P20/P21`、
+`P24/P25`。`SCLK/SDIO/UART` 在 SDK 里是软件 GPIO 位翻转，`alt` 只作界面提示，
+不作硬约束。
+
+### 模块连带规则（`python -m omcfg check --rules`）
+
+规则是 `omcfg/rules.py` 里的一张可读清单，不是规则引擎。`check --sdk <SDK>`
+会对每条规则做静态审计（跨 `user_config` / `key_io` / `ledc`），strict 模式下
+error 计入退出码；GUI 保存与 `gen` 只提示、不阻塞。
+
+```text
+id              level   files                       summary
+pins.macro      error   user_config.h pins 块       角色宏值必须等于配置脚位
+pins.gpio_table error   user_config.c gpio_table    每个已分配角色必须出现在 GPIO 表
+pins.wake       error   user_config.h               唤醒掩码与 EN/DIS 的角色集合必须一致
+key_io.refs     error   key_io.h / key_io.c         key_io 必须引用配置中的按键角色
+led.polarity    error   user_config.h               灯极性与 led_*_on() 的 gpio 操作一致
+led.driver      warning ledc.c                      LEDC_SEL 驱动选择与灯脚提示
+led.sleep       error   user_config.c sleep 块      sleep 断电列表必须覆盖灯脚
+dpi.table       warning sensor.c                    DPI 档位表与配置一致
+dpi.persist     warning flash_process.c             DPI 持久化表存在且回退到出厂表
+dpi.default     warning sensor.h                    默认 DPI 档位与配置一致
+```
+
+命中示例（真实命令输出）：
+
+```text
+[WARNING] pins.macro: pins.KEY_R0_PIN: 配置为 P10，user_config.h 为 P32
+        提示: 说明修改绕过生成；执行 python -m omcfg gen --sdk <SDK> --apply
+[ERROR] pins.wake: PIN_WAKE_UP_MASK: 唤醒角色 [...] 与配置 [...] 不一致
+        提示: 改脚位后必须同步唤醒掩码；执行 gen --apply
+[ERROR] key_io.refs: pins.KEY_C0_PIN: key_io.c 无条件使用 KEY_C0_PIN，但配置已解除
+```
+
+### 二期实测记录（真实副本，2026-11-06）
+
+```text
+[OM_PIN_02] new --name OM_PIN_02 → 项目号 0x8525 / 0x071 / v1；UV4 -b 0 Error/0 Warning
+[OM_PIN_02] save_pinmap({"KEY_R0_PIN": "P10"}) → ok=true, changed=1（伴随 pins.macro warning）
+[OM_PIN_02] gen --apply → 源码只有 user_config.h 的 #define KEY_R0_PIN (P10) 一行变化
+[OM_PIN_02] UV4 -b → 0 Error(s), 0 Warning(s)（Code=39436 RO=2120 RW=208 ZI=2292）
+[OM_PIN_02] 与改脚前快照 diff：user_config.h（宏一行）、project.omcfg（P32→P10）、SE71M.bin
+[冲突] 同脚/缺必需脚/复用矩阵/保留脚四种，check 均退出 1，提示可照做
+[反向] 手删 PIN_WAKE_UP_MASK 中 KEY_PAIR_PIN → check --sdk 报 pins.wake，退出 1
+[反向] 配置改 P06 但未 gen → pins.macro 报“配置为 P06，user_config.h 为 P10”，退出 1
+[幂等] 全量映射连续保存两次 → changed 0 0；gen --dry-run 无变化
+[ID] new --id 0x0457（已占用）→ 拒绝并列出占用者，建议 --id 0x0001，退出 1
+```
+
 ## CLI 参考
 
 每个子命令都有可用的 `--help`（含示例）：
@@ -274,9 +375,9 @@ python -m omcfg rollback --help
 
 | 命令 | 关键参数 | 行为 |
 |---|---|---|
-| `new` | `--sdk DIR --target DIR --config FILE [--name NAME]` | 复制骨架并剔除产物 → 改工程标识 → `init` → `gen --apply`；目标必须不存在 |
+| `new` | `--name NAME [--target DIR] [--id 0xXXXX] [--scan DIR]` | 从内置基线复制骨架并剔除产物 → 改工程标识 → `init` → `gen --apply`；目标必须不存在；项目号默认按名称派生，可用 `--id` 手工指定，重复一律拒绝 |
 | `init` | `--config FILE --sdk DIR [--force]` | 安装 `project.omcfg`，插入 `OMCFG`/`USER CODE` 标记；一次性 |
-| `check` | `FILE...` 或 `--all DIR` | 只校验，不写盘；有 error 返回 1 |
+| `check` | `FILE...`、`--all DIR`、`--sdk DIR`、`--rules` | 只校验，不写盘；`--sdk` 追加跨文件同步审计（严格）；`--rules` 打印连带规则清单；有 error 返回 1 |
 | `gen` | `--sdk DIR [--config FILE] [--dry-run\|--apply]` | 默认 dry-run；`--apply` 走事务并产出 manifest |
 | `rollback` | `--manifest FILE_OR_DIR` | 按 manifest 恢复文件；可多次、按时间倒序撤销 |
 
@@ -295,6 +396,13 @@ python -m omcfg rollback --help
 | 配置与 SDK 不是同一块板 | 0（warning） | `[WARNING] project: 配置与 SDK 现有工程不一致：project.name=CH04，SDK 现有 iPROJECT_NAME="KC536"` + `提示: 若是在副本上换板可继续；否则确认 --sdk/--config 配对` |
 | `new` 目标已存在 | 2 | `[ERROR] 目标路径已存在: ...` + `提示: new 不覆盖任何现有目录；换一个不存在的路径，或确认旧目录无用后手工删除再执行` |
 | `new` 目标位于源 SDK 内 | 2 | `[ERROR] 目标路径不能位于源 SDK 内: ...` + `提示: 把 --target 换到源 SDK 之外，避免复制自身造成递归` |
+| `new` 项目号重复 | 1 | `[ERROR] 项目号 0x0457 / 0x071 已被占用` + 列出占用者 + `可改用: --id 0x0001` |
+| `--id` 越界/无法解析 | 1 | `[ERROR] --id 超出范围: 0` 或 `[ERROR] 无法解析 --id: abc` + `提示: 范围是 1..0xFFFF` |
+| 同脚被两个角色占用 | 1 | `[ERROR] pins: P32 被重复分配: KEY_R0_PIN, KEY_R1_PIN` + `提示: 一个封装脚只能有一个功能` |
+| 复用矩阵非法 | 1 | `[ERROR] board.wheel: WHEEL_A/B 必须是 ENCODER 四对之一（当前 P00+P06）` |
+| 保留脚被占用 | 1 | `[ERROR] pins.SENSOR_SCLK_PIN.pin: P14 是片内 Flash 保留脚，只允许 FLASH_MISO_PIN` |
+| `check --all` 与 `--sdk` 同时给 | 2 | `[ERROR] --all 与 --sdk 互斥` + `提示: 板模板只对自身配置做同步审计` |
+| 改配置绕过生成 | 1（`check --sdk`） | `[WARNING]/[ERROR] pins.macro: 配置为 P10，user_config.h 为 P32` + `提示: 执行 gen --apply` |
 | `--dry-run` 与 `--apply` 同时给 | 2 | `omcfg gen: error: argument --apply: not allowed with argument --dry-run` |
 | `check` 路径不存在 | 2 | `[ERROR] 配置不存在: ...` + `提示: 确认路径；仓库内的板模板在 configs/*.omcfg` |
 
@@ -325,7 +433,11 @@ board:
   mode_pins: single
   logo: rgb
   led_polarity: active_low
-  sensor: { bus: sdio_3wire, dir_clock: 6 }
+  sensor:
+    bus: sdio_3wire
+    dir_clock: 6
+    dpi_levels: [1200, 1600, 2400, 3600, 4800, 6400]   # 可选：DPI 档位（≤8 档，200 的倍数）
+    dpi_default: 1                                      # 可选：默认档位下标（从 0 开始）
   wheel: ENCODER_PINMUX_SEL_IO_20_21
 pins:
   KEY_R0_PIN: P34
@@ -333,7 +445,8 @@ pins:
 ```
 
 `features`、唤醒掩码、`LVD_CHECK_INDEX`、`WHEEL_IO_SELECT`、模式脚等由 `pins`/`board`
-派生，不写进配置。
+派生，不写进配置。`board.sensor.dpi_levels`/`dpi_default` 是可选的元数据，用来和
+`gen` 之外手工维护的 `sensor.c`/`sensor.h` 做一致性提示，不参与 `sensor.c` 生成。
 
 ## 生成物与标记块
 
@@ -371,7 +484,9 @@ pins:
 
 ## 数据与文档
 
-- `chip/om6239.json`：芯片引脚与复用约束，校验器只读它。
+- `chip/om6239.json`：芯片引脚与复用约束（含 `reserved_pins`/`internal_flash`），校验器只读它。
+- `omcfg/pinmap.py`：按封装脚位视图、候选功能推导与“该脚是否具备该功能”判断。
+- `omcfg/rules.py`：模块连带规则清单（`check --rules`）与跨 `user_config`/`key_io`/`ledc` 审计。
 - `baseline/`：内置 SDK 基线（`sdk/` + `project.omcfg` + `META.json`），`new` 的唯一来源。
 - `docs/PLAN-INTERNAL-SDK.md`：内置 SDK、命名即建、引脚数据模型与三期路线。
 - `docs/ROADMAP-LIGHTWEIGHT-CUBEMX.md`：重构路线、阶段验收与设计决策。

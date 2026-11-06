@@ -33,11 +33,18 @@
   </section>
   <main>
     <section class="card">
-      <div class="card-head"><h2>引脚</h2><span id="summary"></span></div>
+      <div class="card-head"><h2>封装脚位</h2><span id="summary"></span></div>
       <div class="table-wrap"><table>
-        <thead><tr><th>功能</th><th>脚位</th><th>模式</th><th>上下拉</th><th>初始</th></tr></thead>
+        <thead><tr><th>脚号</th><th>脚名</th><th>当前功能</th><th>可选功能</th><th>状态</th></tr></thead>
         <tbody id="pins"></tbody>
       </table></div>
+      <div class="card-head"><h2>片内 / 保留脚</h2><span>非封装脚，仅片内 Flash 使用</span></div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>脚名</th><th>用途</th><th>当前功能</th><th>状态</th></tr></thead>
+        <tbody id="internal-pins"></tbody>
+      </table></div>
+      <div class="card-head"><h2>未分配功能</h2></div>
+      <ul id="unassigned" class="issues"></ul>
     </section>
     <section class="card">
       <div class="card-head"><h2>问题</h2></div>

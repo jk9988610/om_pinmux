@@ -75,6 +75,61 @@ def test_gen_apply_and_idempotent(tmp_path, capsys):
     assert "生成结果与 SDK 现状一致" in capsys.readouterr().out
 
 
+def test_check_rules_lists_catalog(capsys):
+    assert cli.main(["check", "--rules"]) == 0
+    out = capsys.readouterr().out
+    assert "pins.macro" in out
+    assert "led.sleep" in out
+    assert "dpi.table" in out
+
+
+def test_check_all_and_sdk_are_mutually_exclusive(capsys):
+    assert cli.main(["check", "--all", "configs", "--sdk", "baseline/sdk"]) == 2
+    assert "互斥" in capsys.readouterr().err
+
+
+def test_check_sdk_accepts_baseline():
+    assert cli.main(["check", "baseline/project.omcfg", "--sdk", "baseline/sdk"]) == 0
+
+
+def test_check_sdk_detects_config_change_without_generate(tmp_path):
+    config = model.load_config(CONFIGS / "CH04.omcfg")
+    config["pins"]["KEY_R0_PIN"] = "P10"
+    path = tmp_path / "changed.omcfg"
+    path.write_text(model.dump_config(config), encoding="utf-8")
+    code = cli.main(["check", str(path), "--sdk", "baseline/sdk"])
+    assert code == 1
+
+
+def test_new_rejects_duplicate_manual_id(tmp_path, capsys):
+    target = tmp_path / "OM_DUP"
+    code = cli.main(["new", "--name", "OM_DUP", "--id", "0x0457", "--target", str(target)])
+    assert code == 1
+    assert not target.exists()
+    err = capsys.readouterr().err
+    assert "已被占用" in err
+    assert "--id 0x" in err
+
+
+def test_new_rejects_invalid_id(tmp_path, capsys):
+    code = cli.main(
+        ["new", "--name", "OM_BAD", "--id", "0x10000", "--target", str(tmp_path / "OM_BAD")]
+    )
+    assert code == 1
+    assert "超出范围" in capsys.readouterr().err
+
+
+def test_new_rejects_derived_collision(tmp_path, capsys, monkeypatch):
+    from omcfg import baseline
+
+    monkeypatch.setattr(baseline, "derive_id", lambda name: "0x0457")
+    code = cli.main(["new", "--name", "OM_DERIVED", "--target", str(tmp_path / "OM_DERIVED")])
+    assert code == 1
+    err = capsys.readouterr().err
+    assert "已被占用" in err
+    assert "手工指定" in err
+
+
 def test_missing_markers_exit_2(tmp_path, capsys):
     sdk_root = _make_sdk(tmp_path, with_markers=False)
     code = cli.main(

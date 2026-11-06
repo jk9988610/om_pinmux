@@ -34,12 +34,12 @@ def _user_code_problem(path: Path, text: str, name: str) -> str | None:
     return f"{path} 的 USER CODE 保护区 '{name}' 缺失或不完整（BEGIN {begin}，END {end}）"
 
 
-def missing_markers(root: Path | str) -> list[str]:
+def missing_markers(root: Path | str, require_config: bool = True) -> list[str]:
     """列出阻止 gen 工作的缺失项；空列表即已初始化。"""
     root_path = Path(root)
     config_path = model.default_config_path(root_path)
     problems: list[str] = []
-    if not config_path.is_file():
+    if require_config and not config_path.is_file():
         problems.append(f"工程尚无 project.omcfg（初始化后写入 {config_path}）")
 
     checks = (

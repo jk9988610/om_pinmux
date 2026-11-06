@@ -246,6 +246,133 @@ def set_pin_text(text: str, role: str, pin: str) -> str:
     raise ValueError(f"{role} 是嵌套写法但没有 pin: 字段")
 
 
+def _block_lines(lines: list[str], key: str) -> tuple[int, int, int]:
+    """返回顶层段的 (起始行, 结束行(不含), 子项缩进)；找不到抛 ValueError。"""
+    start = next(
+        (
+            index
+            for index, line in enumerate(lines)
+            if line.lstrip().startswith(f"{key}:") and not line.lstrip().startswith("#")
+        ),
+        None,
+    )
+    if start is None:
+        raise ValueError(f"配置里没有 {key}: 段")
+    indent = len(lines[start]) - len(lines[start].lstrip())
+    stop = len(lines)
+    for index in range(start + 1, len(lines)):
+        text = lines[index]
+        if not text.strip():
+            continue
+        if len(text) - len(text.lstrip()) <= indent:
+            stop = index
+            break
+    child = indent + 2
+    for index in range(start + 1, stop):
+        text = lines[index]
+        if text.strip() and not text.lstrip().startswith("#"):
+            child = len(text) - len(text.lstrip())
+            break
+    return start, stop, child
+
+
+def _role_line(lines: list[str], role: str, start: int, stop: int) -> int | None:
+    return next(
+        (
+            index
+            for index in range(start + 1, stop)
+            if lines[index].lstrip().startswith(f"{role}:")
+            and not lines[index].lstrip().startswith("#")
+        ),
+        None,
+    )
+
+
+def remove_pin_text(text: str, role: str) -> str:
+    """解除某个角色的分配；角色不存在时原样返回。"""
+    lines = text.split("\n")
+    try:
+        start, stop, _child = _block_lines(lines, "pins")
+    except ValueError:
+        return text
+    target = next(
+        (
+            index
+            for index in range(start + 1, stop)
+            if lines[index].lstrip().startswith(f"{role}:")
+            and not lines[index].lstrip().startswith("#")
+        ),
+        None,
+    )
+    if target is None:
+        return text
+    indent = len(lines[target]) - len(lines[target].lstrip())
+    inline = lines[target].split(":", 1)[1].split("#", 1)[0].strip()
+    if inline:
+        del lines[target]
+        return "\n".join(lines)
+    end = target + 1
+    while end < len(lines):
+        nested = lines[end]
+        if not nested.strip():
+            end += 1
+            continue
+        if len(nested) - len(nested.lstrip()) <= indent:
+            break
+        end += 1
+    del lines[target:end]
+    return "\n".join(lines)
+
+
+def add_pin_text(text: str, role: str, pin: str) -> str:
+    """新增角色分配；已存在则改值，保证幂等。"""
+    pin = str(pin).strip()
+    if not pin:
+        raise ValueError("引脚值不能为空")
+    lines = text.split("\n")
+    start, stop, child = _block_lines(lines, "pins")
+    if _role_line(lines, role, start, stop) is not None:
+        return set_pin_text(text, role, pin)
+    entry = f"{' ' * child}{role}: {pin}"
+    head = lines[start]
+    if "{" in head.split(":", 1)[1]:
+        lines[start] = head.split(":", 1)[0] + ":\n" + entry
+        return "\n".join(lines)
+    last = None
+    for index in range(start + 1, stop):
+        if lines[index].strip() and not lines[index].lstrip().startswith("#"):
+            last = index
+    insert = (last + 1) if last is not None else (start + 1)
+    lines.insert(insert, entry)
+    return "\n".join(lines)
+
+
+def set_board_value_text(text: str, key: str, value: str) -> str:
+    """改写 board 段的标量值（目前只用于 wheel），保留行尾注释。"""
+    lines = text.split("\n")
+    start, stop, child = _block_lines(lines, "board")
+    target = next(
+        (
+            index
+            for index in range(start + 1, stop)
+            if lines[index].lstrip().startswith(f"{key}:")
+            and not lines[index].lstrip().startswith("#")
+        ),
+        None,
+    )
+    if target is None:
+        lines.insert(stop, f"{' ' * child}{key}: {value}")
+        return "\n".join(lines)
+    line = lines[target]
+    prefix, rest = line.split(":", 1)
+    tail = ""
+    if "#" in rest:
+        tail = " " + rest.split("#", 1)[1]
+        tail = " #" + tail.lstrip()
+    lines[target] = f"{prefix}: {value}{tail}"
+    return "\n".join(lines)
+
+
 def dump_config(data: dict[str, Any]) -> str:
     return yaml.safe_dump(data, allow_unicode=True, sort_keys=False)
 
@@ -314,6 +441,21 @@ def sensor_v2_en(config: dict[str, Any]) -> bool:
 
 def sensor_bus(config: dict[str, Any]) -> str:
     return str(sensor(config).get("bus") or "")
+
+
+def dpi_levels(config: dict[str, Any]) -> list[int]:
+    """配置声明的 DPI 档位；未配置返回空列表。"""
+    value = sensor(config).get("dpi_levels")
+    if not isinstance(value, list):
+        return []
+    return [int(item) for item in value if isinstance(item, int) and not isinstance(item, bool)]
+
+
+def dpi_default(config: dict[str, Any]) -> int | None:
+    value = sensor(config).get("dpi_default")
+    if isinstance(value, bool):
+        return None
+    return int(value) if isinstance(value, int) else None
 
 
 def ble_names(config: dict[str, Any]) -> list[str]:

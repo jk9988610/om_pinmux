@@ -22,6 +22,9 @@ STRING_RE = re.compile(
 )
 LED_ON_RE = re.compile(r"led_r_on\(\)[ \t]*(?:\([ \t]*)?(?P<fn>gpio_set|gpio_clear)\(")
 DIR_CLOCK_RE = re.compile(r"SENSOR_DIR_DEFINE[ \t]+SENSOR_DIR_CLOCK_(?P<value>0|3|6|9)")
+DPI_INI_RE = re.compile(r"sensor_dpi_ini\s*\[\s*\]\s*=\s*\{([^}]*)\}", re.S)
+DPI_ENTRY_RE = re.compile(r"(\d+)L/200L-1")
+DPI_DEFAULT_RE = re.compile(r"#define\s+DEFAULT_DPI_GRADE\s+(\d+)")
 GPIO_ROW_RE = re.compile(
     r"\{[ \t]*(?P<role>[A-Za-z_][A-Za-z0-9_]*)[ \t]*,[ \t]*"
     r"USER_GPIO_MODE_(?P<mode>[A-Z_]+)[ \t]*,[ \t]*"
@@ -140,14 +143,27 @@ def derive_config(root: Path | str) -> dict:
     dir_match = DIR_CLOCK_RE.search(header)
     dir_clock = int(dir_match.group("value")) if dir_match else 6
 
+    sensor_board: dict[str, object] = {
+        "bus": "sdio_3wire" if "SENSOR_SDIO_PIN" in pins else "spi_4wire",
+        "dir_clock": dir_clock,
+    }
+    sensor_c = root_path / sdk.PERIPH / "sensor.c"
+    sensor_h = root_path / sdk.PERIPH / "sensor.h"
+    if sensor_c.is_file():
+        match = DPI_INI_RE.search(sdk.read_source(sensor_c).text)
+        levels = [int(value) for value in DPI_ENTRY_RE.findall(match.group(1))] if match else []
+        if levels:
+            sensor_board["dpi_levels"] = levels
+            if sensor_h.is_file():
+                default = DPI_DEFAULT_RE.search(sdk.read_source(sensor_h).text)
+                if default:
+                    sensor_board["dpi_default"] = int(default.group(1))
+
     board: dict[str, object] = {
         "mode_pins": mode,
         "logo": logo,
         "led_polarity": polarity,
-        "sensor": {
-            "bus": "sdio_3wire" if "SENSOR_SDIO_PIN" in pins else "spi_4wire",
-            "dir_clock": dir_clock,
-        },
+        "sensor": sensor_board,
         "wheel": _wheel(header, pins),
     }
     uart = numbers.get("UART_PIN", "").strip("()")

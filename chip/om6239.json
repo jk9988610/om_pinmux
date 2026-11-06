@@ -88,6 +88,13 @@
     }
   },
   "internal_not_on_package": ["P14", "P15", "P16", "P17", "P35", "P37"],
+  "reserved_pins": ["P14", "P15", "P16", "P17", "P35", "P37"],
+  "internal_flash": {
+    "FLASH_CS_PIN": "P17",
+    "FLASH_SCLK_PIN": "P15",
+    "FLASH_MOSI_PIN": "P16",
+    "FLASH_MISO_PIN": "P14"
+  },
   "workflow": [
     "1. 对照原理图网名，在左侧选固件功能宏",
     "2. 点中间封装脚（与手册 Figure1.1 一致）完成分配",

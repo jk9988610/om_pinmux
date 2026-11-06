@@ -23,8 +23,11 @@ def render_pins(config: dict, pins: dict[str, dict[str, str]]) -> str:
 
     wake = model.wake_keys(config, pins)
     lines.append("//* IO口唤醒配置 */")
-    mask = f"((1<<{wake[0]}) |" + "|".join(f"(1<<{key})" for key in wake[1:])
-    mask += "|(1<<SENSOR_MOTION_PIN))"
+    if wake:
+        mask = f"((1<<{wake[0]}) |" + "|".join(f"(1<<{key})" for key in wake[1:])
+        mask += "|(1<<SENSOR_MOTION_PIN))"
+    else:
+        mask = "((1<<SENSOR_MOTION_PIN))"
     lines.append(f"#define {pad('PIN_WAKE_UP_MASK', 24)}{mask}")
     lines.extend(
         _wake_macro(

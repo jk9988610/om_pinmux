@@ -5,7 +5,7 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from . import derive, initproject, model, validate
+from . import derive, initproject, model, pinmap, rules, validate
 from .generate import generator
 from .targets import sdk
 from .transaction import FileTransaction
@@ -69,6 +69,10 @@ def _needs_init(root: Path, missing: list[str]) -> dict:
 
 def _payload(root: Path, config: dict, report: validate.Report) -> dict:
     pins = model.resolved_pins(config)
+    pinmap_data = pinmap.editable(config)
+    pinmap_data["protected_roles"] = sorted(
+        set(validate.required_roles(config, pins)) | {"KEY_C0_PIN"}
+    )
     return {
         "ok": report.ok,
         "sdk": str(root),
@@ -90,6 +94,7 @@ def _payload(root: Path, config: dict, report: validate.Report) -> dict:
             for role, item in pins.items()
         ],
         "features": {key: value for key, value in model.features(config, pins).items()},
+        "pinmap": pinmap_data,
         "issues": [issue.__dict__ for issue in report.errors + report.warnings],
     }
 
@@ -98,6 +103,25 @@ def _add_warning(root: Path, config: dict, report: validate.Report) -> None:
     warning = generator.sdk_warning(config, root)
     if warning:
         report.add_warning("project", warning[0], warning[1])
+    audit = rules.audit(config, root, strict=False)
+    report.warnings.extend(audit.warnings)
+
+
+def _sync_wheel(text: str) -> str:
+    """WHEEL_A/B 改脚后按 ENCODER 四对自动回写 board.wheel。"""
+    config = model.load_config_text(text)
+    pins = model.resolved_pins(config)
+    if model.board(config).get("wheel") == "SOFT_GPIO":
+        return text
+    pair = {pins.get("WHEEL_A_PIN", {}).get("pin"), pins.get("WHEEL_B_PIN", {}).get("pin")}
+    if not all(pair):
+        return text
+    for item in model.load_chip().get("mux", {}).get("ENCODER", {}).get("sdk_macros", []):
+        if set(item.get("pins", [])) == pair:
+            if model.board(config).get("wheel") != item["macro"]:
+                return model.set_board_value_text(text, "wheel", str(item["macro"]))
+            return text
+    return text
 
 
 class Api:
@@ -241,8 +265,8 @@ class Api:
     def check(self, sdk_path: str) -> dict:
         return self.load(sdk_path)
 
-    def save_pins(self, sdk_path: str, updates: list[dict] | None = None) -> dict:
-        """把前端提交的引脚修改写回 project.omcfg；校验失败时不落盘。"""
+    def save_pinmap(self, sdk_path: str, assignments: dict[str, str] | None = None) -> dict:
+        """全量角色→脚位映射写回 project.omcfg；空值表示解除分配。"""
         try:
             root = sdk.resolve_sdk(sdk_path)
             missing = initproject.missing_markers(root)
@@ -251,11 +275,18 @@ class Api:
             config_path = model.default_config_path(root)
             source = sdk.read_source(config_path)
             text = source.text
-            for update in updates or []:
-                role = str(update.get("role") or "").strip()
-                pin = str(update.get("pin") or "").strip()
-                if role and pin:
-                    text = model.set_pin_text(text, role, pin)
+            unknown = sorted(set(assignments or {}) - set(model.ROLE_ORDER))
+            if unknown:
+                return _error(
+                    f"未知功能宏: {', '.join(unknown)}",
+                    "只能提交 ROLE_ORDER 里列出的功能；未知角色请手工改配置",
+                )
+            for role, pin in (assignments or {}).items():
+                value = str(pin or "").strip()
+                text = model.remove_pin_text(text, role) if not value else model.add_pin_text(
+                    text, role, value
+                )
+            text = _sync_wheel(text)
             config = model.load_config_text(text)
             report = validate.validate_config(config)
             _add_warning(root, config, report)

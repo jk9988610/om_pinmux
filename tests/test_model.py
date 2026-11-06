@@ -74,6 +74,41 @@ def test_set_pin_text_preserves_layout():
     assert inline.replace("pin: P22", "pin: P32", 1) == text
 
 
+def test_remove_and_add_pin_text_are_idempotent():
+    text = (CONFIGS / "KC536.omcfg").read_text(encoding="utf-8")
+    removed = model.remove_pin_text(text, "KEY_R0_PIN")
+    assert "KEY_R0_PIN: P34" not in removed
+    assert model.remove_pin_text(removed, "KEY_R0_PIN") == removed
+    restored = model.add_pin_text(removed, "KEY_R0_PIN", "P34")
+    assert model.load_config_text(restored)["pins"]["KEY_R0_PIN"] == "P34"
+    assert model.add_pin_text(restored, "KEY_R0_PIN", "P34") == restored
+
+
+def test_remove_nested_pin_text():
+    text = (
+        "board:\n  wheel: SOFT_GPIO\npins:\n  KEY_R0_PIN: P32\n"
+        "  SENSOR_MOTION_PIN:\n    pin: P10\n    mode: input_floating\n  KEY_R1_PIN: P36\n"
+    )
+    after = model.remove_pin_text(text, "SENSOR_MOTION_PIN")
+    assert "SENSOR_MOTION_PIN" not in after
+    assert "KEY_R1_PIN: P36" in after
+
+
+def test_add_pin_text_to_empty_block():
+    text = "board:\n  wheel: SOFT_GPIO\npins: {}\n"
+    after = model.add_pin_text(text, "KEY_R0_PIN", "P32")
+    assert "pins:\n  KEY_R0_PIN: P32" in after
+    assert model.load_config_text(after)["pins"]["KEY_R0_PIN"] == "P32"
+
+
+def test_set_board_value_text_keeps_comment():
+    text = (CONFIGS / "CH04.omcfg").read_text(encoding="utf-8")
+    after = model.set_board_value_text(text, "wheel", "ENCODER_PINMUX_SEL_IO_05_06")
+    assert after.replace(
+        "wheel: ENCODER_PINMUX_SEL_IO_05_06", "wheel: ENCODER_PINMUX_SEL_IO_00_01"
+    ) == text
+
+
 def test_set_pin_text_rejects_unknown_role():
     text = (CONFIGS / "KC536.omcfg").read_text(encoding="utf-8")
     try:

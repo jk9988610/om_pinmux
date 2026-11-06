@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from . import model
+from . import model, pinmap
 
 
 @dataclass
@@ -58,6 +58,10 @@ def _as_int(value: object) -> int | None:
         except ValueError:
             return None
     return None
+
+
+def required_roles(config: dict, pins: dict | None = None) -> list[str]:
+    return _required_roles(config, pins or model.pin_entries(config))
 
 
 def _required_roles(config: dict, pins: dict) -> list[str]:
@@ -186,6 +190,34 @@ def validate_config(config: dict, chip: dict | None = None) -> Report:
         report.add_error("board.sensor.dir_clock", "只允许 0/3/6/9")
     if "v2_en" in sens and not isinstance(sens.get("v2_en"), bool):
         report.add_error("board.sensor.v2_en", "必须是布尔值")
+    levels = model.dpi_levels(config)
+    if levels:
+        if len(levels) > 8:
+            report.add_error(
+                "board.sensor.dpi_levels", "最多 8 档（dpi_value_tbl 长度）", "删掉多余档位"
+            )
+        for index, level in enumerate(levels):
+            if level < 200 or level > 6400 or level % 200:
+                report.add_error(
+                    f"board.sensor.dpi_levels[{index}]",
+                    "必须是 200..6400 且为 200 的整数倍",
+                    "sensor_dpi_ini 的编码是 level/200-1",
+                )
+        default = model.dpi_default(config)
+        if default is None:
+            report.add_warning(
+                "board.sensor.dpi_default", "已声明 dpi_levels，但缺少 dpi_default"
+            )
+        elif not 0 <= default < len(levels):
+            report.add_error(
+                "board.sensor.dpi_default",
+                f"必须是 0..{len(levels) - 1} 的档位下标",
+                "下标从 0 开始，对应 dpi_levels 第一档",
+            )
+    elif model.dpi_default(config) is not None:
+        report.add_error(
+            "board.sensor.dpi_levels", "声明了 dpi_default 但缺少 dpi_levels"
+        )
 
     pins = model.pin_entries(config)
     if not pins:
@@ -197,6 +229,11 @@ def validate_config(config: dict, chip: dict | None = None) -> Report:
             report.add_error(f"pins.{role}", "未知的功能宏名")
         if item["pin"] not in allowed_pins:
             report.add_error(f"pins.{role}.pin", f"{item['pin']} 不在 OM6239 可用 GPIO 列表")
+        problem = pinmap.role_pin_problem(chip, role, item["pin"])
+        if problem:
+            report.add_error(
+                f"pins.{role}.pin", problem, "在封装脚位表里选具备该功能的脚；片内脚不可占用"
+            )
         for name, value, valid in (
             ("mode", item["mode"], model.GPIO_MODES),
             ("pull", item["pull"], model.GPIO_PULLS),
@@ -228,45 +265,35 @@ def validate_config(config: dict, chip: dict | None = None) -> Report:
 
     for role in _required_roles(config, pins):
         if role not in pins:
-            report.add_error(f"pins.{role}", "当前板型需要该引脚")
-
-    usb = chip.get("mux", {}).get("USB", {}).get("fixed", {})
-    for role, expected in usb.items():
-        if role in pins and pins[role]["pin"] != expected:
-            report.add_error(f"pins.{role}", f"USB 固定脚必须是 {expected}")
-
-    lvd_pins = set(chip.get("mux", {}).get("LVD", {}).get("common_pins", []))
-    if "LVD_PIN" in pins and lvd_pins and pins["LVD_PIN"]["pin"] not in lvd_pins:
-        report.add_error("pins.LVD_PIN", f"LVD 只能接 {sorted(lvd_pins)}")
+            report.add_error(f"pins.{role}", f"当前板型需要 {role}，但配置缺少")
 
     encoder_macros = chip.get("mux", {}).get("ENCODER", {}).get("sdk_macros", [])
     if wheel and wheel != "SOFT_GPIO":
+        pair = {pins.get("WHEEL_A_PIN", {}).get("pin"), pins.get("WHEEL_B_PIN", {}).get("pin")}
         matched = next(
-            (
-                m
-                for m in encoder_macros
-                if set(m.get("pins", []))
-                == {pins.get("WHEEL_A_PIN", {}).get("pin"), pins.get("WHEEL_B_PIN", {}).get("pin")}
-            ),
+            (m for m in encoder_macros if set(m.get("pins", [])) == pair),
             None,
         )
         if matched is None:
-            report.add_error("board.wheel", "WHEEL_A/B 与任何 ENCODER 引脚对都不匹配")
+            current = "+".join(sorted(str(item) for item in pair if item))
+            report.add_error(
+                "board.wheel",
+                f"WHEEL_A/B 必须是 ENCODER 四对之一（当前 {current or '未分配'}）",
+                "四对: P00/P01、P05/P06、P20/P21、P24/P25；GUI 保存时会自动改 board.wheel",
+            )
         elif matched["macro"] != wheel:
             report.add_error("board.wheel", f"应为 {matched['macro']}（由 WHEEL_A/B 推导）")
-
-    if b.get("logo") == "ledc":
-        ledc_pins: set[str] = set()
-        for option in chip.get("mux", {}).get("LEDC_SEL", {}).get("options", []):
-            ledc_pins.update(option.get("pins", []))
-        ctrl = pins.get("LEDC_CTRL_PIN", {}).get("pin")
-        if ctrl and ledc_pins and ctrl not in ledc_pins:
-            report.add_error("pins.LEDC_CTRL_PIN", f"LEDC_SEL 只能选 {sorted(ledc_pins)}")
 
     if "KEY_PAIR_PIN" not in pins:
         report.add_warning(
             "pins.KEY_PAIR_PIN",
             "当前 key_io.h 无条件引用 KEY_PAIR_PIN；编译前需 P2 的 key_io 契约或手工包 #ifdef",
+        )
+    if "KEY_C0_PIN" not in pins:
+        report.add_warning(
+            "pins.KEY_C0_PIN",
+            "key_io.c 无条件使用 KEY_C0_PIN；解除后生成的头文件缺该宏，编译会失败",
+            "保留 KEY_C0_PIN，或手工给 key_io.c 的矩阵列扫描加 #ifdef",
         )
 
     report.derived = {

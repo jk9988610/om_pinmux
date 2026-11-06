@@ -18,6 +18,8 @@ board:
   sensor:
     bus: sdio_3wire
     dir_clock: 6
+    dpi_levels: [1200, 1600, 2400, 3600, 4800, 6400]
+    dpi_default: 1
   wheel: ENCODER_PINMUX_SEL_IO_20_21
 
 pins:

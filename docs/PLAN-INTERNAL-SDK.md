@@ -1,8 +1,8 @@
 # 内置 SDK 与“命名即建工程”计划
 
-> 状态：计划（2026-11-06）。适用：`omcfg` 当前架构。目标：把“从外部 SDK 复制”改成
-> “从工具内置基线长出”，新建工程只输入一个名字，引脚分配成为主要配置动作。
-> 本文只定方案；第一阶段实施结果见文末“落地记录”。
+> 状态：一期已落地，二期已落地（2026-11-06）。适用：`omcfg` 当前架构。目标：把
+> “从外部 SDK 复制”改成“从工具内置基线长出”，新建工程只输入一个名字，引脚分配成为
+> 主要配置动作。本文只定方案；一、二期实施结果见文末“落地记录”。
 
 ## 0. 结论摘要
 
@@ -211,7 +211,10 @@ pins:
 
 ### 3.6 模块图谱如何驱动校验与提示
 
-把 1.2 的“硬组”落成声明式规则（建议 `omcfg/rules/modules.yaml`，二期实现）：
+把 1.2 的“硬组”落成声明式规则。二期实际实现为 `omcfg/rules.py` 的常量清单
+（10 条，见附录 C），**没有**引入 YAML 规则引擎：规则数量少且每条都要写解析代码，
+Python 常量更易读、易测、易被 `check --rules` 直接打印；未来若要扩到几十条再考虑
+外置文件。
 
 ```yaml
 - id: PIN_MOVE_REQUIRES_BOARD_TABLE
@@ -278,7 +281,7 @@ pins:
 
 **非目标**：不做引脚编辑界面、不做参数配置、不做模块连带规则执行。
 
-### 二期：引脚配置与冲突检测
+### 二期：引脚配置与冲突检测（已实施，见附录 C）
 
 **范围**
 
@@ -311,6 +314,10 @@ pins:
 4. 上述改动后编译 0 Error，回归全绿。
 
 ## 5. 风险与待拍板
+
+> 2026-11-06 已拍板：①接受仓库内置源码基线；②基线更新暂人工（不自动下载/升级）；
+> ③不加第二套基线；④项目号允许 `--id` 手工指定，并做碰撞检查（重复拒绝）；
+> ⑤许可证在内部使用前提下随基线保留 `LICENSE.md`。
 
 1. **仓库体积**：一期基线 +5.43 MB（207 文件）。是否接受？若不接受，切 zip 方案
    （约 1–2 MB），接口保持 `baseline/sdk`，但首次要展开、缓存要校验。
@@ -386,3 +393,57 @@ Program Size: Code=39440 RO-data=2120 RW-data=208 ZI-data=2292
 ```
 
 **回归**：`pytest` 77 passed；`ruff` clean；`check --all configs` 两块板 0 error 0 warning。
+
+## 附录 C 二期实际落地记录（2026-11-06）
+
+**数据模型**
+
+- `chip/om6239.json` 新增 `reserved_pins`（`P14–P17`、`P35`、`P37`）与
+  `internal_flash`（`FLASH_CS/SCLK/MOSI/MISO` 固定脚）；`package_pins`/`mux` 沿用。
+- 新增 `omcfg/pinmap.py`：`rows()`（32 封装脚 + 片内脚 + 未分配角色）、
+  `assignable_roles()`、`allowed_pins()`、`constraint_pins()`、`role_pin_problem()`。
+- `.omcfg` 的 `pins` 仍是唯一配置源；GUI/API 的脚位表是投影，不存第二份数据。
+- `omcfg/api.py` 用 `save_pinmap()` 取代旧的 `save_pins()`：全量或部分映射、
+  `""` 解除、未知角色拒绝、`WHEEL_A/B` 脚对自动回写 `board.wheel`，一次校验一次事务。
+
+**四类冲突（`validate.py` + `pinmap.role_pin_problem`）**
+
+| 类型 | 输出 | 退出码 |
+| --- | --- | --- |
+| 同脚多功能 | `[ERROR] pins: P32 被重复分配: KEY_R0_PIN, KEY_R1_PIN` | 1 |
+| 缺必需脚 | `[ERROR] pins.MODE_BLE_PIN: 当前板型需要 MODE_BLE_PIN，但配置缺少` | 1 |
+| 复用矩阵非法 | `[ERROR] board.wheel: WHEEL_A/B 必须是 ENCODER 四对之一（当前 P00+P06）` | 1 |
+| 保留脚被占用 | `[ERROR] pins.SENSOR_SCLK_PIN.pin: P14 是片内 Flash 保留脚，只允许 FLASH_MISO_PIN` | 1 |
+
+固定脚同样拦：`P02/P03` 只能接 USB 差分、`LVD ∈ P23/P33`、
+`LEDC_CTRL ∈ P01/P05/P21/P33`。
+
+**连带规则（`omcfg/rules.py`，`check --rules` 可打印）**
+
+`pins.macro`、`pins.gpio_table`、`pins.wake`、`key_io.refs`、`led.polarity`、
+`led.sleep` 为 error；`led.driver`、`dpi.table`、`dpi.persist`、`dpi.default`
+为 warning。`check --sdk <SDK>` 用 strict 模式把 error 计入退出码，GUI 保存与
+`gen` 用非 strict 只提示。
+
+**真实验收（CH04 基线新工程 `OM_PIN_02`，项目号 `0x8525 / 0x071 / v1`）**
+
+1. 改脚前 `UV4 -b`：0 Error/0 Warning（Code=39436 RO=2120 RW=208 ZI=2292）。
+2. `save_pinmap({"KEY_R0_PIN": "P10"})` → `ok=true, changed=1`，伴随 `pins.macro` warning。
+3. `gen --apply` 后源码只有 `user_config.h` 的 `#define KEY_R0_PIN (P10)` 一行变化；
+   与改脚前快照 diff 仅 `user_config.h`、`project.omcfg`（P32→P10）与 `SE71M.bin`。
+4. 改脚后 `UV4 -b`：0 Error/0 Warning（Code=39436）。
+5. 反向验证：手删 `PIN_WAKE_UP_MASK` 里的 `KEY_PAIR_PIN` → `check --sdk` 报
+   `pins.wake`，退出 1；配置改 P06 但未生成 → `pins.macro` 报“配置为 P06，
+   user_config.h 为 P10”，退出 1。
+6. 幂等：全量映射连续保存两次 `changed: 0 0`；`gen --dry-run` 无变化。
+7. `new --id 0x0457`（已占用）→ 拒绝、列出占用者、建议 `--id 0x0001`，退出 1；
+   理由：项目号是烧录/配对身份，冲突只能拒绝，不能警告后继续。
+8. 回归：`pytest` 109 passed、`ruff` clean、`check --all configs` 退出 0
+   （KC536 仅 `KEY_C0_PIN` warning）、基线 `check --sdk` strict 0 error。
+
+**遗留**
+
+- `ledc.c` 的 `drv_pmu_ledc_sel` 仍是硬编码，移动 `LEDC_CTRL_PIN` 只提示不生成，
+  需三期加标记块。
+- DPI 只做三处一致性提示（`sensor.c`/`flash_process.c`/`sensor.h`），不生成 `sensor.c`。
+- 片外 Flash/`P35`/`P37` 的硬件用途未展开；`new` 后改 `ble_names` 仍需重跑或手工改。

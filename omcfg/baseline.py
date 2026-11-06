@@ -55,16 +55,20 @@ def derive_id(name: str) -> str:
     return f"0x{number or 1:04X}"
 
 
-def config_for_name(name: str, config_path: Path | str | None = None) -> dict:
-    """读取基线配置，写入工程名、派生 ID 与 BLE 广播名。"""
+def config_for_name(
+    name: str, config_path: Path | str | None = None,
+    id_low: int | str | None = None,
+) -> dict:
+    """读取基线配置，写入工程名、项目号与 BLE 广播名；id_low 手工指定时不再派生。"""
     path = Path(config_path) if config_path else CONFIG_PATH
     config = model.load_config(path)
     project = model.project(config)
     project["name"] = name
     project["ble_names"] = [f"{name} Bt1", f"{name} Bt2"]
     base_id = model.project_id(config)
+    low = derive_id(name) if id_low is None else f"0x{int(id_low):04X}"
     project["id"] = {
-        "low": derive_id(name),
+        "low": low,
         "high": base_id.get("high") or "0x071",
         "version": 1,
     }

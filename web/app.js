@@ -28,37 +28,127 @@ function showInit(show) {
   $("init-panel").classList.toggle("hidden", !show);
 }
 
-function renderPins(pins) {
+let currentPinmap = null;
+let protectedRoles = new Set();
+
+function label(role) {
+  return role ? role.replace(/_PIN$/, "") : "";
+}
+
+function cell(text, className) {
+  const td = document.createElement("td");
+  td.textContent = text;
+  if (className) td.className = className;
+  return td;
+}
+
+function renderPinmap(data) {
+  currentPinmap = data || { package: [], internal: [], unassigned: [] };
+  protectedRoles = new Set(currentPinmap.protected_roles || []);
+  renderPackage(currentPinmap.package);
+  renderInternal(currentPinmap.internal);
+  renderUnassigned(currentPinmap.unassigned);
+}
+
+function renderPackage(rows) {
   const body = $("pins");
   body.innerHTML = "";
-  for (const item of pins || []) {
-    const row = document.createElement("tr");
-    for (const [value, cls] of [
-      [item.role, ""], [item.pin, "pin"], [item.mode, ""], [item.pull, ""], [item.init, ""],
-    ]) {
-      if (cls === "pin") {
-        const cell = document.createElement("td");
-        const input = document.createElement("input");
-        input.className = "pin-input";
-        input.dataset.role = item.role;
-        input.value = value;
-        cell.appendChild(input);
-        row.appendChild(cell);
-        continue;
+  for (const row of rows || []) {
+    const tr = document.createElement("tr");
+    tr.appendChild(cell(String(row.pkg)));
+    tr.appendChild(cell(row.name, "pin"));
+    tr.appendChild(cell(row.assigned.map(label).join(" / ") || "—"));
+    if (row.special) {
+      tr.appendChild(cell("—"));
+      tr.appendChild(cell(row.desc));
+    } else if (row.assigned.length > 1) {
+      tr.appendChild(cell("—"));
+      tr.appendChild(cell("多个功能共用此脚，只读"));
+    } else {
+      const td = document.createElement("td");
+      const select = document.createElement("select");
+      select.className = "pin-select";
+      select.dataset.pin = row.name;
+      select.dataset.assigned = row.assigned.join(",");
+      const blank = document.createElement("option");
+      blank.value = "";
+      blank.textContent = "未分配";
+      select.appendChild(blank);
+      for (const role of row.candidates || []) {
+        const option = document.createElement("option");
+        option.value = role;
+        option.textContent = label(role);
+        if (row.assigned.includes(role)) option.selected = true;
+        select.appendChild(option);
       }
-      const cell = document.createElement("td");
-      cell.textContent = value;
-      row.appendChild(cell);
+      select.disabled = row.locked;
+      td.appendChild(select);
+      tr.appendChild(td);
+      const protectedRole = row.assigned.find((role) => protectedRoles.has(role));
+      tr.appendChild(cell(protectedRole ? "必需/驱动引用：可移动，不可解除" : ""));
     }
-    body.appendChild(row);
+    body.appendChild(tr);
   }
 }
 
-function collectPins() {
-  return Array.from(document.querySelectorAll("input.pin-input")).map((input) => ({
-    role: input.dataset.role,
-    pin: input.value.trim(),
-  }));
+function renderInternal(rows) {
+  const body = $("internal-pins");
+  body.innerHTML = "";
+  for (const row of rows || []) {
+    const tr = document.createElement("tr");
+    tr.appendChild(cell(row.name, "pin"));
+    tr.appendChild(cell(row.desc));
+    tr.appendChild(cell(row.assigned.map(label).join(" / ") || "—"));
+    tr.appendChild(cell("保留脚，只读"));
+    body.appendChild(tr);
+  }
+}
+
+function renderUnassigned(roles) {
+  const list = $("unassigned");
+  list.innerHTML = "";
+  if (!roles || !roles.length) {
+    const li = document.createElement("li");
+    li.textContent = "所有已知功能都已分配";
+    list.appendChild(li);
+    return;
+  }
+  for (const role of roles) {
+    const li = document.createElement("li");
+    li.textContent = label(role);
+    list.appendChild(li);
+  }
+}
+
+function collectPinmap() {
+  const map = {};
+  const selects = Array.from(document.querySelectorAll("select.pin-select"));
+  for (const select of selects) {
+    for (const role of (select.dataset.assigned || "").split(",").filter(Boolean)) {
+      map[role] = "";
+    }
+  }
+  const chosen = new Set(selects.map((item) => item.value).filter(Boolean));
+  const seen = {};
+  for (const select of selects) {
+    const role = select.value;
+    if (!role) {
+      const old = (select.dataset.assigned || "").split(",").filter(Boolean);
+      const kept = old.find((item) => protectedRoles.has(item) && !chosen.has(item));
+      if (kept) {
+        setStatus(`${label(kept)} 是必需/驱动引用，不能解除；可改到其它脚`, true);
+        return null;
+      }
+      continue;
+    }
+    if (seen[role]) {
+      setStatus(`功能 ${label(role)} 被选到多个脚，请先改回其中一个`, true);
+      return null;
+    }
+    seen[role] = true;
+    map[role] = select.dataset.pin;
+  }
+  return map;
 }
 
 function renderIssues(issues) {
@@ -111,7 +201,7 @@ function renderNeedsInit(data) {
     options.appendChild(option);
   }
   $("summary").textContent = "未初始化";
-  renderPins([]);
+  renderPinmap(null);
   renderIssues([]);
   $("diff").textContent = "尚未初始化";
   const detail = data.hint ? `${data.error}；${data.hint}` : data.error;
@@ -136,7 +226,7 @@ function render(data, action) {
     localStorage.setItem(`omcfg.config:${data.sdk}`, lastConfig);
   }
   $("summary").textContent = data.summary || "";
-  renderPins(data.pins);
+  renderPinmap(data.pinmap);
   renderIssues(data.issues);
   renderDiff(data.diffs || []);
   const count = data.issues ? data.issues.length : 0;
@@ -204,6 +294,14 @@ function startDerive() {
 
 let initialized = false;
 
+document.addEventListener("change", (event) => {
+  const select = event.target;
+  if (!select.classList || !select.classList.contains("pin-select") || !select.value) return;
+  for (const other of document.querySelectorAll("select.pin-select")) {
+    if (other !== select && other.value === select.value) other.value = "";
+  }
+});
+
 function init() {
   if (initialized) return;
   initialized = true;
@@ -220,7 +318,10 @@ function init() {
   $("config").addEventListener("keydown", (event) => {
     if (event.key === "Enter") startInitialize();
   });
-  $("save").addEventListener("click", () => run("save_pins", "保存引脚", collectPins()));
+  $("save").addEventListener("click", () => {
+    const map = collectPinmap();
+    if (map) run("save_pinmap", "保存引脚", map);
+  });
   $("preview").addEventListener("click", () => run("preview", "预览"));
   $("apply").addEventListener("click", () => {
     if (confirm("确认按 project.omcfg 写入 user_config.h/.c 与生成文件？")) run("apply", "应用");

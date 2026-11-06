@@ -67,6 +67,45 @@ def test_usb_fixed_pins():
     assert any("USB 固定脚" in issue.message for issue in report.errors)
 
 
+def test_missing_required_mode_pin_is_error():
+    config = _load("CH04")
+    del config["pins"]["MODE_BLE_PIN"]
+    report = validate.validate_config(config)
+    assert any("MODE_BLE_PIN" in issue.message for issue in report.errors)
+
+
+def test_illegal_encoder_pair_is_error():
+    config = _load("CH04")
+    config["pins"]["WHEEL_B_PIN"] = "P06"
+    report = validate.validate_config(config)
+    assert any("ENCODER 四对" in issue.message for issue in report.errors)
+
+
+def test_reserved_pin_is_error():
+    config = _load("CH04")
+    config["pins"]["KEY_R0_PIN"] = "P14"
+    report = validate.validate_config(config)
+    assert any("片内 Flash 保留脚" in issue.message for issue in report.errors)
+
+
+def test_non_usb_role_cannot_use_usb_pin():
+    config = _load("CH04")
+    config["pins"]["KEY_R0_PIN"] = "P02"
+    report = validate.validate_config(config)
+    assert any("USB 差分脚" in issue.message for issue in report.errors)
+
+
+def test_dpi_metadata_consistency():
+    config = _load("CH04")
+    config["board"]["sensor"]["dpi_levels"] = [1200, 1300]
+    report = validate.validate_config(config)
+    assert any("200 的整数倍" in issue.message for issue in report.errors)
+    config["board"]["sensor"]["dpi_levels"] = [1200, 1600]
+    config["board"]["sensor"]["dpi_default"] = 5
+    report = validate.validate_config(config)
+    assert any("档位下标" in issue.message for issue in report.errors)
+
+
 def test_ble_names_validation():
     config = _load("KC536")
     for bad in ([], ["x" * 29], ['bad"name']):

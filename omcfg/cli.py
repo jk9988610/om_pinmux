@@ -13,9 +13,9 @@ from pathlib import Path
 
 import yaml
 
-from . import baseline, model, newproject, validate
+from . import baseline, model, newproject, rules, validate
 from .generate import generator
-from .initproject import init_project
+from .initproject import init_project, missing_markers
 from .targets import sdk, uvprojx
 from .transaction import FileTransaction, rollback_manifest
 
@@ -25,6 +25,47 @@ EXIT_ENVIRONMENT = 2
 EXIT_WRITE = 3
 # 4 历史预留（已回滚），当前命令不会返回；保留常量避免误以为是新错误。
 EXIT_ROLLED_BACK = 4
+
+CONFIGS_DIR = Path(__file__).resolve().parent.parent / "configs"
+
+
+def _id_records(paths: list[Path]) -> list[dict]:
+    records: list[dict] = []
+    seen: set[tuple[int, int, str]] = set()
+    for path in paths:
+        if not path.is_file():
+            continue
+        try:
+            config = model.load_config(path)
+            project = model.project_id(config)
+            low = int(str(project["low"]), 0)
+            high = int(str(project["high"]), 0)
+            name = str(model.project(config).get("name", ""))
+        except Exception:
+            continue
+        key = (low, high, name)
+        if key in seen:
+            continue
+        seen.add(key)
+        records.append({"low": low, "high": high, "name": name, "path": path})
+    return records
+
+
+def _id_paths(target: Path, scans: list[str]) -> list[Path]:
+    paths: set[Path] = {baseline.CONFIG_PATH}
+    paths.update(CONFIGS_DIR.glob("*.omcfg"))
+    paths.update(target.parent.glob("*/projects/mouse_demo/project.omcfg"))
+    for item in scans:
+        paths.update(Path(item).expanduser().glob("*/projects/mouse_demo/project.omcfg"))
+    return sorted(path.resolve() for path in paths)
+
+
+def _free_id(records: list[dict]) -> int:
+    used = {record["low"] for record in records}
+    candidate = 1
+    while candidate in used:
+        candidate += 1
+    return candidate
 
 
 def _error(message: str, hint: str = "") -> None:
@@ -50,7 +91,37 @@ def _add_mismatch_warning(report: validate.Report, config: dict, root: Path) -> 
 
 
 def cmd_check(args: argparse.Namespace) -> int:
-    if args.all:
+    if args.rules:
+        if args.paths or args.all or args.sdk:
+            _error("--rules 不能与配置路径/--all/--sdk 组合", "单独运行 check --rules 查看规则清单")
+            return EXIT_ENVIRONMENT
+        print(rules.render_rules())
+        return EXIT_OK
+    if args.all and args.sdk:
+        _error("--all 与 --sdk 互斥", "板模板只对自身配置做同步审计；指定 --sdk 时只检查一份配置")
+        return EXIT_ENVIRONMENT
+    root: Path | None = None
+    if args.sdk:
+        try:
+            root = sdk.resolve_sdk(args.sdk)
+        except Exception as exc:
+            print(f"[ERROR] {exc}", file=sys.stderr)
+            return EXIT_ENVIRONMENT
+        missing = missing_markers(root, require_config=False)
+        if missing:
+            _error(
+                f"SDK 尚未初始化（缺少标记块: {', '.join(missing)}）",
+                "先运行 python -m omcfg init --config <配置> --sdk <SDK>",
+            )
+            return EXIT_ENVIRONMENT
+        if len(args.paths) > 1:
+            _error(
+                "--sdk 只接受一个配置路径",
+                "省略路径则用 <SDK>/projects/mouse_demo/project.omcfg",
+            )
+            return EXIT_ENVIRONMENT
+        paths = [Path(args.paths[0])] if args.paths else [model.default_config_path(root)]
+    elif args.all:
         directory = Path(args.all)
         if not directory.is_dir():
             _error(
@@ -64,7 +135,7 @@ def cmd_check(args: argparse.Namespace) -> int:
     if not paths:
         _error(
             "没有可检查的配置",
-            "用 check <file.omcfg ...> 或 check --all configs",
+            "用 check <file.omcfg ...>、check --all configs 或 check --sdk <SDK>",
         )
         return EXIT_ENVIRONMENT
     failed = False
@@ -91,6 +162,10 @@ def cmd_check(args: argparse.Namespace) -> int:
             _error(f"{path}: 读取失败: {exc}", "确认文件未被占用、当前用户可读")
             return EXIT_ENVIRONMENT
         report = validate.validate_config(config)
+        if root is not None:
+            audit = rules.audit(config, root, strict=True)
+            report.errors.extend(audit.errors)
+            report.warnings.extend(audit.warnings)
         _print_report(report, config)
         failed = failed or not report.ok
     return EXIT_VALIDATION if failed else EXIT_OK
@@ -242,6 +317,17 @@ def cmd_new(args: argparse.Namespace) -> int:
         )
         return EXIT_ENVIRONMENT
 
+    id_low: int | None = None
+    if args.id:
+        try:
+            id_low = int(args.id, 0)
+        except ValueError:
+            _error(f"无法解析 --id: {args.id}", "接受 0x0457 或 1111 这类写法")
+            return EXIT_VALIDATION
+        if not 1 <= id_low <= 0xFFFF:
+            _error(f"--id 超出范围: {id_low}", "项目号低 16 位范围是 1..0xFFFF（0x0000 保留）")
+            return EXIT_VALIDATION
+
     try:
         source, config_source = baseline.ensure_ready()
     except baseline.BaselineError as exc:
@@ -254,20 +340,36 @@ def cmd_new(args: argparse.Namespace) -> int:
         )
         return EXIT_ENVIRONMENT
 
-    config = baseline.config_for_name(name, config_source)
+    config = baseline.config_for_name(name, config_source, id_low)
+    project_id = model.project_id(config)
+    low = int(str(project_id["low"]), 0)
+    high = int(str(project_id["high"]), 0)
+    records = _id_records(_id_paths(target, args.scan or []))
+    duplicates = [item for item in records if item["low"] == low and item["high"] == high]
+    if duplicates:
+        _error(
+            f"项目号 {project_id['low']} / {project_id['high']} 已被占用",
+            "同一项目号会让烧录/配对身份无法区分；请手工指定 --id（未占用的低 16 位）",
+        )
+        for item in duplicates:
+            print(f"        - {item['name'] or '(未命名)'}: {item['path']}", file=sys.stderr)
+        suggestion = _free_id(records)
+        print(f"        可改用: --id 0x{suggestion:04X}", file=sys.stderr)
+        return EXIT_VALIDATION
+
     config_payload = (model.dump_config(config) + "\n").encode("utf-8")
     report = validate.validate_config(config)
     _print_report(report, config)
     if not report.ok:
         return EXIT_VALIDATION
 
-    project_id = model.project_id(config)
     print(f"内置基线: {source}")
     print(f"新工程: {target}（目录由工具生成）")
     print(f"工程名: {name}")
+    source_note = "手工指定" if id_low is not None else "按名称派生"
     print(
         f"项目号: {project_id['low']} / {project_id['high']} / v{project_id['version']}"
-        "（按名称派生）"
+        f"（{source_note}）"
     )
     print(f"BLE 广播名: {' / '.join(model.ble_names(config))}")
 
@@ -417,6 +519,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     check.add_argument("paths", nargs="*", metavar="FILE", help="一个或多个 .omcfg 路径")
     check.add_argument("--all", metavar="DIR", help="检查目录下所有 *.omcfg")
+    check.add_argument(
+        "--sdk",
+        metavar="DIR",
+        help="对该 SDK 副本做跨 key_io/ledc/user_config 的同步审计（严格模式）",
+    )
+    check.add_argument("--rules", action="store_true", help="打印模块连带规则清单后退出")
 
     gen = sub.add_parser(
         "gen",
@@ -473,6 +581,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--target",
         metavar="DIR",
         help="新工程目录；缺省为当前目录下的 <NAME>（必须不存在）",
+    )
+    new.add_argument(
+        "--id",
+        metavar="ID",
+        help="手工指定项目号低 16 位（0x0457 或十进制）；缺省按名称派生",
+    )
+    new.add_argument(
+        "--scan",
+        action="append",
+        metavar="DIR",
+        help="额外的已生成工程父目录，用于项目号碰撞检查（可重复）",
     )
 
     rollback = sub.add_parser(

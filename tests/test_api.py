@@ -65,7 +65,7 @@ def test_gui_save_preview_apply(tmp_path):
 
     config_path = sdk_root / "projects/mouse_demo/project.omcfg"
     before = config_path.read_text(encoding="utf-8")
-    saved = api.save_pins(str(sdk_root), [{"role": "KEY_R0_PIN", "pin": "P36"}])
+    saved = api.save_pinmap(str(sdk_root), {"KEY_R0_PIN": "P36"})
     assert saved["ok"] is True
     assert saved["changed"] == 1
     after = config_path.read_text(encoding="utf-8")
@@ -207,6 +207,14 @@ def _make_config_sdk(tmp_path: Path, name: str, config: dict) -> Path:
     sleep = templates.render_sleep(config, pins)
     (periph / "user_config.h").write_text(header, encoding="utf-8")
     (periph / "user_config.c").write_text(f"{table}\n\n{sleep}\n", encoding="utf-8")
+    (periph / "sensor.c").write_text(
+        "unsigned char const sensor_dpi_ini[] = {\n"
+        "    1200L/200L-1,\n    1600L/200L-1,\n    2400L/200L-1,\n"
+        "    3600L/200L-1,\n    4800L/200L-1,\n    6400L/200L-1,\n"
+        "    0xFF,\n    0xFF,\n};\n",
+        encoding="utf-8",
+    )
+    (periph / "sensor.h").write_text("#define DEFAULT_DPI_GRADE 1\n", encoding="utf-8")
     return root
 
 
@@ -274,6 +282,47 @@ def test_api_initialize_derived_reports_underivable_state(tmp_path):
     assert "复制邻近板配置" in result["hint"]
 
 
+def test_save_pinmap_removes_optional_role(tmp_path):
+    sdk_root = _make_sdk(tmp_path)
+    assert cli.main(["init", "--config", str(CONFIGS / "CH04.omcfg"), "--sdk", str(sdk_root)]) == 0
+    result = Api().save_pinmap(str(sdk_root), {"KEY_C0_PIN": ""})
+    assert result["ok"] is True
+    config_path = sdk_root / "projects/mouse_demo/project.omcfg"
+    assert "KEY_C0_PIN" not in model.load_config(config_path)["pins"]
+
+
+def test_save_pinmap_is_idempotent(tmp_path):
+    sdk_root = _make_sdk(tmp_path)
+    assert cli.main(["init", "--config", str(CONFIGS / "CH04.omcfg"), "--sdk", str(sdk_root)]) == 0
+    api = Api()
+    first = api.save_pinmap(str(sdk_root), {"KEY_R0_PIN": "P10"})
+    assert first["ok"] is True and first["changed"] == 1
+    second = api.save_pinmap(str(sdk_root), {"KEY_R0_PIN": "P10"})
+    assert second["ok"] is True
+    assert second["changed"] == 0
+
+
+def test_save_pinmap_rejects_unknown_role(tmp_path):
+    sdk_root = _make_sdk(tmp_path)
+    assert cli.main(["init", "--config", str(CONFIGS / "CH04.omcfg"), "--sdk", str(sdk_root)]) == 0
+    result = Api().save_pinmap(str(sdk_root), {"NOT_A_ROLE": "P10"})
+    assert result["ok"] is False
+    assert "未知功能宏" in result["error"]
+
+
+def test_sync_wheel_follows_encoder_pair():
+    from omcfg import api as api_module
+
+    text = (CONFIGS / "CH04.omcfg").read_text(encoding="utf-8")
+    moved = text.replace("WHEEL_A_PIN: P00", "WHEEL_A_PIN: P20").replace(
+        "WHEEL_B_PIN: P01", "WHEEL_B_PIN: P21"
+    )
+    after = api_module._sync_wheel(moved)
+    assert "wheel: ENCODER_PINMUX_SEL_IO_20_21" in after
+    config = model.load_config_text(after)
+    assert model.board(config)["wheel"] == "ENCODER_PINMUX_SEL_IO_20_21"
+
+
 def test_gui_rejects_invalid_pin_without_writing(tmp_path):
     sdk_root = _make_sdk(tmp_path)
     assert (
@@ -282,7 +331,7 @@ def test_gui_rejects_invalid_pin_without_writing(tmp_path):
     api = Api()
     config_path = sdk_root / "projects/mouse_demo/project.omcfg"
     before = config_path.read_text(encoding="utf-8")
-    result = api.save_pins(str(sdk_root), [{"role": "KEY_R0_PIN", "pin": "P99"}])
+    result = api.save_pinmap(str(sdk_root), {"KEY_R0_PIN": "P99"})
     assert result["ok"] is False
     assert "未通过校验" in result["error"]
     assert config_path.read_text(encoding="utf-8") == before

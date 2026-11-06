@@ -418,6 +418,26 @@ python -m pytest                              :: 全绿
 - 验收：新工程 `UV4 -b` 0 Error/0 Warning，与基线 diff 仅标识与配置/标记差异。
 - 详见 `docs/PLAN-INTERNAL-SDK.md`。二期做引脚配置与冲突检测，三期做参数与模块连带校验。
 
+**P10：按脚号配置 + 四类冲突 + 连带规则 + `--id` 碰撞（2026-11-06，二期）**
+
+- **按封装脚位配置**：`chip/om6239.json` 补 `reserved_pins`/`internal_flash`；
+  新增 `omcfg/pinmap.py`（`rows`/`assignable_roles`/`allowed_pins`/`role_pin_problem`）。
+  GUI 主表 32 个封装脚、副表片内/保留脚、下方未分配角色；`Api.save_pinmap()`
+  支持全量/部分映射与解除，`WHEEL_A/B` 自动回写 `board.wheel`。
+- **四类冲突**：同脚多功能（LED 别名对白名单除外）、缺必需脚、复用矩阵非法
+  （ENCODER 四对/LEDC_SEL/LVD/USB 固定脚/片内 Flash 保留脚）、保留脚被占用；
+  `check`、GUI 保存、`gen` 共用同一套校验，均退出 1。
+- **连带规则**：`omcfg/rules.py` 10 条常量清单（`check --rules` 可打印）；
+  `check --sdk` strict 审计宏/GPIO 表/唤醒掩码/key_io/灯极性/sleep/DPI 三处，
+  漏改可报出；GUI 与 `gen` 只提示。
+- **`--id`**：`new` 支持手工指定低 16 位；生成前与基线、模板、已生成工程比对
+  `(low, high, name)`，重复一律拒绝并给建议值（理由：项目号是烧录/配对身份）。
+- **验收**：`OM_PIN_02`（`0x8525`）改 `KEY_R0_PIN` P32→P10，diff 仅 `user_config.h`
+  一行宏 + `project.omcfg`，`UV4 -b` 0 Error/0 Warning；四冲突与“漏唤醒掩码”
+  反向验证均有真实输出与退出码；`pytest`/`ruff`/`check --all` 全绿。
+- **边界**：`ledc.c` 的 `drv_pmu_ledc_sel` 未加标记块，仍手工改；DPI 只做一致性提示，
+  不生成 `sensor.c`；这两项留三期。
+
 ---
 
 ## 5. 砍并清单（逐项去留）
