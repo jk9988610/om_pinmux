@@ -13,7 +13,7 @@ from pathlib import Path
 
 import yaml
 
-from . import model, newproject, validate
+from . import baseline, model, newproject, validate
 from .generate import generator
 from .initproject import init_project
 from .targets import sdk, uvprojx
@@ -223,13 +223,17 @@ def cmd_gen(args: argparse.Namespace) -> int:
 
 
 def cmd_new(args: argparse.Namespace) -> int:
-    try:
-        source = sdk.resolve_sdk(args.sdk)
-    except sdk.TargetError as exc:
-        print(f"[ERROR] {exc}", file=sys.stderr)
-        return EXIT_ENVIRONMENT
-
-    target = Path(args.target).expanduser().resolve()
+    """命名即建工程：从内置基线复制，身份与默认参数由工具生成。"""
+    name = args.name.strip()
+    problem = baseline.name_problem(name)
+    if problem:
+        _error(problem, "例如 --name KC536X；工程名会写入 iPROJECT_NAME 并派生 BLE 广播名")
+        return EXIT_VALIDATION
+    target = (
+        Path(args.target).expanduser().resolve()
+        if args.target
+        else (Path.cwd() / name).resolve()
+    )
     if target.exists():
         _error(
             f"目标路径已存在: {target}",
@@ -237,55 +241,40 @@ def cmd_new(args: argparse.Namespace) -> int:
             "或确认旧目录无用后手工删除再执行",
         )
         return EXIT_ENVIRONMENT
-    if source in target.parents:
-        _error(
-            f"目标路径不能位于源 SDK 内: {target}",
-            "把 --target 换到源 SDK 之外，避免复制自身造成递归",
-        )
-        return EXIT_ENVIRONMENT
 
-    config_source = Path(args.config)
-    if not config_source.is_file():
-        _error(
-            f"配置不存在: {config_source}",
-            "板模板在 configs/*.omcfg；新项目请先复制一份模板并改 project.name/id/ble_names",
-        )
-        return EXIT_ENVIRONMENT
     try:
-        config = _read_config(config_source)
-    except yaml.YAMLError as exc:
+        source, config_source = baseline.ensure_ready()
+    except baseline.BaselineError as exc:
+        print(f"[ERROR] {exc}", file=sys.stderr)
+        return EXIT_ENVIRONMENT
+    if source == target or source in target.parents:
         _error(
-            f"{config_source}: YAML 解析失败: {exc}",
-            "检查缩进、冒号和引号；可对照 configs/KC536.omcfg",
+            f"目标路径不能位于内置基线内: {target}",
+            "把 --target 换到 baseline/sdk 之外，避免复制自身造成递归",
         )
         return EXIT_ENVIRONMENT
-    except ValueError as exc:
-        _error(f"{config_source}: {exc}", "配置顶层应为 schema/chip/project/board/pins 映射")
-        return EXIT_ENVIRONMENT
-    except OSError as exc:
-        _error(f"{config_source}: 读取失败: {exc}", "确认文件未被占用、当前用户可读")
-        return EXIT_ENVIRONMENT
 
-    if args.name is not None:
-        name = args.name.strip()
-        if not name:
-            _error("--name 不能为空", "新工程名会写入 iPROJECT_NAME，例如 --name KC536X")
-            return EXIT_VALIDATION
-        project = model.project(config)
-        project["name"] = name
-        if not project.get("ble_names"):
-            project["ble_names"] = [f"{name} Bt1", f"{name} Bt2"]
-        config_payload = (model.dump_config(config) + "\n").encode("utf-8")
-    else:
-        config_payload = config_source.read_bytes()
-
+    config = baseline.config_for_name(name, config_source)
+    config_payload = (model.dump_config(config) + "\n").encode("utf-8")
     report = validate.validate_config(config)
     _print_report(report, config)
     if not report.ok:
         return EXIT_VALIDATION
 
+    project_id = model.project_id(config)
+    print(f"内置基线: {source}")
+    print(f"新工程: {target}（目录由工具生成）")
+    print(f"工程名: {name}")
+    print(
+        f"项目号: {project_id['low']} / {project_id['high']} / v{project_id['version']}"
+        "（按名称派生）"
+    )
+    print(f"BLE 广播名: {' / '.join(model.ble_names(config))}")
+
     try:
         copied = newproject.copy_skeleton(source, target)
+        print(f"新工程: {target}（复制 {copied} 个文件）")
+        print(f"不复制: {newproject.NOT_COPIED_SUMMARY}")
         config_target = model.default_config_path(target)
         config_target.parent.mkdir(parents=True, exist_ok=True)
         config_target.write_bytes(config_payload)
@@ -309,8 +298,6 @@ def cmd_new(args: argparse.Namespace) -> int:
     records = macros + rewrites
     newproject.remove_backups(target)
 
-    print(f"新工程: {target}（复制 {copied} 个文件）")
-    print(f"不复制: {newproject.NOT_COPIED_SUMMARY}")
     if records:
         print("标识改写（源 -> 新）:")
         for record in records:
@@ -373,8 +360,7 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=(
             "快速上手（在副本上）:\n"
             "  python -m omcfg check --all configs\n"
-            "  python -m omcfg new --sdk <源SDK> --target <新工程目录>"
-            " --config configs\\KC536.omcfg\n"
+            "  python -m omcfg new --name <新工程名>\n"
             "  python -m omcfg init --config configs\\KC536.omcfg --sdk <SDK副本>\n"
             "  python -m omcfg gen --sdk <SDK副本> --dry-run\n"
             "  python -m omcfg gen --sdk <SDK副本> --apply\n"
@@ -463,30 +449,30 @@ def build_parser() -> argparse.ArgumentParser:
 
     new = sub.add_parser(
         "new",
-        help="从源 SDK 一键生成可编译的新工程（复制 → 改标识 → init → gen）",
+        help="从内置基线按名称生成可编译的新工程（复制 → 改标识 → init → gen）",
         description=(
-            "复制源 SDK 骨架（剔除 out/、.dep、.omcfg_bak_* 等产物），按配置改写 "
-            "iPROJECT_NAME、iPROJECT_ID_L/H、iREAL_VERSION_ID 与 BLE 广播名，"
-            "完成 init 与 gen --apply。"
+            "从工具内置基线（baseline/sdk）复制骨架，按工程名生成 ID/BLE 广播名并改写 "
+            "iPROJECT_NAME、iPROJECT_ID_L/H、iREAL_VERSION_ID，完成 init 与 gen --apply。"
         ),
         epilog=(
             "示例:\n"
-            "  copy configs\\KC536.omcfg myboard.omcfg  :: 改 project.name/id/ble_names\n"
-            "  python -m omcfg new --sdk E:\\SDK\\KC536 --target D:\\work\\MyBoard "
-            "--config myboard.omcfg\n"
-            "目标路径必须不存在；命令不会覆盖任何现有目录。"
+            "  python -m omcfg new --name MyMouse\n"
+            "  python -m omcfg new --name MyMouse --target D:\\work\\MyMouse\n"
+            "工程名、目录、项目号、BLE 广播名由工具生成；源 SDK 来自工具内置基线，"
+            "无需再指定 --sdk/--config。目标路径必须不存在，命令不覆盖现有目录。"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    new.add_argument("--sdk", required=True, metavar="DIR", help="源 SDK 根目录（不修改源工程）")
-    new.add_argument("--target", required=True, metavar="DIR", help="新工程目录（必须不存在）")
-    new.add_argument(
-        "--config", required=True, metavar="FILE", help="新工程配置（含 project.name/id/ble_names）"
-    )
     new.add_argument(
         "--name",
+        required=True,
         metavar="NAME",
-        help="覆盖 project.name；未配置 ble_names 时按 '<NAME> Bt1/Bt2' 生成",
+        help="工程名（写入 iPROJECT_NAME，并派生 BLE 广播名）",
+    )
+    new.add_argument(
+        "--target",
+        metavar="DIR",
+        help="新工程目录；缺省为当前目录下的 <NAME>（必须不存在）",
     )
 
     rollback = sub.add_parser(

@@ -1,0 +1,14 @@
+{
+  "source_sdk": "E:\\M_2026\\M_2026_T\\SE71M_0457_CH04_V4_20260829",
+  "source_commit": "212aa96",
+  "source_date": "2026-11-06",
+  "baseline_board": "CH04",
+  "created": "2026-11-06",
+  "state": "已初始化并生成（OMCFG 标记块 + board_features.h）",
+  "file_count": 207,
+  "size_bytes": 5689945,
+  "tree_sha256": "eb1521833e3badb1e5f40f876f6007f224629fda543da98400799d01b339c775",
+  "config_sha256": "3947d1a86d8ec84ef43382560216ece7efa8021ca9a746618e48b14d0ee05fcf",
+  "license": "sdk/LICENSE.md (OM-SLA01)",
+  "notes": "清理后的 CH04 SDK 基线：无 out/_build/.git/uvguix/日志；保留 uvprojx 引用的两个预编译 .o；已用 baseline/project.omcfg 初始化并生成，新建工程只改身份。更新方式见 docs/PLAN-INTERNAL-SDK.md 3.1。"
+}

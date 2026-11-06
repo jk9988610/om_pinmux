@@ -409,6 +409,15 @@ python -m pytest                              :: 全绿
 - **验收**：`check --all configs` 只剩 CH04/KC536 且 0 error 0 warning；`pytest`、
   `ruff` 全绿。
 
+**P9：内置 SDK 基线 + 命名即建工程（2026-11-06，一期）**
+
+- `baseline/sdk`（CH04，207 文件 / 5.43 MB）+ `baseline/project.omcfg` + `META.json`
+  随仓库分发，`new` 不再接受外部 `--sdk/--config`。
+- `python -m omcfg new --name <NAME>` 生成目录、项目号、BLE 名与默认板参数；
+  `--target` 仅改落点。
+- 验收：新工程 `UV4 -b` 0 Error/0 Warning，与基线 diff 仅标识与配置/标记差异。
+- 详见 `docs/PLAN-INTERNAL-SDK.md`。二期做引脚配置与冲突检测，三期做参数与模块连带校验。
+
 ---
 
 ## 5. 砍并清单（逐项去留）

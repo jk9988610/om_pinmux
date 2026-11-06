@@ -6,8 +6,8 @@
 
 ## 0. 结论摘要
 
-1. **SDK 内置用“仓库内基线目录”落地**：`baseline/sdk/` 放一份清理过的 CH04 SDK
-   （208 个文件、5.43 MB），`baseline/project.omcfg` 放该基线的板级配置，
+1. **SDK 内置用“仓库内基线目录”落地**：`baseline/sdk/` 放一份清理过、已初始化并
+   生成过的 CH04 SDK（207 个文件、5.43 MB），`baseline/project.omcfg` 放该基线的板级配置，
    `baseline/META.json` 记录来源、提交、许可证和文件树摘要。不引入 zip 展开、
    下载器或外部 SDK 路径。理由是体积可接受、Git 可 diff、编译可复现、许可证可控。
 2. **新建工程只给名字**：`python -m omcfg new --name <NAME>`。工程名、目录、ID、
@@ -87,7 +87,7 @@ USB 文件在 `mode_usb/`；2.4G 在 `mode_24g/`。
 
 | 方案 | 体积 | 首次使用 | 更新 | 可审查性 | 结论 |
 | --- | --- | --- | --- | --- | --- |
-| A. 仓库内基线源码目录 | +5.43 MB / 208 文件 | 直接复制，无展开 | 重新拷入 + 更新 `META.json` | Git 可逐文件 diff | **采用** |
+| A. 仓库内基线源码目录 | +5.43 MB / 207 文件 | 直接复制，无展开 | 重新拷入 + 更新 `META.json` | Git 可逐文件 diff | **采用** |
 | B. 基线压缩包（zip） | 约 1–2 MB | 首次解压到缓存 | 换包 + 清缓存 | 需解压后才能审查，缓存易脏 | 暂不采用 |
 | C. 工具内置模板 + 首次展开 | 同 A 或 B | 多一层“模板→工程” | 模板与展开逻辑双维护 | 中 | 不采用 |
 | D. 继续用外部 SDK 路径 | 0 | 依赖用户目录 | 无 | 差（路径漂移） | 废弃 |
@@ -108,6 +108,10 @@ baseline/
     ├── projects/mouse_demo/...
     └── ...
 ```
+
+`sdk/` 处于**已初始化并生成**的状态（含 `OMCFG` 标记块、`USER CODE` 保护区、
+`board_features.h` 与 `uvprojx` 登记），因此新建时不会再重排引脚表，diff 只剩
+身份宏与 `project.omcfg`。这也让基线本身成为一个“可编译样板”。
 
 **来源与许可证**：基线取自 `E:\M_2026\M_2026_T\SE71M_0457_CH04_V4_20260829`
 （CH04，`212aa96`），许可证为 SDK 自带 `LICENSE.md`（OM-SLA01）。要点：
@@ -308,7 +312,7 @@ pins:
 
 ## 5. 风险与待拍板
 
-1. **仓库体积**：一期基线 +5.43 MB（208 文件）。是否接受？若不接受，切 zip 方案
+1. **仓库体积**：一期基线 +5.43 MB（207 文件）。是否接受？若不接受，切 zip 方案
    （约 1–2 MB），接口保持 `baseline/sdk`，但首次要展开、缓存要校验。
 2. **基线更新方式**：当前“人工拷入 + 更新 META”是否可接受？是否需要
    `omcfg baseline update --from <SDK>`（自动剔除产物 + 生成 META）？
@@ -346,6 +350,39 @@ BM2017 cc2af3e 2026-11-04 组合键：main_usb.c, usb_user_process.c, mouse_hw.c
 CH04  212aa96 2026-11-06 模式/USB/灯：key_io.c, main_24g.c, sleep.c, hid_process.c, ledc.c
 ```
 
-## 附录 B 一期实际落地记录
+## 附录 B 一期实际落地记录（2026-11-06）
 
-（实施完成后补充：基线来源与体积、生成命令、标识 diff、编译结果。）
+**基线**：`baseline/sdk` 207 文件 / 5,689,945 B，`tree_sha256=eb152183…`，
+来源 CH04 `212aa96`，已初始化并生成（`OMCFG` 标记块、`board_features.h`、`uvprojx` 登记）。
+
+**生成命令**
+
+```powershell
+python -m omcfg new --name OM_TEST_01 --target C:\...\temp_20261106_01\OM_TEST_01
+```
+
+输出：项目号 `0x15B0 / 0x071 / v1`，BLE `OM_TEST_01 Bt1 / OM_TEST_01 Bt2`，
+复制 207 个文件，无 `.omcfg_bak_*` 残留。
+
+**与基线 diff（源码范围，排除 `out/_build`）**
+
+| 类型 | 文件 | 差异 |
+| --- | --- | --- |
+| 新增 | `projects/mouse_demo/project.omcfg` | 新工程配置（名称/ID/BLE/基线引脚） |
+| 修改 | `periph/user_config.h` | 3 行：`iPROJECT_ID_L`、`iREAL_VERSION_ID`、`iPROJECT_NAME` |
+| 修改 | `main/mouse_hw.c` | 1 行：`mouse_name` |
+| 修改 | `main/ex2_app_mouse.c` | 2 行：两个广播名 `memcpy` |
+| 修改 | `periph/board_features.h` | 1 行：`board:` 注释跟随工程名 |
+
+没有引脚、功能宏、`uvprojx` 或其它源码差异。
+
+**编译**
+
+```text
+UV4 -b ...\OM_TEST_01\projects\mouse_demo\keil5\SE71M.uvprojx
+exit=0
+Program Size: Code=39440 RO-data=2120 RW-data=208 ZI-data=2292
+".\out\SE71M.axf" - 0 Error(s), 0 Warning(s).
+```
+
+**回归**：`pytest` 77 passed；`ruff` clean；`check --all configs` 两块板 0 error 0 warning。

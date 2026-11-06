@@ -1,8 +1,10 @@
-"""new 子命令：骨架复制排除、标识改写、目标拒绝。"""
+"""new 子命令：内置基线、命名即建工程、骨架排除、标识改写。"""
 
 from pathlib import Path
 
-from omcfg import cli, model
+import pytest
+
+from omcfg import baseline, cli, model, newproject
 
 CONFIGS = Path(__file__).resolve().parent.parent / "configs"
 
@@ -13,7 +15,7 @@ HEADER = "\n".join(
         "#define UART_PIN (KEY_R0_PIN)",
         "#define iPROJECT_ID_H  0x071               /* 项目平台编号:OM6239 */",
         "#define iPROJECT_ID_L  0x0023               /* 项目编号 */",
-        '#define iREAL_VERSION_ID        5            /* 版本编号 */',
+        "#define iREAL_VERSION_ID        5            /* 版本编号 */",
         '#define iCONSUMER_NAME "BYC"        /* 客户名字 */',
         '#define iPROJECT_NAME  "KC536"      /* 项目名字 */',
         "",
@@ -50,7 +52,7 @@ ADV_MOUSE = "\n".join(
 
 
 def _make_sdk(tmp_path: Path) -> Path:
-    root = tmp_path / "sdk"
+    root = tmp_path / "baseline_sdk"
     periph = root / "projects/mouse_demo/periph"
     main = root / "projects/mouse_demo/main"
     periph.mkdir(parents=True)
@@ -71,37 +73,58 @@ def _make_sdk(tmp_path: Path) -> Path:
     (root / "keil5" / "SE71M.BAT").write_text("stale paths", encoding="utf-8")
     (root / "keil5" / "keep.txt").write_text("keep", encoding="utf-8")
     (root / "compile_commands.json").write_text("[]", encoding="utf-8")
+    project = root / "projects/mouse_demo/keil5"
+    project.mkdir()
+    (project / "SE71M.uvprojx").write_text(
+        "\n".join(
+            [
+                '<?xml version="1.0" encoding="UTF-8"?>',
+                "<Project>",
+                "  <Groups>",
+                "    <Group>",
+                "      <GroupName>periph</GroupName>",
+                "      <Files>",
+                "        <File>",
+                "          <FileName>user_config.c</FileName>",
+                "          <FileType>1</FileType>",
+                "          <FilePath>..\\periph\\user_config.c</FilePath>",
+                "        </File>",
+                "      </Files>",
+                "    </Group>",
+                "  </Groups>",
+                "</Project>",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
     # uvprojx 直接引用的预编译输入必须保留
     (periph / "userdefined_key_20260724.o").write_text("obj", encoding="utf-8")
     return root
 
 
-def _run_new(sdk_root: Path, target: Path, config: Path, *extra: str) -> int:
-    return cli.main(
-        ["new", "--sdk", str(sdk_root), "--target", str(target), "--config", str(config), *extra]
-    )
-
-
-def _config_with_identity(tmp_path: Path) -> Path:
-    config = model.load_config(CONFIGS / "KC536.omcfg")
-    config["project"] = {
-        "name": "KC536X",
-        "customer": "BYC",
-        "ble_names": ["KC536X Bt1"],
-        "id": {"low": "0x0101", "high": "0x071", "version": 7},
-    }
-    path = tmp_path / "kc536x.omcfg"
-    path.write_text(model.dump_config(config), encoding="utf-8")
-    return path
-
-
-def test_new_copies_without_artifacts(tmp_path, capsys):
+@pytest.fixture
+def fake_baseline(tmp_path, monkeypatch):
+    """把模块级基线路径指到临时目录，避免每个用例复制 5 MB 真实基线。"""
     sdk_root = _make_sdk(tmp_path)
+    config = tmp_path / "baseline.omcfg"
+    config.write_bytes((CONFIGS / "KC536.omcfg").read_bytes())
+    meta = tmp_path / "META.json"
+    meta.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(baseline, "SDK_DIR", sdk_root)
+    monkeypatch.setattr(baseline, "CONFIG_PATH", config)
+    monkeypatch.setattr(baseline, "META_PATH", meta)
+    return sdk_root
+
+
+def test_new_copies_without_artifacts(fake_baseline, tmp_path, capsys):
     target = tmp_path / "new"
-    code = _run_new(sdk_root, target, CONFIGS / "KC536.omcfg")
+    code = cli.main(["new", "--name", "KC536X", "--target", str(target)])
     assert code == cli.EXIT_OK
     output = capsys.readouterr().out
+    assert "内置基线:" in output
     assert "不复制:" in output
+    assert "目录由工具生成" in output
     assert not (target / "out").exists()
     assert not (target / "compile_commands.json").exists()
     assert not (target / "keil5" / "old.dep").exists()
@@ -115,12 +138,18 @@ def test_new_copies_without_artifacts(tmp_path, capsys):
     assert (target / "projects/mouse_demo/periph/board_features.h").is_file()
 
 
-def test_new_refuses_existing_target(tmp_path, capsys):
-    sdk_root = _make_sdk(tmp_path)
+def test_new_default_target_uses_name(fake_baseline, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    code = cli.main(["new", "--name", "MyMouse"])
+    assert code == cli.EXIT_OK
+    assert (tmp_path / "MyMouse" / "projects/mouse_demo/project.omcfg").is_file()
+
+
+def test_new_refuses_existing_target(fake_baseline, tmp_path, capsys):
     target = tmp_path / "existing"
     target.mkdir()
     (target / "keep.txt").write_text("user data", encoding="utf-8")
-    code = _run_new(sdk_root, target, CONFIGS / "KC536.omcfg")
+    code = cli.main(["new", "--name", "KC536X", "--target", str(target)])
     assert code == cli.EXIT_ENVIRONMENT
     stderr = capsys.readouterr().err
     assert "目标路径已存在" in stderr
@@ -128,10 +157,9 @@ def test_new_refuses_existing_target(tmp_path, capsys):
     assert (target / "keep.txt").read_text(encoding="utf-8") == "user data"
 
 
-def test_new_rewrites_identity(tmp_path, capsys):
-    sdk_root = _make_sdk(tmp_path)
+def test_new_rewrites_identity(fake_baseline, tmp_path, capsys):
     target = tmp_path / "new"
-    code = _run_new(sdk_root, target, _config_with_identity(tmp_path))
+    code = cli.main(["new", "--name", "KC536X", "--target", str(target)])
     assert code == cli.EXIT_OK
     output = capsys.readouterr().out
     assert "iPROJECT_NAME" in output
@@ -140,42 +168,38 @@ def test_new_rewrites_identity(tmp_path, capsys):
 
     header = (target / "projects/mouse_demo/periph/user_config.h").read_text(encoding="utf-8")
     assert '"KC536X"' in header
-    assert "0x0101" in header
-    assert "iREAL_VERSION_ID        7" in header
+    assert "iREAL_VERSION_ID        1" in header
+    config = model.load_config(target / "projects/mouse_demo/project.omcfg")
+    assert model.project(config)["name"] == "KC536X"
+    assert model.ble_names(config) == ["KC536X Bt1", "KC536X Bt2"]
+    assert model.project_id(config)["low"] == baseline.derive_id("KC536X")
     mouse = (target / "projects/mouse_demo/main/mouse_hw.c").read_text(encoding="utf-8")
     assert '"KC536X Bt1"' in mouse
+    adv = (target / "projects/mouse_demo/main/ex2_app_mouse.c").read_text(encoding="utf-8")
+    assert '"KC536X Bt1"' in adv
+    assert '"KC536X Bt2"' in adv
 
 
-def test_new_name_override_derives_ble_name(tmp_path):
-    sdk_root = _make_sdk(tmp_path)
-    target = tmp_path / "new"
-    config = model.load_config(CONFIGS / "KC536.omcfg")
-    del config["project"]["ble_names"]
-    config_path = tmp_path / "named.omcfg"
-    config_path.write_text(model.dump_config(config), encoding="utf-8")
-    code = cli.main(
-        [
-            "new",
-            "--sdk",
-            str(sdk_root),
-            "--target",
-            str(target),
-            "--config",
-            str(config_path),
-            "--name",
-            "KC536Y",
-        ]
-    )
-    assert code == cli.EXIT_OK
-    config = model.load_config(target / "projects/mouse_demo/project.omcfg")
-    assert model.project(config)["name"] == "KC536Y"
-    assert model.ble_names(config) == ["KC536Y Bt1", "KC536Y Bt2"]
-    mouse = (target / "projects/mouse_demo/main/mouse_hw.c").read_text(encoding="utf-8")
-    assert '"KC536Y Bt1"' in mouse
+def test_new_rejects_invalid_name(fake_baseline, tmp_path, capsys):
+    code = cli.main(["new", "--name", "bad\\name", "--target", str(tmp_path / "x")])
+    assert code == cli.EXIT_VALIDATION
+    assert "不能包含" in capsys.readouterr().err
+    assert not (tmp_path / "x").exists()
 
 
-def test_new_missing_config_exit_2(tmp_path, capsys):
-    sdk_root = _make_sdk(tmp_path)
-    code = _run_new(sdk_root, tmp_path / "new", tmp_path / "nope.omcfg")
+def test_new_incomplete_baseline(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(baseline, "SDK_DIR", tmp_path / "missing")
+    code = cli.main(["new", "--name", "KC536X", "--target", str(tmp_path / "x")])
     assert code == cli.EXIT_ENVIRONMENT
-    assert "配置不存在" in capsys.readouterr().err
+    stderr = capsys.readouterr().err
+    assert "内置 SDK 基线不完整" in stderr
+    assert not (tmp_path / "x").exists()
+
+
+def test_copy_skeleton_keeps_required_objects(tmp_path):
+    source = _make_sdk(tmp_path)
+    target = tmp_path / "copy"
+    copied = newproject.copy_skeleton(source, target)
+    assert copied > 0
+    assert (target / "projects/mouse_demo/periph/userdefined_key_20260724.o").is_file()
+    assert not (target / "out").exists()

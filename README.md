@@ -11,68 +11,57 @@
 - Windows + Python 3.10+（PowerShell 或 cmd 均可）。
 - `pip install -r requirements.txt`（`pyyaml`；GUI 另需 `pywebview`）。
 - 编译验证需要 Keil `UV4.exe`（默认 `C:\Keil_v5\UV4\UV4.exe`）。
-- 准备一份 **SDK 副本**。工具会直接改副本里的源码，原工程请保持不变。
+- 新建工程不需要外部 SDK；工具仓库内置 `baseline/sdk`（清理并已生成的 CH04 SDK，
+  207 个文件、5.43 MB）。接入已有工程时才需要准备那份 SDK 的**副本**。
 
 ## 新工程一键生成（推荐）
 
-从源 SDK + 一份配置直接生成**可编译的新工程**，不再手工 `robocopy` 再逐文件改。
-
-### 1. 准备新配置
-
-```powershell
-copy configs\KC536.omcfg myboard.omcfg
-```
-
-编辑 `myboard.omcfg` 的工程标识；引脚/板型保持与源 SDK 一致即可：
-
-```yaml
-project:
-  name: KC536X
-  customer: BYC
-  ble_names: ["KC536X Bt1"]   # 可选；BT0/BT1 双广播名可写 2 项
-  id: { low: "0x0101", high: "0x071", version: 6 }
-```
-
-### 2. 一条命令生成
+只给工程名，工具从内置基线生成**可编译的新工程**：目录、项目号、BLE 广播名、默认板
+参数全部由工具生成。
 
 ```powershell
-python -m omcfg new --sdk E:\SDK\KC536 --target D:\work\KC536X --config myboard.omcfg
+python -m omcfg new --name KC536X
+# 或指定落点
+python -m omcfg new --name KC536X --target D:\work\KC536X
 ```
 
-它依次完成：复制骨架（剔除产物）→ 安装 `project.omcfg` → 改写工程标识 →
-插入 `OMCFG`/`USER CODE` 标记 → `gen --apply`。实测输出：
+它依次完成：读取 `baseline/sdk` + `baseline/project.omcfg` → 按名称派生 ID/BLE 名 →
+复制骨架（剔除产物）→ 安装 `project.omcfg` → 改写工程标识 → 插入
+`OMCFG`/`USER CODE` 标记 → `gen --apply`。实测输出形如：
 
 ```text
-新工程: D:\work\KC536X（复制 202 个文件）
-不复制: out/, _build/, lib_build/, ..., .omcfg_bak_*/, *.dep, *.uvoptx, ...
+内置基线: E:\tools\om_pinmux\baseline\sdk
+新工程: D:\work\KC536X（目录由工具生成）
+工程名: KC536X
+项目号: 0x???? / 0x071 / v1（按名称派生）
+BLE 广播名: KC536X Bt1 / KC536X Bt2
+新工程: D:\work\KC536X（复制 207 个文件）
 标识改写（源 -> 新）:
-  projects/mouse_demo/periph/user_config.h  iPROJECT_NAME  '"KC536"' -> '"KC536X"'
-  projects/mouse_demo/periph/user_config.h  iPROJECT_ID_L  '0x0023' -> '0x0101'
-  projects/mouse_demo/periph/user_config.h  iREAL_VERSION_ID  '5' -> '6'
-  projects/mouse_demo/main/mouse_hw.c  mouse_name  'BT5.1Mouse' -> 'KC536X Bt1'
+  projects/mouse_demo/periph/user_config.h  iPROJECT_NAME  '"CH04"' -> '"KC536X"'
+  ...
 ```
 
-> SDK 里 `periph\userdefined_key_20260724.o`、`mode_24g\rf_protocol_20260704.o` 是
+> 基线里 `periph\userdefined_key_20260724.o`、`mode_24g\rf_protocol_20260704.o` 是
 > `.uvprojx` 直接引用的预编译输入，会保留；它们不是本次编译产物，删除会导致链接失败。
 
 - **目标必须不存在**：已存在直接 `[ERROR] 目标路径已存在`，退出码 2，不覆盖任何文件。
-- 源工程与配置的 `project.name` 不一致是正常输入；命令结束后会列出实际改写项。
-- `--name X` 可覆盖 `project.name`；配置未写 `ble_names` 时按 `X Bt1`/`X Bt2` 派生。
-  配置里显式写了 `ble_names` 时以配置为准。
-- 除生成区外，BLE 广播名落在 `main/mouse_hw.c`（`mouse_name` 初值）和
-  `main/ex2_app_mouse.c`（`memcpy(mouse_name, ...)`，CH04 双名）；`gen` 不会改这两处，
-  后续改名请重新执行 `new` 或手工修改。
+  缺省落点是当前目录下的 `<NAME>`。
+- **不再需要 `--sdk` / `--config`**：新建只有一条路径。已有 SDK 首次接入仍用
+  `init`（见下文“从零到编译”），两者不会并存。
+- 工程名限制：非空、≤24 字符、不含 `/ \ : * ? " < > |` 与换行、不以 `.` 开头。
+- ID 由名称的 CRC16 派生（避开 0x0000），高 16 位继承基线（`0x071`），版本固定 `1`。
+- BLE 广播名固定派生为 `<NAME> Bt1` / `<NAME> Bt2`；除生成区外落在
+  `main/mouse_hw.c`（`mouse_name` 初值）和 `main/ex2_app_mouse.c`
+  （`memcpy(mouse_name, ...)`）。后续改名请重新执行 `new` 或手工修改。
+- 基线来源、许可证（SDK 自带 `LICENSE.md`，OM-SLA01）与文件树摘要见
+  `baseline/META.json`；更新方式见 [docs/PLAN-INTERNAL-SDK.md](docs/PLAN-INTERNAL-SDK.md) §3.1。
 
-### 3. 编译
+### 编译
 
 ```powershell
 python -m omcfg check D:\work\KC536X\projects\mouse_demo\project.omcfg
 UV4 -r D:\work\KC536X\projects\mouse_demo\keil5\SE71M.uvprojx -o build.log
 ```
-
-实测：KC536 → KC536X 生成后 `0 Error(s), 0 Warning(s)`，Code=38576；
-`user_config.h/.c` 与源工程相比，除标记/保护区行外只有 `iPROJECT_NAME`、
-`iPROJECT_ID_L`、`iREAL_VERSION_ID` 三行不同，`user_config.c` 正文零差异。
 
 ## 从零到编译：5 步
 
@@ -383,6 +372,8 @@ pins:
 ## 数据与文档
 
 - `chip/om6239.json`：芯片引脚与复用约束，校验器只读它。
+- `baseline/`：内置 SDK 基线（`sdk/` + `project.omcfg` + `META.json`），`new` 的唯一来源。
+- `docs/PLAN-INTERNAL-SDK.md`：内置 SDK、命名即建、引脚数据模型与三期路线。
 - `docs/ROADMAP-LIGHTWEIGHT-CUBEMX.md`：重构路线、阶段验收与设计决策。
 - `launch*.bat`：GUI 启动方式。
 

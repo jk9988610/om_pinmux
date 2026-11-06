@@ -1,0 +1,56 @@
+# OM6239 项目配置 — CH04（双模式脚 + LEDC LOGO + 矩阵列 + LED_LOW）
+schema: om6239-project/v1
+chip: OM6239
+
+project:
+  name: CH04
+  customer: App
+  ble_names: ["CH-04 Bt1", "CH-04 Bt2"]
+  id:
+    low: "0x0457"
+    high: "0x071"
+    version: 4
+
+board:
+  mode_pins: dual
+  logo: ledc
+  ledc_rgb_number: 6
+  led_polarity: active_high
+  sensor:
+    bus: sdio_3wire
+    dir_clock: 6
+  wheel: ENCODER_PINMUX_SEL_IO_00_01
+  uart_pin: KEY_R2_PIN
+
+pins:
+  KEY_R0_PIN: P32
+  KEY_R1_PIN: P36
+  KEY_R2_PIN: P20
+  KEY_PAIR_PIN: P24
+  KEY_C0_PIN: P31
+  WHEEL_A_PIN: P00
+  WHEEL_B_PIN: P01
+  MODE_24G_PIN: P27
+  MODE_BLE_PIN: P26
+  SENSOR_MOTION_PIN: P07
+  SENSOR_SCLK_PIN: P11
+  SENSOR_SDIO_PIN: P12
+  LED_MODE_R_PIN: P23
+  LED_MODE_G_PIN: P22
+  LED_MODE_B_PIN: P21
+  LED_LOW_PIN: P04
+  LEDC_CTRL_PIN: P05
+  LEDC_PIN: P34
+  USB_5V: P25
+  BAT_CHG_PIN: P30
+  LVD_PIN: P33
+  USB_DN_PIN: P02
+  USB_DP_PIN: P03
+  FLASH_CS_PIN: P17
+  FLASH_SCLK_PIN: P15
+  FLASH_MOSI_PIN: P16
+  FLASH_MISO_PIN: P14
+
+codegen:
+  output: periph
+  keil_project: projects/mouse_demo/keil5/SE71M.uvprojx
