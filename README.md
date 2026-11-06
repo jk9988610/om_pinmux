@@ -1,42 +1,99 @@
 # OM6239 PinMux (`om_pinmux`)
 
-硬件脚位 / 板级特征写入工具。业务协议（RF/HID 映射）不在范围内。
+轻量配置驱动的引脚/板级特征生成器：`.omcfg` 是唯一真相，Python 校验并生成代码，只按标记块写回 SDK。
+业务协议（RF/HID 映射）不在范围内。
 
-## 换板推荐流程（调查表先行）
-
-1. 打开并填写调查表说明：`survey/QUESTIONNAIRE.md`
-2. 多板差异对照：`survey/multi_board_matrix.md`
-3. 生成并填写答案 JSON：
+## 快速上手
 
 ```bat
 cd /d E:\tools\om_pinmux
-python om_pinmux.py survey blank --out survey\answers_NEWBOARD.json
-:: 编辑 answers_NEWBOARD.json
-python om_pinmux.py survey check  --answers survey\answers_NEWBOARD.json
-python om_pinmux.py survey export --answers survey\answers_NEWBOARD.json
+
+:: 0) 安装依赖
+pip install -r requirements.txt
+
+:: 1) 一次性初始化：把配置装进工程、在已知区域插入 OMCFG 标记
+python -m omcfg init --config configs\KC536.omcfg --sdk <SDK根>
+
+:: 2) 校验配置（0 error 才继续）
+python -m omcfg check <SDK根>\projects\mouse_demo\project.omcfg
+python -m omcfg check --all configs
+
+:: 3) 预览 diff（不落盘）
+python -m omcfg gen --sdk <SDK根> --dry-run
+
+:: 4) 写入（走事务，产出可回滚 manifest）
+python -m omcfg gen --sdk <SDK根> --apply
+
+:: 5) 需要时回滚
+python -m omcfg rollback --manifest <SDK根>\.omcfg_bak_<时间戳>\manifest.json
 ```
 
-4. 双击 `launch.bat`（或 `打开引脚工具.bat`）打开 UI；也可 `launch.ps1` → 选板 → 校验 → 写入工程 `user_config`
-5. 冒烟：键控灯 → 滚轮 → 光流 → USB HID → 24G/BLE 配对
+生成 4 个产物：`user_config.h`、`user_config.c`、`board_features.h`、
+`periph_gpio_sleep_set.pinmux.c`。
 
-等价：`python survey.py blank|check|export ...`
+## 图形界面
 
-## 已收录板 JSON
+双击 `launch.bat`（或 `打开引脚工具.bat`）启动 pywebview 薄壳；界面只负责展示
+引脚表 / 问题 / diff，所有动作调用后端同一套 `omcfg` 核心。
 
-`boards/`：KC536、CH04、A02、BD316、BD319、MW650、HTW17
+## 唯一配置源
 
-## 调查表会强制提醒的坑
+`<SDK根>/projects/mouse_demo/project.omcfg`（YAML）。仓库内 `configs/*.omcfg`
+是板模板，`init` 时复制为工程配置。
 
-- 传感器 3 线 SDIO 与 4 线 MOSI/MISO 混用
-- DPI 与 PAIR 同脚
-- UART 复用按键
-- LEDC 与滚轮重叠
-- 无 PAIR 且关闭 24G 首次自动配对
-- RGB 板整包套 CH04 LEDC
+```yaml
+schema: om6239-project/v1
+chip: OM6239
+project:
+  name: KC536
+  customer: BYC
+  id: { low: "0x0023", high: "0x071", version: 5 }
+board:
+  mode_pins: single
+  logo: rgb
+  led_polarity: active_low
+  sensor: { bus: sdio_3wire, dir_clock: 6 }
+  wheel: ENCODER_PINMUX_SEL_IO_20_21
+pins:
+  KEY_R0_PIN: P34
+  ...
+```
 
-## 其它命令
+`features`、唤醒掩码、`LVD_CHECK_INDEX`、`WHEEL_IO_SELECT`、模式脚等全部由
+`pins`/`board` 派生，不允许写进配置。
+
+## 标记块
+
+写回只认精确标记，缺标记直接报错（不猜位置）：
+
+```c
+/* OMCFG BEGIN pins */
+/* OMCFG END pins */
+```
+
+块名：`pins`、`project_ids`、`project_version`、`project_names`（`user_config.h`），
+`gpio_table`（`user_config.c`），`features`、`sleep`（生成文件存在时）。新文件缺失
+则整文件创建。
+
+## CLI 退出码
+
+| 码 | 含义 |
+|---|---|
+| 0 | 成功 / 校验通过 / 无变化 |
+| 1 | 配置校验失败 |
+| 2 | 配置、环境或标记块错误 |
+| 3 | 写盘失败 |
+| 4 | 已回滚 |
+
+## 数据与归档
+
+- `chip/om6239.json`：芯片引脚与复用约束，校验器只读它。
+- `boards/*.json`：历史板档案，运行时不读取。
+- `docs/ROADMAP-LIGHTWEIGHT-CUBEMX.md`：重构路线与阶段验收。
+
+## 测试
 
 ```bat
-python om_pinmux.py validate --all
-python om_pinmux.py apply --target <SDK根> --board BD319 --dry-run
+python -m pytest
+python -m ruff check .
 ```

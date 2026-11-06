@@ -15,10 +15,6 @@ venv/
 pinmux_state.json
 launch.log
 
-# Generated operation output (keep the smoke checklist baseline)
-reports/*.txt
-!reports/BD319_smoke_checklist.md
-
 # Editor-local state
 .cursor/*
 !.cursor/plans/

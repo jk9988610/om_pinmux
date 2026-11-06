@@ -15,10 +15,15 @@ jobs:
       - name: Install development dependencies
         run: python -m pip install -e ".[dev]"
       - name: Compile Python sources
-        run: python -m compileall -q .
+        run: python -m compileall -q omcfg app.py
       - name: Lint
         run: python -m ruff check .
-      - name: Validate board descriptions
-        run: python validation.py --all
+      - name: Web must stay a view (no codegen in JS/HTML)
+        shell: pwsh
+        run: |
+          $hits = Select-String -Path web/*.js, web/*.html -Pattern '#define|OMCFG BEGIN|OMCFG END'
+          if ($hits) { $hits; throw "web/ 不允许出现生成逻辑或标记文本" }
+      - name: Validate configs
+        run: python -m omcfg check --all configs
       - name: Test
         run: python -m pytest
