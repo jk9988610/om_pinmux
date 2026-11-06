@@ -7,5 +7,5 @@ if (-not $py) {
     Write-Error "Python not found. Install Python and add it to PATH."
     exit 1
 }
-& $py.Source launch.py @args
+& $py.Source app.py @args
 exit $LASTEXITCODE

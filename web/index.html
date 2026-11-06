@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OM6239 配置</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <div class="brand">OM6239 <span>配置</span></div>
+    <input id="sdk" placeholder="SDK 根目录，例如 E:\M_2026\...\SE71M_0023_KC536_V1_20260909">
+    <button id="load">打开</button>
+    <button id="check">检查</button>
+    <button id="preview">预览 diff</button>
+    <button id="apply" class="primary">应用</button>
+  </header>
+  <div id="status" class="status">输入 SDK 路径后回车；配置文件固定为 projects/mouse_demo/project.omcfg</div>
+  <main>
+    <section class="card">
+      <div class="card-head"><h2>引脚</h2><span id="summary"></span></div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>功能</th><th>脚位</th><th>模式</th><th>上下拉</th><th>初始</th></tr></thead>
+        <tbody id="pins"></tbody>
+      </table></div>
+    </section>
+    <section class="card">
+      <div class="card-head"><h2>问题</h2></div>
+      <ul id="issues" class="issues"></ul>
+      <div class="card-head"><h2>diff</h2></div>
+      <pre id="diff" class="diff">尚未预览</pre>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

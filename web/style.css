@@ -1,0 +1,98 @@
+:root {
+  --bg: #f5f6f8;
+  --card: #fff;
+  --line: #dfe2e8;
+  --text: #1f2430;
+  --muted: #6b7280;
+  --accent: #2f6fed;
+  --error: #c62828;
+  --warn: #a15c00;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font: 13px/1.5 "Segoe UI", "Microsoft YaHei", sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+header {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 14px;
+  background: #232a36;
+  color: #fff;
+}
+.brand { font-weight: 600; letter-spacing: .5px; white-space: nowrap; }
+.brand span { color: #8fb3ff; font-weight: 400; }
+#sdk {
+  flex: 1;
+  min-width: 180px;
+  padding: 7px 9px;
+  border: 1px solid #3a4354;
+  border-radius: 4px;
+  background: #171c25;
+  color: #e8ebf2;
+  font: inherit;
+}
+button {
+  padding: 7px 12px;
+  border: 1px solid #414b5e;
+  border-radius: 4px;
+  background: #2c3444;
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+button.primary { border-color: var(--accent); background: var(--accent); }
+button:disabled { opacity: .45; cursor: default; }
+.status { padding: 8px 14px; color: var(--muted); border-bottom: 1px solid var(--line); background: #fff; }
+.status.error { color: var(--error); }
+main {
+  display: grid;
+  grid-template-columns: minmax(420px, 1.1fr) minmax(380px, 1fr);
+  gap: 12px;
+  padding: 12px;
+  height: calc(100vh - 92px);
+}
+.card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: #fafbfc;
+}
+h2 { margin: 0; font-size: 13px; }
+#summary, .card-head span { color: var(--muted); }
+.table-wrap { flex: 1; min-height: 0; overflow: auto; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 6px 10px; text-align: left; border-bottom: 1px solid #edf0f4; }
+th { position: sticky; top: 0; background: #fafbfc; color: var(--muted); font-weight: 500; }
+td.pin { font-family: Consolas, monospace; }
+.issues { margin: 0; padding: 10px 12px; list-style: none; max-height: 180px; overflow: auto; }
+.issues li { padding: 4px 0; border-bottom: 1px dashed #eef0f3; }
+.issues li.error { color: var(--error); }
+.issues li.warning { color: var(--warn); }
+.diff {
+  flex: 1;
+  margin: 0;
+  padding: 10px 12px;
+  overflow: auto;
+  font: 12px/1.45 Consolas, monospace;
+  white-space: pre-wrap;
+  color: #333;
+}
+@media (max-width: 900px) {
+  main { grid-template-columns: 1fr; height: auto; }
+  .card { max-height: 48vh; }
+}

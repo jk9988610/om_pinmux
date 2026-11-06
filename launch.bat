@@ -25,14 +25,14 @@ if not defined PYEXE if not defined PYWEXE (
 
 REM Prefer pythonw so double-click does not leave a console window
 if defined PYWEXE (
-  start "OM6239 PinMux" /D "%~dp0" "%PYWEXE%" "%~dp0launch.py" %*
+  start "OM6239 PinMux" /D "%~dp0" "%PYWEXE%" "%~dp0app.py" %*
   exit /b 0
 )
 
 if /I "%PYEXE%"=="py" (
-  start "OM6239 PinMux" /D "%~dp0" py -3 "%~dp0launch.py" %*
+  start "OM6239 PinMux" /D "%~dp0" py -3 "%~dp0app.py" %*
   exit /b 0
 )
 
-start "OM6239 PinMux" /D "%~dp0" "%PYEXE%" "%~dp0launch.py" %*
+start "OM6239 PinMux" /D "%~dp0" "%PYEXE%" "%~dp0app.py" %*
 exit /b 0
