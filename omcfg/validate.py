@@ -69,7 +69,6 @@ def _required_roles(config: dict, pins: dict) -> list[str]:
         "WHEEL_B_PIN",
         "SENSOR_MOTION_PIN",
         "SENSOR_SCLK_PIN",
-        "SENSOR_SDIO_PIN",
         "LED_MODE_R_PIN",
         "LED_MODE_G_PIN",
         "LED_MODE_B_PIN",
@@ -93,7 +92,9 @@ def _required_roles(config: dict, pins: dict) -> list[str]:
     elif b.get("logo") == "ledc":
         required += ["LEDC_CTRL_PIN", "LEDC_PIN"]
     if model.sensor(config).get("bus") == "spi_4wire":
-        required += ["SENSOR_NCS_PIN"]
+        required += ["SENSOR_NCS_PIN", "SENSOR_MOSI_PIN", "SENSOR_MISO_PIN"]
+    else:
+        required += ["SENSOR_SDIO_PIN"]
     return required
 
 
@@ -156,6 +157,8 @@ def validate_config(config: dict, chip: dict | None = None) -> Report:
         report.add_error("board.sensor.bus", f"只允许 {sorted(model.BUS_ENUM)}")
     if sens.get("dir_clock") not in model.DIR_CLOCK_ENUM:
         report.add_error("board.sensor.dir_clock", "只允许 0/3/6/9")
+    if "v2_en" in sens and not isinstance(sens.get("v2_en"), bool):
+        report.add_error("board.sensor.v2_en", "必须是布尔值")
 
     pins = model.pin_entries(config)
     if not pins:

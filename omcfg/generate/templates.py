@@ -65,9 +65,17 @@ def render_pins(config: dict, pins: dict[str, dict[str, str]]) -> str:
     lines.append("")
 
     lines.append("//* SENSOR IO口配置 */")
-    for role in ("SENSOR_MOTION_PIN", "SENSOR_SCLK_PIN", "SENSOR_SDIO_PIN", "SENSOR_NCS_PIN"):
+    sensor_roles = ["SENSOR_MOTION_PIN", "SENSOR_SCLK_PIN"]
+    if model.sensor_bus(config) == "spi_4wire":
+        sensor_roles += ["SENSOR_MOSI_PIN", "SENSOR_MISO_PIN"]
+    else:
+        sensor_roles.append("SENSOR_SDIO_PIN")
+    sensor_roles.append("SENSOR_NCS_PIN")
+    for role in sensor_roles:
         if role in pins:
             lines.append(pin_line(role, pins[role]["pin"], 24))
+    if model.sensor_v2_en(config):
+        lines.append(f"#define {pad('SENSOR_2V_IN_EN', 24)}(1<<7|1<<6)")
     lines.append("")
     lines.append(
         f"#define {pad('SENSOR_DIR_DEFINE', 24)}"

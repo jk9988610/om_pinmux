@@ -38,6 +38,8 @@ ROLE_ORDER = [
     "SENSOR_SCLK_PIN",
     "SENSOR_SDIO_PIN",
     "SENSOR_NCS_PIN",
+    "SENSOR_MOSI_PIN",
+    "SENSOR_MISO_PIN",
     "LED_MODE_R_PIN",
     "LED_MODE_G_PIN",
     "LED_MODE_B_PIN",
@@ -75,7 +77,17 @@ GROUP_ORDER = [
         ],
     ),
     ("滚轮", ["WHEEL_A_PIN", "WHEEL_B_PIN"]),
-    ("Sensor", ["SENSOR_MOTION_PIN", "SENSOR_SCLK_PIN", "SENSOR_SDIO_PIN", "SENSOR_NCS_PIN"]),
+    (
+        "Sensor",
+        [
+            "SENSOR_MOTION_PIN",
+            "SENSOR_SCLK_PIN",
+            "SENSOR_SDIO_PIN",
+            "SENSOR_NCS_PIN",
+            "SENSOR_MOSI_PIN",
+            "SENSOR_MISO_PIN",
+        ],
+    ),
     ("模式", ["MODE_24G_PIN", "MODE_BLE_PIN", "MODE_BLE_24G_PIN"]),
     (
         "灯光",
@@ -117,6 +129,8 @@ DEFAULT_GPIO = {
     "SENSOR_SCLK_PIN": ("output_pp", "pu_30k", "high"),
     "SENSOR_SDIO_PIN": ("input_pullup", "pu_30k", "high"),
     "SENSOR_NCS_PIN": ("output_pp", "pu_30k", "high"),
+    "SENSOR_MOSI_PIN": ("output_pp", "pu_30k", "high"),
+    "SENSOR_MISO_PIN": ("input_pullup", "pu_30k", "high"),
     "LED_MODE_R_PIN": ("output_pp", "pu_30k", "low"),
     "LED_MODE_G_PIN": ("output_pp", "pu_30k", "low"),
     "LED_MODE_B_PIN": ("output_pp", "pu_30k", "low"),
@@ -234,6 +248,14 @@ def project(config: dict[str, Any]) -> dict[str, Any]:
 def sensor(config: dict[str, Any]) -> dict[str, Any]:
     value = board(config).get("sensor") or {}
     return value if isinstance(value, dict) else {}
+
+
+def sensor_v2_en(config: dict[str, Any]) -> bool:
+    return sensor(config).get("v2_en") is True
+
+
+def sensor_bus(config: dict[str, Any]) -> str:
+    return str(sensor(config).get("bus") or "")
 
 
 def project_id(config: dict[str, Any]) -> dict[str, str]:
