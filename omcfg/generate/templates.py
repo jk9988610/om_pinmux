@@ -145,10 +145,6 @@ def render_pins(config: dict, pins: dict[str, dict[str, str]]) -> str:
             lines.append(pin_line("LEDC_PIN", pins["LEDC_PIN"]["pin"], 24))
         lines.append(f"#define {pad('LEDC_RGB_NUMBER', 24)}6")
         lines.append(f"#define {pad('LEDC_RGB_DATA_SIZE', 24)}LEDC_RGB_NUMBER*3")
-        lines.append("/* 兼容旧 RGB 业务代码：LEDC 板仍提供 LED_R/G/B 别名指向模式灯脚 */")
-        lines.append(f"#define {pad('LED_R_PIN', 24)}LED_MODE_R_PIN")
-        lines.append(f"#define {pad('LED_G_PIN', 24)}LED_MODE_G_PIN")
-        lines.append(f"#define {pad('LED_B_PIN', 24)}LED_MODE_B_PIN")
     else:
         for role in ("LED_R_PIN", "LED_G_PIN", "LED_B_PIN"):
             if role in pins:
@@ -181,7 +177,7 @@ def render_pins(config: dict, pins: dict[str, dict[str, str]]) -> str:
             lines.append(pin_line(role, pins[role]["pin"], 24))
     lines.append("")
     lines.append("//* 当前UART仅调试用 */")
-    lines.append(f"#define {pad('UART_PIN', 24)}(KEY_R0_PIN)")
+    lines.append(f"#define {pad('UART_PIN', 24)}({model.uart_pin(config)})")
     return "\n".join(lines)
 
 

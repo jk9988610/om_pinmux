@@ -37,6 +37,7 @@ def test_ch04_derived_values():
     assert features["BOARD_HAS_KEY_C0"] is True
     assert features["BOARD_MODE_DUAL_PIN"] is True
     assert model.lvd_index(config, pins) == "POF_LVD_PIN_P33"
+    assert model.uart_pin(config) == "KEY_R2_PIN"
 
 
 def test_bd319_has_no_pair_and_dual_mode():

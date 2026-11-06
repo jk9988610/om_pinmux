@@ -18,6 +18,7 @@ board:
     bus: sdio_3wire
     dir_clock: 6
   wheel: ENCODER_PINMUX_SEL_IO_00_01
+  uart_pin: KEY_R2_PIN
 
 pins:
   KEY_R0_PIN: P32

@@ -284,6 +284,11 @@ def lvd_index(config: dict[str, Any], pins: dict[str, dict[str, str]] | None = N
     return f"POF_LVD_PIN_{pin}" if pin else ""
 
 
+def uart_pin(config: dict[str, Any]) -> str:
+    """调试 UART 复用的按键脚，缺省与 KC536 一致。"""
+    return str(board(config).get("uart_pin") or "KEY_R0_PIN")
+
+
 def mode_pins(config: dict[str, Any], pins: dict[str, dict[str, str]] | None = None) -> list[str]:
     pins = pins or pin_entries(config)
     mode = board(config).get("mode_pins")

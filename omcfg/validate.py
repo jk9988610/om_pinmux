@@ -171,6 +171,13 @@ def validate_config(config: dict, chip: dict | None = None) -> Report:
             if value and value not in valid:
                 report.add_error(f"pins.{role}.gpio.{name}", f"只允许 {sorted(valid)}")
 
+    uart = b.get("uart_pin")
+    if uart is not None:
+        if uart not in ("KEY_R0_PIN", "KEY_R1_PIN", "KEY_R2_PIN", "KEY_PAIR_PIN"):
+            report.add_error("board.uart_pin", "只允许复用 KEY_R0/R1/R2/PAIR")
+        elif uart not in pins:
+            report.add_error("board.uart_pin", "该引脚未在 pins 中分配")
+
     by_pin: dict[str, list[str]] = {}
     for role, item in pins.items():
         by_pin.setdefault(item["pin"], []).append(role)
