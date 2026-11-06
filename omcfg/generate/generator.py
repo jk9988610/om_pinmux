@@ -1,4 +1,4 @@
-"""把配置组装成 4 个产物的目标文本，不负责落盘。"""
+"""把配置组装成各目标文本（4 个生成文件 + Keil 工程），不负责落盘。"""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .. import model
-from ..targets import sdk
+from ..targets import sdk, uvprojx
 from . import templates
 
 BLOCKS_H = ("pins", "project_ids", "project_version", "project_names")
@@ -59,6 +59,10 @@ def _wrap(name: str, payload: str) -> str:
     return sdk.marker_begin(name) + "\n" + payload.strip("\n") + "\n" + sdk.marker_end(name)
 
 
+def _empty_user_code(name: str) -> str:
+    return sdk.user_code_begin(name) + "\n" + sdk.user_code_end(name) + "\n"
+
+
 def build_outputs(config: dict, sdk_root: Path | str) -> list[GeneratedFile]:
     root = sdk.resolve_sdk(sdk_root)
     pins = model.resolved_pins(config)
@@ -80,6 +84,7 @@ def build_outputs(config: dict, sdk_root: Path | str) -> list[GeneratedFile]:
     text = header.text
     for name in BLOCKS_H:
         text = sdk.replace_block(text, name, payloads[name], header.path)
+    sdk.check_user_code(header.text, sdk.USER_CODE_H, header.path)
     sdk.ensure_encodable(text, header.encoding)
     outputs.append(
         GeneratedFile(
@@ -98,6 +103,7 @@ def build_outputs(config: dict, sdk_root: Path | str) -> list[GeneratedFile]:
     if sdk.legacy_markers(source_c.text):
         raise sdk.TargetError(f"{source_c.path} 仍含旧 OM_PINMUX_GENERATED 标记，请先人工迁移")
     text_c = sdk.replace_block(source_c.text, BLOCK_C, table, source_c.path)
+    sdk.check_user_code(source_c.text, sdk.USER_CODE_C, source_c.path)
     sdk.ensure_encodable(text_c, source_c.encoding)
     outputs.append(
         GeneratedFile(
@@ -112,9 +118,9 @@ def build_outputs(config: dict, sdk_root: Path | str) -> list[GeneratedFile]:
         )
     )
 
-    for relative, block, payload in (
-        (sdk.BOARD_FEATURES_H, BLOCK_FEATURES, features),
-        (sdk.SLEEP_TEMPLATE, BLOCK_SLEEP, sleep),
+    for relative, block, user_code, payload in (
+        (sdk.BOARD_FEATURES_H, BLOCK_FEATURES, sdk.USER_CODE_FEATURES, features),
+        (sdk.SLEEP_TEMPLATE, BLOCK_SLEEP, sdk.USER_CODE_SLEEP, sleep),
     ):
         path = root / relative
         if path.is_file():
@@ -122,17 +128,35 @@ def build_outputs(config: dict, sdk_root: Path | str) -> list[GeneratedFile]:
             if sdk.legacy_markers(src.text):
                 raise sdk.TargetError(f"{src.path} 仍含旧 OM_PINMUX_GENERATED 标记，请先人工迁移")
             after = sdk.replace_block(src.text, block, payload, path)
+            sdk.check_user_code(src.text, user_code, path)
             outputs.append(
                 GeneratedFile(
                     path, src.text, after, src.encoding, src.newline, src.bom, True, [block]
                 )
             )
         else:
-            after = _wrap(block, payload) + "\n"
+            after = _wrap(block, payload) + "\n\n" + _empty_user_code(user_code)
             outputs.append(
                 GeneratedFile(
                     path, "", after, header.encoding, header.newline, header.bom, False, [block]
                 )
             )
+
+    project = uvprojx.project_path(config, root)
+    if project is not None:
+        project_source = sdk.read_source(project)
+        after_project = uvprojx.update_project(project_source.text, config, project)
+        outputs.append(
+            GeneratedFile(
+                project,
+                project_source.text,
+                after_project,
+                project_source.encoding,
+                project_source.newline,
+                project_source.bom,
+                True,
+                ["keil_project"],
+            )
+        )
 
     return outputs

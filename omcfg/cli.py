@@ -127,9 +127,9 @@ def cmd_init(args: argparse.Namespace) -> int:
         if not config_target.is_file() or config_target.read_bytes() != config_source.read_bytes():
             transaction.write_bytes(config_target, config_source.read_bytes(), "安装唯一配置源")
 
-        for relative, handler in (
-            (sdk.USER_CONFIG_H, _init_header),
-            (sdk.USER_CONFIG_C, _init_source),
+        for relative, handler, user_code in (
+            (sdk.USER_CONFIG_H, _init_header, sdk.USER_CODE_H),
+            (sdk.USER_CONFIG_C, _init_source, sdk.USER_CODE_C),
         ):
             path = root / relative
             source = sdk.read_source(path)
@@ -139,6 +139,7 @@ def cmd_init(args: argparse.Namespace) -> int:
             after = handler(before, path)
             if sdk.strip_marker_lines(after) != sdk.strip_marker_lines(before):
                 raise sdk.TargetError(f"{path} 插入标记后正文发生变化，已中止")
+            after = sdk.append_user_code(after, user_code, path)
             if after != before:
                 sdk.ensure_encodable(after, source.encoding)
                 transaction.write_bytes(
@@ -146,11 +147,33 @@ def cmd_init(args: argparse.Namespace) -> int:
                     sdk.SourceFile(
                         path, after, source.encoding, source.newline, source.bom
                     ).render(),
-                    "插入 OMCFG 标记",
+                    "插入 OMCFG/USER CODE 标记",
                 )
                 print(f"已插入标记: {path}")
             else:
                 print(f"标记已存在: {path}")
+
+        for relative, user_code in (
+            (sdk.BOARD_FEATURES_H, sdk.USER_CODE_FEATURES),
+            (sdk.SLEEP_TEMPLATE, sdk.USER_CODE_SLEEP),
+        ):
+            path = root / relative
+            if not path.is_file():
+                continue
+            source = sdk.read_source(path)
+            if sdk.legacy_markers(source.text):
+                raise sdk.TargetError(f"{path} 仍含旧 OM_PINMUX_GENERATED 标记，请先人工迁移")
+            after = sdk.append_user_code(source.text, user_code, path)
+            if after != source.text:
+                sdk.ensure_encodable(after, source.encoding)
+                transaction.write_bytes(
+                    path,
+                    sdk.SourceFile(
+                        path, after, source.encoding, source.newline, source.bom
+                    ).render(),
+                    "补 USER CODE 保护区",
+                )
+                print(f"已补 USER CODE 保护区: {path}")
         if transaction.actions:
             manifest = transaction.commit()
             print(f"事务 manifest: {manifest}")

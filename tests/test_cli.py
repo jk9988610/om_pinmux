@@ -20,6 +20,8 @@ HEADER_WITH_MARKERS = "\n".join(
         "old",
         "/* OMCFG END project_names */",
         "tail",
+        "/* USER CODE BEGIN user_config_h */",
+        "/* USER CODE END user_config_h */",
         "",
     ]
 )
@@ -31,6 +33,8 @@ SOURCE_WITH_MARKERS = "\n".join(
         "old",
         "/* OMCFG END gpio_table */",
         "};",
+        "/* USER CODE BEGIN user_config_c */",
+        "/* USER CODE END user_config_c */",
         "",
     ]
 )
@@ -73,6 +77,46 @@ def test_missing_markers_exit_2(tmp_path, capsys):
     )
     assert code == cli.EXIT_ENVIRONMENT
     assert "缺少 OMCFG 标记块" in capsys.readouterr().err
+
+
+def test_missing_user_code_exit_2(tmp_path, capsys):
+    sdk_root = _make_sdk(tmp_path)
+    periph = sdk_root / "projects/mouse_demo/periph"
+    for name, block in (("user_config.h", "user_config_h"), ("user_config.c", "user_config_c")):
+        path = periph / name
+        text = path.read_text(encoding="utf-8")
+        text = text.replace(f"/* USER CODE BEGIN {block} */\n", "")
+        text = text.replace(f"/* USER CODE END {block} */\n", "")
+        path.write_text(text, encoding="utf-8")
+    code = cli.main(
+        ["gen", "--config", str(CONFIGS / "KC536.omcfg"), "--sdk", str(sdk_root), "--dry-run"]
+    )
+    assert code == cli.EXIT_ENVIRONMENT
+    stderr = capsys.readouterr().err
+    assert "USER CODE" in stderr
+    assert "omcfg init" in stderr
+
+
+def test_user_code_preserved_on_regen(tmp_path):
+    sdk_root = _make_sdk(tmp_path)
+    header = sdk_root / "projects/mouse_demo/periph/user_config.h"
+    assert (
+        cli.main(["init", "--config", str(CONFIGS / "KC536.omcfg"), "--sdk", str(sdk_root)]) == 0
+    )
+    text = header.read_text(encoding="utf-8").replace(
+        "/* USER CODE END user_config_h */",
+        "#define OMCFG_USER_TEST 1\n/* USER CODE END user_config_h */",
+    )
+    header.write_text(text, encoding="utf-8")
+    assert (
+        cli.main(
+            ["gen", "--config", str(CONFIGS / "KC536.omcfg"), "--sdk", str(sdk_root), "--apply"]
+        )
+        == 0
+    )
+    after = header.read_text(encoding="utf-8")
+    assert "#define OMCFG_USER_TEST 1" in after
+    assert "/* USER CODE BEGIN user_config_h */" in after
 
 
 def test_bad_config_exit_1(tmp_path, capsys):

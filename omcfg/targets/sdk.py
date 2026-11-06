@@ -14,6 +14,12 @@ USER_CONFIG_C = Path("projects/mouse_demo/periph/user_config.c")
 BOARD_FEATURES_H = Path("projects/mouse_demo/periph/board_features.h")
 SLEEP_TEMPLATE = Path("projects/mouse_demo/periph/periph_gpio_sleep_set.pinmux.c")
 PERIPH = Path("projects/mouse_demo/periph")
+KEIL_PROJECT = Path("projects/mouse_demo/keil5/SE71M.uvprojx")
+
+USER_CODE_H = "user_config_h"
+USER_CODE_C = "user_config_c"
+USER_CODE_FEATURES = "board_features_h"
+USER_CODE_SLEEP = "sleep_reference"
 
 
 class TargetError(RuntimeError):
@@ -37,12 +43,33 @@ class DuplicateBlockError(TargetError):
         super().__init__(f"{path} 中标记块 '{block}' 出现多次，拒绝猜测替换位置")
 
 
+class UserCodeError(TargetError):
+    """USER CODE 保护区缺失/重复/只出现一半。"""
+
+    def __init__(self, path: Path, name: str, detail: str):
+        self.path = path
+        self.name = name
+        super().__init__(
+            f"{path} 的 USER CODE 保护区 '{name}' {detail}。\n"
+            f"  生成器只改写 OMCFG 生成区，不会猜测插入位置。\n"
+            f"  先运行: python -m omcfg init --config <config> --sdk <SDK>"
+        )
+
+
 def marker_begin(name: str) -> str:
     return f"/* OMCFG BEGIN {name} */"
 
 
 def marker_end(name: str) -> str:
     return f"/* OMCFG END {name} */"
+
+
+def user_code_begin(name: str) -> str:
+    return f"/* USER CODE BEGIN {name} */"
+
+
+def user_code_end(name: str) -> str:
+    return f"/* USER CODE END {name} */"
 
 
 @dataclass
@@ -130,6 +157,37 @@ def replace_block(text: str, name: str, payload: str, path: Path) -> str:
     if marker_begin(name) in core or marker_end(name) in core:
         raise TargetError(f"生成内容里混入了标记文本 '{name}'，拒绝写入")
     return text[:start] + marker_begin(name) + "\n" + core + "\n" + marker_end(name) + text[stop:]
+
+
+def find_user_code(text: str, name: str, path: Path) -> tuple[int, int]:
+    begin = user_code_begin(name)
+    end = user_code_end(name)
+    begin_count = text.count(begin)
+    end_count = text.count(end)
+    if begin_count == 0 and end_count == 0:
+        raise UserCodeError(path, name, "不存在")
+    if begin_count != 1 or end_count != 1:
+        raise UserCodeError(path, name, f"标记不完整（BEGIN {begin_count} 次，END {end_count} 次）")
+    start = text.index(begin)
+    stop = text.index(end, start) + len(end)
+    if text.find(begin, stop) != -1:
+        raise UserCodeError(path, name, "出现多次")
+    return start, stop
+
+
+def check_user_code(text: str, name: str, path: Path) -> None:
+    find_user_code(text, name, path)
+
+
+def append_user_code(text: str, name: str, path: Path) -> str:
+    """在文件末尾追加空 USER CODE 保护区；已存在则原样返回。"""
+    begin = user_code_begin(name)
+    end = user_code_end(name)
+    if begin in text or end in text:
+        check_user_code(text, name, path)
+        return text
+    prefix = text if text.endswith("\n") or not text else text + "\n"
+    return prefix + begin + "\n" + end + "\n"
 
 
 def resolve_sdk(sdk_root: Path | str) -> Path:
