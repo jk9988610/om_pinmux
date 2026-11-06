@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from omcfg import cli, model
 
 CONFIGS = Path(__file__).resolve().parent.parent / "configs"
@@ -164,3 +166,107 @@ def test_rollback_command(tmp_path):
     assert "old" in (sdk_root / "projects/mouse_demo/periph/user_config.h").read_text(
         encoding="utf-8"
     )
+
+
+def test_subcommand_help_is_usable(capsys):
+    for command in ("init", "check", "gen", "rollback"):
+        with pytest.raises(SystemExit) as info:
+            cli.main([command, "--help"])
+        assert info.value.code == 0
+        output = capsys.readouterr().out
+        assert f"usage: omcfg {command}" in output
+    with pytest.raises(SystemExit) as info:
+        cli.main(["--help"])
+    assert info.value.code == 0
+    assert "退出码" in capsys.readouterr().out
+
+
+def test_check_missing_file_exit_2(tmp_path, capsys):
+    code = cli.main(["check", str(tmp_path / "missing.omcfg")])
+    assert code == cli.EXIT_ENVIRONMENT
+    stderr = capsys.readouterr().err
+    assert "配置不存在" in stderr
+    assert "提示" in stderr
+
+
+def test_check_bad_yaml_exit_2(tmp_path, capsys):
+    bad = tmp_path / "bad.omcfg"
+    bad.write_text("schema: [\n", encoding="utf-8")
+    assert cli.main(["check", str(bad)]) == cli.EXIT_ENVIRONMENT
+    stderr = capsys.readouterr().err
+    assert "YAML 解析失败" in stderr
+    assert "提示" in stderr
+
+
+def test_check_all_missing_dir_exit_2(tmp_path, capsys):
+    assert cli.main(["check", "--all", str(tmp_path / "nope")]) == cli.EXIT_ENVIRONMENT
+    assert "目录不存在" in capsys.readouterr().err
+
+
+def test_init_bad_yaml_exit_2(tmp_path, capsys):
+    sdk_root = _make_sdk(tmp_path)
+    bad = tmp_path / "bad.omcfg"
+    bad.write_text("schema: [\n", encoding="utf-8")
+    assert (
+        cli.main(["init", "--config", str(bad), "--sdk", str(sdk_root)]) == cli.EXIT_ENVIRONMENT
+    )
+    assert "YAML 解析失败" in capsys.readouterr().err
+
+
+def test_gen_before_init_exit_2(tmp_path, capsys):
+    sdk_root = _make_sdk(tmp_path)
+    assert cli.main(["gen", "--sdk", str(sdk_root), "--dry-run"]) == cli.EXIT_ENVIRONMENT
+    stderr = capsys.readouterr().err
+    assert "配置不存在" in stderr
+    assert "omcfg init" in stderr
+
+
+def test_rollback_missing_manifest_exit_2(tmp_path, capsys):
+    assert (
+        cli.main(["rollback", "--manifest", str(tmp_path / "nope" / "manifest.json")])
+        == cli.EXIT_ENVIRONMENT
+    )
+    stderr = capsys.readouterr().err
+    assert "manifest 不存在" in stderr
+    assert ".omcfg_bak_" in stderr
+
+
+def test_rollback_accepts_backup_dir(tmp_path):
+    sdk_root = _make_sdk(tmp_path)
+    assert (
+        cli.main(
+            ["gen", "--config", str(CONFIGS / "BD319.omcfg"), "--sdk", str(sdk_root), "--apply"]
+        )
+        == 0
+    )
+    backups = list(sdk_root.glob(".omcfg_bak_*"))
+    assert backups
+    assert cli.main(["rollback", "--manifest", str(backups[0])]) == 0
+    assert "old" in (sdk_root / "projects/mouse_demo/periph/user_config.h").read_text(
+        encoding="utf-8"
+    )
+
+
+def test_dry_run_and_apply_conflict(tmp_path):
+    sdk_root = _make_sdk(tmp_path)
+    with pytest.raises(SystemExit) as info:
+        cli.main(["gen", "--sdk", str(sdk_root), "--dry-run", "--apply"])
+    assert info.value.code == 2
+
+
+def test_config_board_mismatch_warns(tmp_path, capsys):
+    sdk_root = _make_sdk(tmp_path)
+    header = sdk_root / "projects/mouse_demo/periph/user_config.h"
+    header.write_text(
+        '#define iPROJECT_NAME  "KC536"\n#define iCONSUMER_NAME "BYC"\n' + HEADER_WITH_MARKERS,
+        encoding="utf-8",
+    )
+    assert (
+        cli.main(
+            ["gen", "--config", str(CONFIGS / "CH04.omcfg"), "--sdk", str(sdk_root), "--dry-run"]
+        )
+        == 0
+    )
+    output = capsys.readouterr().out
+    assert "配置与 SDK 现有工程不一致" in output
+    assert "CH04" in output and "KC536" in output

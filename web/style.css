@@ -79,6 +79,16 @@ table { width: 100%; border-collapse: collapse; }
 th, td { padding: 6px 10px; text-align: left; border-bottom: 1px solid #edf0f4; }
 th { position: sticky; top: 0; background: #fafbfc; color: var(--muted); font-weight: 500; }
 td.pin { font-family: Consolas, monospace; }
+.pin-input {
+  width: 64px;
+  padding: 2px 4px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  font: inherit;
+  font-family: Consolas, monospace;
+  background: #fff;
+}
+.pin-input:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
 .issues { margin: 0; padding: 10px 12px; list-style: none; max-height: 180px; overflow: auto; }
 .issues li { padding: 4px 0; border-bottom: 1px dashed #eef0f3; }
 .issues li.error { color: var(--error); }

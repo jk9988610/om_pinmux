@@ -37,6 +37,12 @@ def _payload(root: Path, config: dict, report: validate.Report) -> dict:
     }
 
 
+def _add_warning(root: Path, config: dict, report: validate.Report) -> None:
+    warning = generator.sdk_warning(config, root)
+    if warning:
+        report.add_warning("project", warning[0], warning[1])
+
+
 class Api:
     def load(self, sdk_path: str) -> dict:
         try:
@@ -46,6 +52,7 @@ class Api:
                 return {"ok": False, "error": f"缺少 {config_path}；先运行 omcfg init"}
             config = model.load_config(config_path)
             report = validate.validate_config(config)
+            _add_warning(root, config, report)
             return _payload(root, config, report)
         except Exception as exc:  # 本地 GUI 边界，统一转为可见错误
             return {"ok": False, "error": str(exc)}
@@ -53,11 +60,54 @@ class Api:
     def check(self, sdk_path: str) -> dict:
         return self.load(sdk_path)
 
+    def save_pins(self, sdk_path: str, updates: list[dict] | None = None) -> dict:
+        """把前端提交的引脚修改写回 project.omcfg；校验失败时不落盘。"""
+        try:
+            root = sdk.resolve_sdk(sdk_path)
+            config_path = model.default_config_path(root)
+            if not config_path.is_file():
+                return {"ok": False, "error": f"缺少 {config_path}；先运行 omcfg init"}
+            source = sdk.read_source(config_path)
+            text = source.text
+            for update in updates or []:
+                role = str(update.get("role") or "").strip()
+                pin = str(update.get("pin") or "").strip()
+                if role and pin:
+                    text = model.set_pin_text(text, role, pin)
+            config = model.load_config_text(text)
+            report = validate.validate_config(config)
+            _add_warning(root, config, report)
+            if not report.ok:
+                result = _payload(root, config, report)
+                result["error"] = "修改未通过校验，未写入 project.omcfg"
+                return result
+            result = _payload(root, config, report)
+            if text == source.text:
+                result["changed"] = 0
+                result["message"] = "引脚没有变化"
+                return result
+            sdk.ensure_encodable(text, source.encoding)
+            transaction = FileTransaction.create(root, "omcfg_gui_save")
+            transaction.write_bytes(
+                config_path,
+                sdk.SourceFile(
+                    config_path, text, source.encoding, source.newline, source.bom
+                ).render(),
+                "GUI 修改引脚",
+            )
+            result["manifest"] = str(transaction.commit())
+            result["changed"] = 1
+            result["message"] = "已保存 project.omcfg；接着点「预览 diff」"
+            return result
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}
+
     def preview(self, sdk_path: str) -> dict:
         try:
             root = sdk.resolve_sdk(sdk_path)
             config = model.load_config(model.default_config_path(root))
             report = validate.validate_config(config)
+            _add_warning(root, config, report)
             result = _payload(root, config, report)
             if not report.ok:
                 return result
@@ -75,6 +125,7 @@ class Api:
             root = sdk.resolve_sdk(sdk_path)
             config = model.load_config(model.default_config_path(root))
             report = validate.validate_config(config)
+            _add_warning(root, config, report)
             result = _payload(root, config, report)
             if not report.ok:
                 result["error"] = "校验未通过，拒绝写入"

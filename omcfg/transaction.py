@@ -62,8 +62,12 @@ class FileTransaction:
         cls, target_root: str | Path, operation: str, stamp: str | None = None
     ) -> "FileTransaction":
         root = Path(target_root).resolve()
-        stamp = stamp or datetime.now().strftime("%Y%m%d_%H%M%S")
-        return cls(root, root / f".omcfg_bak_{stamp}", operation)
+        stamp = stamp or datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        backup_root = root / f".omcfg_bak_{stamp}"
+        while backup_root.exists():
+            stamp += "_1"
+            backup_root = root / f".omcfg_bak_{stamp}"
+        return cls(root, backup_root, operation)
 
     def _relative(self, path: Path) -> str:
         return path.resolve().relative_to(self.target_root).as_posix()
@@ -157,4 +161,9 @@ def rollback_manifest(manifest_path: str | Path) -> dict:
         elif target.exists():
             target.unlink()
         restored.append(str(target))
-    return {"ok": True, "manifest": str(manifest), "restored": restored}
+    return {
+        "ok": True,
+        "manifest": str(manifest),
+        "target_root": str(root),
+        "restored": restored,
+    }

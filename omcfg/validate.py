@@ -125,9 +125,13 @@ def validate_config(config: dict, chip: dict | None = None) -> Report:
 
     proj = model.project(config)
     if not str(proj.get("name") or "").strip():
-        report.add_error("project.name", "不能为空")
+        report.add_error(
+            "project.name", "不能为空", "补 project.name（如 KC536），可对照 configs/*.omcfg"
+        )
     if not str(proj.get("customer") or "").strip():
-        report.add_error("project.customer", "不能为空")
+        report.add_error(
+            "project.customer", "不能为空", "补 project.customer（如 BYC），可对照 configs/*.omcfg"
+        )
     pid = model.project_id(config)
     for key, maximum in (("low", 0xFFFF), ("high", 0xFFFF), ("version", 0x7F)):
         number = _as_int(pid.get(key))

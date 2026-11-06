@@ -63,6 +63,18 @@ def _empty_user_code(name: str) -> str:
     return sdk.user_code_begin(name) + "\n" + sdk.user_code_end(name) + "\n"
 
 
+def sdk_warning(config: dict, sdk_root: Path | str) -> tuple[str, str] | None:
+    """配置项目名/客户与 SDK 现有宏不一致时返回 (message, hint)。"""
+    project = model.project(config)
+    message = sdk.project_mismatch(sdk_root, project.get("name"), project.get("customer"))
+    if not message:
+        return None
+    return (
+        f"配置与 SDK 现有工程不一致：{message}",
+        "若是在副本上换板可继续；否则确认 --sdk/--config 配对（CH04↔CH04、KC536↔KC536）",
+    )
+
+
 def build_outputs(config: dict, sdk_root: Path | str) -> list[GeneratedFile]:
     root = sdk.resolve_sdk(sdk_root)
     pins = model.resolved_pins(config)

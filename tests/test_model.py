@@ -57,3 +57,27 @@ def test_gpio_defaults_fill_missing_fields():
         "pull": "pu_30k",
         "init": "high",
     }
+
+
+def test_set_pin_text_preserves_layout():
+    text = (CONFIGS / "KC536.omcfg").read_text(encoding="utf-8")
+    after = model.set_pin_text(text, "KEY_R0_PIN", "P36")
+    assert after.replace("KEY_R0_PIN: P36", "KEY_R0_PIN: P34") == text
+    config = model.load_config_text(after)
+    assert model.pin_entries(config)["KEY_R0_PIN"]["pin"] == "P36"
+
+    nested = model.set_pin_text(text, "MODE_BLE_24G_PIN", "P22")
+    assert nested.replace("pin: P22", "pin: P26", 1) == text
+
+    inline = model.set_pin_text(text, "LED_MODE_R_PIN", "P22")
+    assert inline.replace("pin: P22", "pin: P32", 1) == text
+
+
+def test_set_pin_text_rejects_unknown_role():
+    text = (CONFIGS / "KC536.omcfg").read_text(encoding="utf-8")
+    try:
+        model.set_pin_text(text, "NOT_A_PIN", "P34")
+    except ValueError as exc:
+        assert "没有引脚" in str(exc)
+    else:
+        raise AssertionError("应当拒绝未知角色")

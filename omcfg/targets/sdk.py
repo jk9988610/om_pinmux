@@ -243,13 +243,54 @@ def _doc_comment_start(lines: list[str], decl: int) -> int:
 def resolve_sdk(sdk_root: Path | str) -> Path:
     root = Path(sdk_root).expanduser().resolve()
     if not root.is_dir():
-        raise TargetError(f"SDK 目录不存在: {root}")
+        raise TargetError(
+            f"SDK 目录不存在: {root}\n"
+            f"  提示: --sdk 指向 SDK 根目录（其下应有 projects/mouse_demo/periph），"
+            f"不是 keil5 子目录"
+        )
     periph = root / PERIPH
     if not periph.is_dir():
-        raise TargetError(f"不是预期的 SDK：缺少 {PERIPH.as_posix()}（{root}）")
+        raise TargetError(
+            f"不是预期的 SDK：缺少 {PERIPH.as_posix()}（{root}）\n"
+            f"  提示: 确认这是 mouse_demo 工程的 SDK 根目录；改板请先复制一份 SDK 再操作"
+        )
     if not (root / USER_CONFIG_H).is_file() or not (root / USER_CONFIG_C).is_file():
-        raise TargetError(f"SDK 缺少 user_config.h / user_config.c（{periph}）")
+        raise TargetError(
+            f"SDK 缺少 user_config.h / user_config.c（{periph}）\n"
+            f"  提示: 该目录不是完整的 mouse_demo 工程，检查是否复制中断"
+        )
     return root
+
+
+DEFINE_STR_RE = re.compile(
+    r'^\s*#define\s+(?P<name>iPROJECT_NAME|iCONSUMER_NAME)\s+"(?P<value>[^"]*)"', re.M
+)
+
+
+def existing_project(root: Path | str) -> dict[str, str]:
+    """读取 SDK 现有 user_config.h 中的项目名/客户名，用于配置与板匹配检查。"""
+    path = Path(root) / USER_CONFIG_H
+    if not path.is_file():
+        return {}
+    text = read_source(path).text
+    return {match.group("name"): match.group("value") for match in DEFINE_STR_RE.finditer(text)}
+
+
+def project_mismatch(root: Path | str, name: object, customer: object) -> str | None:
+    """配置 project 段与 SDK 现有宏不一致时返回说明，一致或无法判定时返回 None。"""
+    current = existing_project(root)
+    problems: list[str] = []
+    expected_name = str(name or "").strip()
+    expected_customer = str(customer or "").strip()
+    actual_name = current.get("iPROJECT_NAME", "")
+    actual_customer = current.get("iCONSUMER_NAME", "")
+    if expected_name and actual_name and expected_name != actual_name:
+        problems.append(f"project.name={expected_name}，SDK 现有 iPROJECT_NAME=\"{actual_name}\"")
+    if expected_customer and actual_customer and expected_customer != actual_customer:
+        problems.append(
+            f"project.customer={expected_customer}，SDK 现有 iCONSUMER_NAME=\"{actual_customer}\""
+        )
+    return "；".join(problems) or None
 
 
 def target_path(sdk_root: Path | str, relative: Path) -> Path:

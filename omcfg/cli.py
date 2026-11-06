@@ -1,10 +1,16 @@
-"""omcfg 命令行：init / check / gen / rollback。"""
+"""omcfg 命令行：init / check / gen / rollback。
+
+退出码：0 成功；1 配置校验失败；2 环境/标记块/manifest 错误；3 写盘失败。
+"""
 
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
+
+import yaml
 
 from . import model, validate
 from .generate import generator
@@ -15,7 +21,14 @@ EXIT_OK = 0
 EXIT_VALIDATION = 1
 EXIT_ENVIRONMENT = 2
 EXIT_WRITE = 3
+# 4 历史预留（已回滚），当前命令不会返回；保留常量避免误以为是新错误。
 EXIT_ROLLED_BACK = 4
+
+
+def _error(message: str, hint: str = "") -> None:
+    print(f"[ERROR] {message}", file=sys.stderr)
+    if hint:
+        print(f"        提示: {hint}", file=sys.stderr)
 
 
 def _read_config(path: Path) -> dict:
@@ -28,20 +41,52 @@ def _print_report(report: validate.Report, config: dict) -> None:
     print(validate.summary(config, report))
 
 
+def _add_mismatch_warning(report: validate.Report, config: dict, root: Path) -> None:
+    warning = generator.sdk_warning(config, root)
+    if warning:
+        report.add_warning("project", warning[0], warning[1])
+
+
 def cmd_check(args: argparse.Namespace) -> int:
-    paths: list[Path] = [Path(item) for item in args.paths]
     if args.all:
-        paths = sorted(Path(args.all).glob("*.omcfg"))
+        directory = Path(args.all)
+        if not directory.is_dir():
+            _error(
+                f"目录不存在: {directory}",
+                "check --all 指向存放 *.omcfg 的目录，例如: check --all configs",
+            )
+            return EXIT_ENVIRONMENT
+        paths = sorted(directory.glob("*.omcfg"))
+    else:
+        paths = [Path(item) for item in args.paths]
     if not paths:
-        print("没有可检查的配置；用 check <file...> 或 check --all configs", file=sys.stderr)
+        _error(
+            "没有可检查的配置",
+            "用 check <file.omcfg ...> 或 check --all configs",
+        )
         return EXIT_ENVIRONMENT
     failed = False
     for path in paths:
         print(f"== {path} ==")
+        if not path.is_file():
+            _error(
+                f"配置不存在: {path}",
+                "确认路径；仓库内的板模板在 configs/*.omcfg",
+            )
+            return EXIT_ENVIRONMENT
         try:
             config = _read_config(path)
-        except (OSError, ValueError, Exception) as exc:  # yaml 解析错误
-            print(f"[ERROR] {path}: 读取失败: {exc}", file=sys.stderr)
+        except yaml.YAMLError as exc:
+            _error(
+                f"{path}: YAML 解析失败: {exc}",
+                "检查缩进、冒号和引号；可对照 configs/KC536.omcfg",
+            )
+            return EXIT_ENVIRONMENT
+        except ValueError as exc:
+            _error(f"{path}: {exc}", "配置顶层应为 schema/chip/project/board/pins 映射")
+            return EXIT_ENVIRONMENT
+        except OSError as exc:
+            _error(f"{path}: 读取失败: {exc}", "确认文件未被占用、当前用户可读")
             return EXIT_ENVIRONMENT
         report = validate.validate_config(config)
         _print_report(report, config)
@@ -71,10 +116,7 @@ def _insert_block(
         raise sdk.TargetError(f"{path} 的 '{block}' 标记只出现一半，请人工修掉后再 init")
     lines = text.split("\n")
     start = _anchor_index(lines, start_needle, starts, path, block)
-    if starts:
-        end = _anchor_index(lines[start:], end_needle, starts, path, block) + start
-    else:
-        end = _anchor_index(lines[start:], end_needle, starts, path, block) + start
+    end = _anchor_index(lines[start:], end_needle, starts, path, block) + start
     lines.insert(end + 1, sdk.marker_end(block))
     lines.insert(start, sdk.marker_begin(block))
     return "\n".join(lines)
@@ -103,9 +145,7 @@ def _init_source(text: str, path: Path) -> str:
         "};",
         starts=False,
     )
-    return sdk.wrap_function_block(
-        text, sdk.SLEEP_BLOCK, "void periph_gpio_sleep_set", path
-    )
+    return sdk.wrap_function_block(text, sdk.SLEEP_BLOCK, "void periph_gpio_sleep_set", path)
 
 
 def cmd_init(args: argparse.Namespace) -> int:
@@ -113,8 +153,21 @@ def cmd_init(args: argparse.Namespace) -> int:
         root = sdk.resolve_sdk(args.sdk)
         config_source = Path(args.config)
         if not config_source.is_file():
-            raise sdk.TargetError(f"配置不存在: {config_source}")
-        config = _read_config(config_source)
+            raise sdk.TargetError(
+                f"配置不存在: {config_source}\n"
+                f"  提示: 板模板在 configs/*.omcfg（如 configs/KC536.omcfg、configs/CH04.omcfg）"
+            )
+        try:
+            config = _read_config(config_source)
+        except yaml.YAMLError as exc:
+            _error(
+                f"{config_source}: YAML 解析失败: {exc}",
+                "检查缩进、冒号和引号；可对照 configs/KC536.omcfg",
+            )
+            return EXIT_ENVIRONMENT
+        except ValueError as exc:
+            _error(f"{config_source}: {exc}", "配置顶层应为 schema/chip/project/board/pins 映射")
+            return EXIT_ENVIRONMENT
         report = validate.validate_config(config)
         if not report.ok:
             _print_report(report, config)
@@ -124,7 +177,9 @@ def cmd_init(args: argparse.Namespace) -> int:
         if config_target.is_file():
             if config_target.read_bytes() != config_source.read_bytes():
                 if not args.force:
-                    raise sdk.TargetError(f"{config_target} 已存在且内容不同；确认覆盖请加 --force")
+                    raise sdk.TargetError(
+                        f"{config_target} 已存在且内容不同；确认覆盖请加 --force"
+                    )
             else:
                 print(f"配置已存在且一致: {config_target}")
         if not config_target.is_file() or config_target.read_bytes() != config_source.read_bytes():
@@ -137,7 +192,9 @@ def cmd_init(args: argparse.Namespace) -> int:
             path = root / relative
             source = sdk.read_source(path)
             if sdk.legacy_markers(source.text):
-                raise sdk.TargetError(f"{path} 仍含旧 OM_PINMUX_GENERATED 标记，请先人工迁移")
+                raise sdk.TargetError(
+                    f"{path} 仍含旧 OM_PINMUX_GENERATED 标记，请先人工迁移"
+                )
             before = source.text
             after = handler(before, path)
             if sdk.strip_marker_lines(after) != sdk.strip_marker_lines(before):
@@ -162,7 +219,9 @@ def cmd_init(args: argparse.Namespace) -> int:
                 continue
             source = sdk.read_source(path)
             if sdk.legacy_markers(source.text):
-                raise sdk.TargetError(f"{path} 仍含旧 OM_PINMUX_GENERATED 标记，请先人工迁移")
+                raise sdk.TargetError(
+                    f"{path} 仍含旧 OM_PINMUX_GENERATED 标记，请先人工迁移"
+                )
             after = sdk.append_user_code(source.text, user_code, path)
             if after != source.text:
                 sdk.ensure_encodable(after, source.encoding)
@@ -179,31 +238,47 @@ def cmd_init(args: argparse.Namespace) -> int:
             print(f"事务 manifest: {manifest}")
         else:
             print("没有文件变化")
-        print(f"下一步: python -m omcfg gen --config {config_target} --sdk {root} --dry-run")
+        print(f"下一步: python -m omcfg gen --sdk {root} --dry-run")
         return EXIT_OK
     except sdk.TargetError as exc:
         print(f"[ERROR] {exc}", file=sys.stderr)
         return EXIT_ENVIRONMENT
     except OSError as exc:
-        print(f"[ERROR] 写入失败: {exc}", file=sys.stderr)
+        _error(f"写入失败: {exc}", "确认 SDK 副本不在编译中、文件未被占用")
         return EXIT_WRITE
 
 
 def cmd_gen(args: argparse.Namespace) -> int:
     try:
         root = sdk.resolve_sdk(args.sdk)
-        config_path = Path(args.config) if args.config else model.default_config_path(root)
-        if not config_path.is_file():
-            raise sdk.TargetError(f"配置不存在: {config_path}")
-        config = _read_config(config_path)
     except sdk.TargetError as exc:
         print(f"[ERROR] {exc}", file=sys.stderr)
         return EXIT_ENVIRONMENT
-    except Exception as exc:
-        print(f"[ERROR] 读取配置失败: {exc}", file=sys.stderr)
+    config_path = Path(args.config) if args.config else model.default_config_path(root)
+    if not config_path.is_file():
+        _error(
+            f"配置不存在: {config_path}",
+            "先运行 python -m omcfg init 安装 project.omcfg，"
+            "或用 --config configs/KC536.omcfg 指定板模板",
+        )
+        return EXIT_ENVIRONMENT
+    try:
+        config = _read_config(config_path)
+    except yaml.YAMLError as exc:
+        _error(
+            f"{config_path}: YAML 解析失败: {exc}",
+            "检查缩进、冒号和引号；可对照 configs/KC536.omcfg",
+        )
+        return EXIT_ENVIRONMENT
+    except ValueError as exc:
+        _error(f"{config_path}: {exc}", "配置顶层应为 schema/chip/project/board/pins 映射")
+        return EXIT_ENVIRONMENT
+    except OSError as exc:
+        _error(f"{config_path}: 读取失败: {exc}", "确认文件未被占用、当前用户可读")
         return EXIT_ENVIRONMENT
 
     report = validate.validate_config(config)
+    _add_mismatch_warning(report, config, root)
     _print_report(report, config)
     if not report.ok:
         return EXIT_VALIDATION
@@ -213,6 +288,9 @@ def cmd_gen(args: argparse.Namespace) -> int:
     except sdk.TargetError as exc:
         print(f"[ERROR] {exc}", file=sys.stderr)
         return EXIT_ENVIRONMENT
+    except OSError as exc:
+        _error(f"读取生成目标失败: {exc}", "确认 SDK 副本完整、文件未被其他程序占用")
+        return EXIT_WRITE
 
     changed = [item for item in outputs if item.changed]
     for item in outputs:
@@ -234,7 +312,7 @@ def cmd_gen(args: argparse.Namespace) -> int:
             transaction.write_bytes(item.path, item.render(), "按标记块写入生成内容")
         manifest = transaction.commit()
     except OSError as exc:
-        print(f"[ERROR] 写入失败，回滚备份: {exc}", file=sys.stderr)
+        _error(f"写入失败，已按备份回滚: {exc}", "确认 SDK 副本未被 Keil 打开或占用")
         for entry in transaction.entries:
             target = transaction.target_root / entry["path"]
             backup = transaction.backup_root / entry["backup"] if entry.get("backup") else None
@@ -245,40 +323,160 @@ def cmd_gen(args: argparse.Namespace) -> int:
                 target.unlink()
         return EXIT_WRITE
     print(f"已写入 {len(changed)} 个文件；manifest: {manifest}")
+    print(f"回滚: python -m omcfg rollback --manifest {manifest}")
     return EXIT_OK
 
 
+def _locate_manifest(value: str) -> Path:
+    path = Path(value).expanduser()
+    if path.is_dir():
+        candidate = path / "manifest.json"
+        if candidate.is_file():
+            return candidate
+    return path
+
+
 def cmd_rollback(args: argparse.Namespace) -> int:
+    manifest = _locate_manifest(args.manifest)
+    if not manifest.is_file():
+        _error(
+            f"manifest 不存在: {manifest}",
+            "manifest 位于 <SDK>/.omcfg_bak_<时间戳>/manifest.json；"
+            "也可以直接把该目录传给 --manifest",
+        )
+        return EXIT_ENVIRONMENT
     try:
-        result = rollback_manifest(args.manifest)
-    except (OSError, ValueError) as exc:
-        print(f"[ERROR] 回滚失败: {exc}", file=sys.stderr)
+        result = rollback_manifest(manifest)
+    except json.JSONDecodeError as exc:
+        _error(
+            f"manifest 解析失败: {manifest}: {exc}",
+            "该文件不是 omcfg 事务 manifest，或已损坏；换用 .omcfg_bak_<时间戳> 下的 manifest.json",
+        )
+        return EXIT_ENVIRONMENT
+    except FileNotFoundError as exc:
+        _error(f"备份文件缺失: {exc}", "备份目录被手工删除时无法回滚；改用 git 或原 SDK 对照恢复")
+        return EXIT_ENVIRONMENT
+    except ValueError as exc:
+        _error(f"manifest 不受支持: {exc}", "确认它由当前版本的 init/gen/apply 生成")
+        return EXIT_ENVIRONMENT
+    except OSError as exc:
+        _error(f"回滚写入失败: {exc}", "确认 SDK 副本未被 Keil 打开或占用")
         return EXIT_WRITE
     print(f"已恢复 {len(result['restored'])} 个文件: {result['manifest']}")
+    print(f"目标工程: {result['target_root']}")
+    print(f"复查: python -m omcfg gen --sdk {result['target_root']} --dry-run")
     return EXIT_OK
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="omcfg", description="OM6239 项目配置生成器（P1）")
-    sub = parser.add_subparsers(dest="command", required=True)
+    parser = argparse.ArgumentParser(
+        prog="omcfg",
+        description="OM6239 轻量配置生成器：校验 .omcfg，并按标记块写回 SDK 工程。",
+        epilog=(
+            "快速上手（在副本上）:\n"
+            "  python -m omcfg check --all configs\n"
+            "  python -m omcfg init --config configs\\KC536.omcfg --sdk <SDK副本>\n"
+            "  python -m omcfg gen --sdk <SDK副本> --dry-run\n"
+            "  python -m omcfg gen --sdk <SDK副本> --apply\n"
+            "  python -m omcfg rollback --manifest <SDK副本>\\.omcfg_bak_<时间戳>\\manifest.json\n"
+            "\n"
+            "退出码: 0 成功 / 1 配置校验失败 / 2 环境、配置解析或 manifest 错误 / 3 写盘失败"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    sub = parser.add_subparsers(dest="command", required=True, metavar="{init,check,gen,rollback}")
 
-    init = sub.add_parser("init", help="安装 project.omcfg 并插入 OMCFG 标记块（一次性）")
-    init.add_argument("--config", required=True)
-    init.add_argument("--sdk", required=True)
-    init.add_argument("--force", action="store_true", help="允许覆盖内容不同的 project.omcfg")
+    init = sub.add_parser(
+        "init",
+        help="安装 project.omcfg 并插入 OMCFG/USER CODE 标记（一次性）",
+        description=(
+            "把板模板安装为 <SDK>/projects/mouse_demo/project.omcfg，"
+            "并在生成目标里插入标记块。"
+        ),
+        epilog=(
+            "示例:\n"
+            "  python -m omcfg init --config configs\\CH04.omcfg --sdk E:\\copy\\CH04_SDK\n"
+            "重复执行是安全的；已有内容不同的 project.omcfg 需加 --force。"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    init.add_argument(
+        "--config",
+        required=True,
+        metavar="FILE",
+        help="板模板或已有工程配置，如 configs/KC536.omcfg",
+    )
+    init.add_argument(
+        "--sdk",
+        required=True,
+        metavar="DIR",
+        help="SDK 根目录（其下有 projects/mouse_demo/periph）",
+    )
+    init.add_argument(
+        "--force", action="store_true", help="覆盖内容不同的 project.omcfg（默认拒绝）"
+    )
 
-    check = sub.add_parser("check", help="校验配置")
-    check.add_argument("paths", nargs="*")
+    check = sub.add_parser(
+        "check",
+        help="校验配置（不写盘）",
+        description="解析 .omcfg 并跑引脚/板型规则；退出码 1 表示存在 error。",
+        epilog=(
+            "示例:\n"
+            "  python -m omcfg check configs\\KC536.omcfg\n"
+            "  python -m omcfg check --all configs"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    check.add_argument("paths", nargs="*", metavar="FILE", help="一个或多个 .omcfg 路径")
     check.add_argument("--all", metavar="DIR", help="检查目录下所有 *.omcfg")
 
-    gen = sub.add_parser("gen", help="生成配置代码与 Keil 工程；默认 dry-run")
-    gen.add_argument("--config")
-    gen.add_argument("--sdk", required=True)
-    gen.add_argument("--dry-run", action="store_true", help="只打印 diff（默认行为）")
-    gen.add_argument("--apply", action="store_true", help="真正写入")
+    gen = sub.add_parser(
+        "gen",
+        help="生成配置代码与 Keil 工程；默认 dry-run",
+        description="按 project.omcfg 渲染标记块内容；默认只打印 unified diff。",
+        epilog=(
+            "示例:\n"
+            "  python -m omcfg gen --sdk <SDK副本> --dry-run\n"
+            "  python -m omcfg gen --sdk <SDK副本> --apply\n"
+            "--apply 会写入 .omcfg_bak_<时间戳>/manifest.json，可用 rollback 撤销。"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    gen.add_argument(
+        "--config",
+        metavar="FILE",
+        help="配置路径；缺省用 <SDK>/projects/mouse_demo/project.omcfg",
+    )
+    gen.add_argument(
+        "--sdk",
+        required=True,
+        metavar="DIR",
+        help="SDK 根目录（其下有 projects/mouse_demo/periph）",
+    )
+    dry = gen.add_mutually_exclusive_group()
+    dry.add_argument("--dry-run", action="store_true", help="只打印 diff，不落盘（默认行为）")
+    dry.add_argument(
+        "--apply", action="store_true", help="真正写入标记块，并生成可回滚 manifest"
+    )
 
-    rollback = sub.add_parser("rollback", help="按 manifest 回滚")
-    rollback.add_argument("--manifest", required=True)
+    rollback = sub.add_parser(
+        "rollback",
+        help="按 manifest 回滚到写入前状态",
+        description="读取 .omcfg_bak_<时间戳>/manifest.json，恢复其中记录的文件。",
+        epilog=(
+            "示例:\n"
+            "  python -m omcfg rollback --manifest <SDK副本>\\.omcfg_bak_20261106_120000\n"
+            "  python -m omcfg rollback --manifest <SDK副本>\\.omcfg_bak_<时间戳>\\manifest.json\n"
+            "按时间倒序多次回滚可逐步撤销 init/gen 的操作。"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    rollback.add_argument(
+        "--manifest",
+        required=True,
+        metavar="FILE_OR_DIR",
+        help="manifest.json 或其所在 .omcfg_bak_* 目录",
+    )
     return parser
 
 

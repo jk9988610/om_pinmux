@@ -7,6 +7,7 @@ boards/*.json 是历史档案，运行时不读取。
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -180,12 +181,69 @@ def load_chip(path: Path | str | None = None) -> dict[str, Any]:
         return json.load(handle)
 
 
-def load_config(path: Path | str) -> dict[str, Any]:
-    with Path(path).open(encoding="utf-8") as handle:
-        data = yaml.safe_load(handle)
+def load_config_text(text: str) -> dict[str, Any]:
+    data = yaml.safe_load(text)
     if not isinstance(data, dict):
         raise ValueError("配置文件顶层必须是映射")
     return data
+
+
+def load_config(path: Path | str) -> dict[str, Any]:
+    with Path(path).open(encoding="utf-8") as handle:
+        return load_config_text(handle.read())
+
+
+PIN_INLINE_RE = re.compile(r"pin\s*:\s*[^,}\s#]+")
+PIN_SCALAR_RE = re.compile(r"(?P<lead>\s*)(?P<value>[^#\s]+)(?P<tail>\s*(?:#.*)?)")
+
+
+def set_pin_text(text: str, role: str, pin: str) -> str:
+    """只在 YAML 文本里替换某个引脚的 pin 值，保留注释与排版。
+
+    支持三种既有写法：`ROLE: Pxx`、`ROLE: { pin: Pxx, ... }`、
+    `ROLE:` 换行缩进的 `pin: Pxx`。找不到角色时抛 ValueError。
+    """
+    pin = str(pin).strip()
+    if not pin:
+        raise ValueError("引脚值不能为空")
+    lines = text.split("\n")
+    target = next(
+        (
+            index
+            for index, line in enumerate(lines)
+            if line.lstrip().startswith(f"{role}:") and not line.lstrip().startswith("#")
+        ),
+        None,
+    )
+    if target is None:
+        raise ValueError(f"配置里没有引脚 {role}；先 init 或手工添加后再改")
+    line = lines[target]
+    indent = len(line) - len(line.lstrip())
+    prefix, rest = line.split(":", 1)
+    if "{" in rest:
+        replaced, count = PIN_INLINE_RE.subn(f"pin: {pin}", rest, count=1)
+        if count != 1:
+            raise ValueError(f"{role} 的内联写法里没有 pin: 字段")
+        lines[target] = f"{prefix}:{replaced}"
+        return "\n".join(lines)
+    if rest.split("#", 1)[0].strip():
+        match = PIN_SCALAR_RE.match(rest)
+        if not match:
+            raise ValueError(f"{role} 的写法无法识别：{line.strip()}")
+        lines[target] = f"{prefix}:{match.group('lead')}{pin}{match.group('tail')}"
+        return "\n".join(lines)
+    for index in range(target + 1, len(lines)):
+        nested = lines[index]
+        if not nested.strip():
+            continue
+        nested_indent = len(nested) - len(nested.lstrip())
+        if nested_indent <= indent:
+            break
+        match = re.match(r"(?P<lead>\s*pin\s*:\s*)(?P<value>[^#\s]+)(?P<tail>\s*(?:#.*)?)$", nested)
+        if match:
+            lines[index] = f"{match.group('lead')}{pin}{match.group('tail')}"
+            return "\n".join(lines)
+    raise ValueError(f"{role} 是嵌套写法但没有 pin: 字段")
 
 
 def dump_config(data: dict[str, Any]) -> str:

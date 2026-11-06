@@ -9,7 +9,7 @@ function setStatus(text, error = false) {
 
 function setBusy(value) {
   busy = value;
-  for (const id of ["load", "check", "preview", "apply"]) $(id).disabled = value;
+  for (const id of ["load", "check", "save", "preview", "apply"]) $(id).disabled = value;
 }
 
 function renderPins(pins) {
@@ -20,13 +20,29 @@ function renderPins(pins) {
     for (const [value, cls] of [
       [item.role, ""], [item.pin, "pin"], [item.mode, ""], [item.pull, ""], [item.init, ""],
     ]) {
+      if (cls === "pin") {
+        const cell = document.createElement("td");
+        const input = document.createElement("input");
+        input.className = "pin-input";
+        input.dataset.role = item.role;
+        input.value = value;
+        cell.appendChild(input);
+        row.appendChild(cell);
+        continue;
+      }
       const cell = document.createElement("td");
       cell.textContent = value;
-      if (cls) cell.className = cls;
       row.appendChild(cell);
     }
     body.appendChild(row);
   }
+}
+
+function collectPins() {
+  return Array.from(document.querySelectorAll("input.pin-input")).map((input) => ({
+    role: input.dataset.role,
+    pin: input.value.trim(),
+  }));
 }
 
 function renderIssues(issues) {
@@ -67,7 +83,7 @@ function render(data, action) {
   setStatus(message, !data.ok);
 }
 
-async function run(method, action) {
+async function run(method, action, payload) {
   if (busy) return;
   const sdk = $("sdk").value.trim();
   if (!sdk) {
@@ -82,7 +98,9 @@ async function run(method, action) {
   setStatus(`${action}中...`);
   try {
     localStorage.setItem("omcfg.sdk", sdk);
-    const data = await window.pywebview.api[method](sdk);
+    const data = payload === undefined
+      ? await window.pywebview.api[method](sdk)
+      : await window.pywebview.api[method](sdk, payload);
     render(data, action);
   } catch (error) {
     setStatus(String(error), true);
@@ -91,7 +109,11 @@ async function run(method, action) {
   }
 }
 
+let initialized = false;
+
 function init() {
+  if (initialized) return;
+  initialized = true;
   const saved = localStorage.getItem("omcfg.sdk") || "";
   $("sdk").value = saved;
   $("sdk").addEventListener("keydown", (event) => {
@@ -99,6 +121,7 @@ function init() {
   });
   $("load").addEventListener("click", () => run("load", "打开"));
   $("check").addEventListener("click", () => run("check", "检查"));
+  $("save").addEventListener("click", () => run("save_pins", "保存引脚", collectPins()));
   $("preview").addEventListener("click", () => run("preview", "预览"));
   $("apply").addEventListener("click", () => {
     if (confirm("确认按 project.omcfg 写入 user_config.h/.c 与生成文件？")) run("apply", "应用");
