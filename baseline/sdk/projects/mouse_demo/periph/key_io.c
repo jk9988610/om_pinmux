@@ -466,7 +466,7 @@ void key_switch_report()
                     bsave_status = true;
                     hid_ctrl_reg |= bdevice_status_change;
                 }
-                ledc_cmd(Cmd_Report_Indicate_Cfg,NULL);
+                ledc_cmd(Cmd_Rep_Indicate_Cfg,NULL);
             }
         }
         

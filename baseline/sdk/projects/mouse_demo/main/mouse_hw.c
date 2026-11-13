@@ -113,7 +113,7 @@ pmu_lpm_t pm_checker_callback(void)
             delayms(8);
         }
         delayms(100);
-        ledc_sleep();
+        ledc_polling();
         delayms(500);
         charg_led_sleep_process();
         mouse_periph_wakeup_enable(WAKEUP_SLEEP_LEVEL2);

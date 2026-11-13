@@ -16,6 +16,14 @@
 #include "om_driver.h"
 #include "time_delay.h"
 #include "main.h"
+
+/* LEDC 未启用时兜底，保证 ledc_mode.h 和本文件类型定义可编译 */
+#ifndef LEDC_RGB_NUMBER
+#define LEDC_RGB_NUMBER 1
+#endif
+#ifndef LEDC_RGB_DATA_SIZE
+#define LEDC_RGB_DATA_SIZE (LEDC_RGB_NUMBER*3)
+#endif
 #include "ledc_mode.h"
 //-----------------------------------------------------------------------------;
 // MACRO
@@ -24,7 +32,11 @@
 #define POWER_ON        1
 #define POWER_OFF       0
 
-#define LEDC_POWER_SET(x)   (x ? GPIO_SET(LEDC_CTRL_PIN) : GPIO_CLEAR(LEDC_CTRL_PIN)) 
+#ifdef LEDC_CTRL_PIN
+#define LEDC_POWER_SET(x)   ((x) ? GPIO_SET(LEDC_CTRL_PIN) : GPIO_CLEAR(LEDC_CTRL_PIN))
+#else
+#define LEDC_POWER_SET(x)   ((void)(x))
+#endif
 
 //-----------------------------------------------------------------------------;
 // Typedef
@@ -33,17 +45,19 @@ typedef enum {
     Cmd_Init,
     Cmd_Power_Set,
     Cmd_Dpi_Indicate_Cfg,
-    Cmd_Report_Indicate_Cfg,
     Cmd_Lvd_Indicate_Cfg,
+    Cmd_Rep_Indicate_Cfg,
     Cmd_Idle_Cfg,
     Cmd_Power_Down_Cfg,
 }Ledc_Cmd_t;
+
+#if defined(LEDC_PIN)
 
 typedef struct {
     uint32_t On_Time;
     uint32_t Off_Time;
     uint16_t Blink_Times;
-    uint8_t Rgb_data[LEDC_RGB_NUMBER*3];
+    uint8_t Rgb_data[LEDC_RGB_DATA_SIZE];
     bool On_State;
 }Ind_Val_t;
 
@@ -79,6 +93,8 @@ typedef struct {
     Bright_Val_t bright_val;
 }ledc_val_t;
 
+extern bool            bledc_data_send;
+
 void ledc_neon(uint8_t reset_state);
 
 //-----------------------------------------------------------------------------;
@@ -87,8 +103,17 @@ void ledc_neon(uint8_t reset_state);
 uint32_t ledc_cmd(Ledc_Cmd_t cmd,void* arg);
 void ledc_polling();
 void ledc_write0(void);
-void ledc_sleep();
 void sys_deepsleep_process(void);
+
+#else  /* !LEDC_PIN: LEDC 未启用，调用退化为空 */
+
+#define ledc_neon(x)                ((void)(x))
+#define ledc_cmd(c, a)              ((void)(c), (void)(a), (uint32_t)0)
+#define ledc_polling()              ((void)0)
+#define ledc_write0()               ((void)0)
+#define sys_deepsleep_process()     ((void)0)
+
+#endif  /* LEDC_PIN */
 
 #endif
 /* end */

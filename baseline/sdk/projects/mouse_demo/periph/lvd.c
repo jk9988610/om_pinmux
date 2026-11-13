@@ -254,7 +254,6 @@ void low_bat_pd()
         delayms(8);
     }
     delayms(100);
-    ledc_sleep();
     delayms(500);
     mouse_periph_wakeup_enable(WAKEUP_SLEEP_LEVEL2);
     drv_pmu_set_low_power_mode(PMU_LPM_DEEP_SLEEP);
