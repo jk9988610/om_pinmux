@@ -13,7 +13,8 @@ from pathlib import Path
 
 import yaml
 
-from . import baseline, model, newproject, rules, validate
+from . import baseline, model, newproject, rules, smoke, validate
+
 from .generate import generator
 from .initproject import init_project, missing_markers
 from .targets import sdk, uvprojx
@@ -414,7 +415,15 @@ def cmd_new(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_smoke(args: argparse.Namespace) -> int:
+    """重建三 logo 形态冒烟工程。"""
+    out = Path(args.out).expanduser().resolve()
+    results = smoke.run_smoke(out)
+    return EXIT_OK if all(r["ok"] for r in results) else EXIT_VALIDATION
+
+
 def _locate_manifest(value: str) -> Path:
+
     path = Path(value).expanduser()
     if path.is_dir():
         candidate = path / "manifest.json"
@@ -473,7 +482,8 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     sub = parser.add_subparsers(
-        dest="command", required=True, metavar="{init,check,gen,new,rollback}"
+        dest="command", required=True, metavar="{init,check,gen,new,rollback,smoke}"
+
     )
 
     init = sub.add_parser(
@@ -612,7 +622,26 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="FILE_OR_DIR",
         help="manifest.json 或其所在 .omcfg_bak_* 目录",
     )
+    smoke_cmd = sub.add_parser(
+        "smoke",
+        help="重建三种 logo 形态的冒烟工程（TEST_CLI / TEST_NOCTRL / TEST_NONE）",
+        description="重建三种 logo 形态的冒烟工程，供 Keil 批量编译 + 烧录。",
+        epilog=(
+            "示例:\n"
+            "  python -m omcfg smoke\n"
+            "  python -m omcfg smoke --out D:\\tmp\\smoke"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    smoke_cmd.add_argument(
+        "--out",
+        default="_test_gen",
+        metavar="DIR",
+        help="冒烟工程输出目录（默认 _test_gen）",
+    )
+
     return parser
+
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -628,5 +657,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_new(args)
     if args.command == "rollback":
         return cmd_rollback(args)
+    if args.command == "smoke":
+        return cmd_smoke(args)
+
     parser.error("未知命令")
     return EXIT_ENVIRONMENT
