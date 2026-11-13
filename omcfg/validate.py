@@ -94,7 +94,7 @@ def _required_roles(config: dict, pins: dict) -> list[str]:
     if b.get("logo") == "rgb":
         required += ["LED_R_PIN", "LED_G_PIN", "LED_B_PIN"]
     elif b.get("logo") == "ledc":
-        required += ["LEDC_CTRL_PIN", "LEDC_PIN"]
+        required += ["LEDC_PIN"]
     if model.sensor(config).get("bus") == "spi_4wire":
         required += ["SENSOR_NCS_PIN", "SENSOR_MOSI_PIN", "SENSOR_MISO_PIN"]
     else:

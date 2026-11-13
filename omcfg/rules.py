@@ -45,6 +45,7 @@ TABLE_ROW_RE = re.compile(r"^\s*\{\s*([A-Z0-9_]+)\s*,", re.M)
 WAKE_MASK_RE = re.compile(r"#define\s+PIN_WAKE_UP_MASK\s+(.*)")
 WAKE_CALL_RE = re.compile(r"drv_pmu_wakeup_pin_set\s*\(\s*([A-Z0-9_]+)\s*,")
 ROLE_REF_RE = re.compile(r"\b(KEY_[A-Z0-9_]+)\b")
+KEY_MODE_USE_RE = re.compile(r"\bKEY_MODE_\w+\b")
 LED_ON_RE = re.compile(r"#define\s+led_r_on\(\)\s+\((gpio_set|gpio_clear)\(LED_MODE_R_PIN\)\)")
 LEDC_SEL_RE = re.compile(r"drv_pmu_ledc_sel\s*\(\s*PMU_LEDC_SEL_IO_(\d{2})\s*\)")
 DPI_INI_RE = re.compile(r"sensor_dpi_ini\s*\[\s*\]\s*=\s*\{([^}]*)\}", re.S)
@@ -192,9 +193,20 @@ def audit(config: dict, root: Path | str, strict: bool = False) -> validate.Repo
     key_io_h = _read(root, sdk.PERIPH / "key_io.h")
     key_io_c = _read(root, sdk.PERIPH / "key_io.c")
     if key_io_h or key_io_c:
-        refs = {
-            role
-            for role in ROLE_REF_RE.findall(key_io_h + "\n" + key_io_c)
+        KEY_MODE_TO_PIN = {
+            'KEY_MODE_PAIR': 'KEY_PAIR_PIN',
+            'KEY_MODE_R0': 'KEY_R0_PIN',
+            'KEY_MODE_R1': 'KEY_R1_PIN',
+            'KEY_MODE_R2': 'KEY_R2_PIN',
+            'KEY_MODE_R3': 'KEY_B_PIN',
+            'KEY_MODE_R4': 'KEY_P_PIN',
+            'KEY_MODE_R5': 'KEY_DPI_SUB_PIN',
+            'KEY_MODE_R7': 'KEY_DPI_ADD_PIN',
+        }
+        used_modes = set(KEY_MODE_USE_RE.findall(key_io_c))
+        refs = {KEY_MODE_TO_PIN[m] for m in used_modes if m in KEY_MODE_TO_PIN}
+        refs |= {
+            role for role in ROLE_REF_RE.findall(key_io_c)
             if role in model.ROLE_ORDER
         }
         configured = {role for role in pins if role.startswith("KEY_")}
