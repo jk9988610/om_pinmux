@@ -39,3 +39,7 @@ baseline/sdk/**/*.crf
 baseline/sdk/**/*.dep
 baseline/sdk/**/*.d
 
+# 转码/编辑备份（本地保留，不入仓库）
+omcfg/templates/_bak/
+
+

@@ -2,40 +2,18 @@
 
 from __future__ import annotations
 
-import fnmatch
+
 import re
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import model
+from . import artifacts, model
 from .targets import sdk
 
-# 不进入新工程的目录/文件：编译产物、编辑器/调试器状态、旧事务备份。
-EXCLUDED_DIRS = (".git", ".vscode", ".cache", "out", "_build", "lib_build")
-# SE71M.BAT 是 Keil 每次编译生成的批处理，内含生成机器的绝对路径。
-EXCLUDED_FILE_NAMES = (
-    "JLinkLog.txt",
-    "JLinkSettings.ini",
-    "compile_commands.json",
-    "SE71M.BAT",
-)
-# 注意不排除 *.o：SDK 里 userdefined_key_20260724.o / rf_protocol_20260704.o
-# 是 uvprojx 直接引用的预编译输入，不是本次编译的产物。
-EXCLUDED_SUFFIXES = (
-    ".dep",
-    ".d",
-    ".crf",
-    ".axf",
-    ".hex",
-    ".bin",
-    ".lst",
-    ".map",
-    ".lnp",
-    ".htm",
-    ".uvoptx",
-    ".log",
-)
+
+# 产物排除规则见 omcfg/artifacts.py（与 baseline 摘要共用）
+
 
 NOT_COPIED_SUMMARY = (
     "out/, _build/, lib_build/, .git/, .vscode/, .cache/, .omcfg_bak_*/，"
@@ -76,13 +54,8 @@ class Rewrite:
 
 
 def _excluded(name: str) -> bool:
-    return (
-        name in EXCLUDED_DIRS
-        or name in EXCLUDED_FILE_NAMES
-        or name.startswith(".omcfg_bak_")
-        or name.endswith(EXCLUDED_SUFFIXES)
-        or fnmatch.fnmatchcase(name, "*.uvguix.*")
-    )
+    return artifacts.is_artifact(name)
+
 
 
 def _ignore(_directory: str, names: list[str]) -> set[str]:

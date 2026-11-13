@@ -11,8 +11,9 @@ import hashlib
 import json
 from pathlib import Path
 
-from . import model
+from . import artifacts, model
 from .targets import sdk
+
 
 ROOT = Path(__file__).resolve().parent.parent / "baseline"
 SDK_DIR = ROOT / "sdk"
@@ -108,15 +109,23 @@ def resolve(sdk_dir: Path | str | None = None, config_path: Path | str | None = 
 
 
 def tree_digest(root: Path | str) -> str:
-    """按相对路径 + 文件 SHA256 计算文件树摘要，用于基线完整性校验。"""
+    """按相对路径 + 文件 SHA256 计算文件树摘要，用于基线完整性校验。
+
+    编译产物/编辑器状态/旧事务备份不参与摘要，避免 Keil 编译后基线与
+    META.json 失配。
+    """
+    base = Path(root)
     entries: list[str] = []
-    for path in sorted(Path(root).rglob("*")):
+    for path in sorted(base.rglob("*")):
         if not path.is_file():
             continue
-        relative = path.relative_to(root).as_posix()
+        relative = path.relative_to(base).as_posix()
+        if artifacts.is_artifact_path(relative):
+            continue
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
         entries.append(f"{relative}\0{digest}")
     return hashlib.sha256("\n".join(entries).encode("utf-8")).hexdigest()
+
 
 
 def file_digest(path: Path | str) -> str:
@@ -136,7 +145,11 @@ def verify_meta(sdk_dir: Path | str | None = None, config_path: Path | str | Non
     config = Path(config_path) if config_path else CONFIG_PATH
     data = meta(root, meta_path)
     problems: list[str] = []
-    actual_files = sum(1 for path in root.rglob("*") if path.is_file())
+    actual_files = sum(
+        1 for path in root.rglob("*")
+        if path.is_file() and not artifacts.is_artifact_path(path.relative_to(root).as_posix())
+    )
+
     if data.get("file_count") != actual_files:
         problems.append(f"文件数 {actual_files} != META {data.get('file_count')}")
     if data.get("tree_sha256") and data["tree_sha256"] != tree_digest(root):
