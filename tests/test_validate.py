@@ -60,6 +60,15 @@ def test_ledc_control_must_be_selector_pin():
     assert any("LEDC_SEL" in issue.message for issue in report.errors)
 
 
+def test_ledc_ctrl_pin_is_optional():
+    """LEDC_CTRL_PIN 可选：logo=ledc 时只强制 LEDC_PIN。"""
+    config = _load("CH04")
+    del config["pins"]["LEDC_CTRL_PIN"]
+    report = validate.validate_config(config)
+    assert report.ok, [issue.render() for issue in report.errors]
+
+
+
 def test_usb_fixed_pins():
     config = _load("KC536")
     config["pins"]["USB_DN_PIN"] = "P04"
