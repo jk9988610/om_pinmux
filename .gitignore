@@ -21,3 +21,21 @@ _test_gen/
 # Editor-local state
 .cursor/*
 !.cursor/plans/
+
+# baseline 编译产物（Keil 每次编译会生成，不进仓库）
+baseline/sdk/**/out/
+baseline/sdk/**/_build/
+baseline/sdk/**/lib_build/
+baseline/sdk/**/*.uvguix.*
+baseline/sdk/**/*.uvoptx
+baseline/sdk/**/*.axf
+baseline/sdk/**/*.hex
+baseline/sdk/**/*.bin
+baseline/sdk/**/*.map
+baseline/sdk/**/*.lnp
+baseline/sdk/**/*.lst
+baseline/sdk/**/*.htm
+baseline/sdk/**/*.crf
+baseline/sdk/**/*.dep
+baseline/sdk/**/*.d
+
