@@ -856,6 +856,128 @@ def _apply_power(board, root, tx):
     return applied
 
 
+# ============ board 驱动策略：keys（v1） ============
+
+
+def _validate_keys(board):
+    """校验 board['keys']，返回错误列表（空=通过）。
+
+    活跃键定义：user_config.h 里 #define 存在的 KEY_*_PIN（不含被注释的）。
+    数量一致性：board 声明的键集合必须与文件活跃键集合完全相等（名字+数量）。
+    例：495/512/516 现状——文件活跃 {R0,R1,R2,B,P,DPI} 6 个，board 必须声明同样 6 个；
+        524 现状——文件活跃 {R0,R1,R2,C0} 4 个，board 声明 {r0,r1,r2} 3 个会因
+        C0 未声明而拒绝（v1 不支持 C0）。
+    """
+    errs = []
+    k = board.get("keys") or {}
+    r0 = k.get("r0")
+    r1 = k.get("r1")
+    r2 = k.get("r2")
+    b = k.get("b")
+    p = k.get("p")
+    dpi = k.get("dpi")
+
+    for name, val in [("r0", r0), ("r1", r1), ("r2", r2)]:
+        if not val or not _PIN_RE.match(str(val)):
+            errs.append("keys.%s 必须是 Pxx 格式" % name)
+
+    opt = [b, p, dpi]
+    n_opt = sum(1 for x in opt if x)
+    if 0 < n_opt < 3:
+        errs.append("keys.b/p/dpi 必须全有或全无（当前 %d/3）" % n_opt)
+    for name, val in [("b", b), ("p", p), ("dpi", dpi)]:
+        if val is not None and not _PIN_RE.match(str(val)):
+            errs.append("keys.%s 必须是 Pxx 或 null" % name)
+
+    pins = [x for x in (r0, r1, r2, b, p, dpi) if x]
+    if len(pins) != len(set(pins)):
+        errs.append("keys 的引脚不能重复: %r" % (pins,))
+
+    if k.get("c0"):
+        errs.append("keys.c0 v1 不支持（524 特殊形态，OUTPUT_PP 飞线设计），需人工")
+    if k.get("pair"):
+        errs.append("keys.pair v1 不支持（条件编译），需人工")
+
+    return errs
+
+
+def _plan_keys(board, root):
+    """返回 [(file_rel, [(pattern, repl, label), ...]), ...]。
+
+    v1 只改 user_config.h 的 KEY_*_PIN (Pxx) 值；gpio_config_table[] 不动——
+    因为该表第一字段是宏名（KEY_R0_PIN 等），宏值变了表自动跟随。
+    """
+    k = board["keys"]
+    patches = []
+    for name in ("r0", "r1", "r2", "b", "p", "dpi"):
+        pin = k.get(name)
+        if not pin:
+            continue
+        macro = "KEY_%s_PIN" % name.upper()
+        patches.append((
+            r"(#define\s+%s\s+)\(P\d+\)" % macro,
+            r"\g<1>(%s)" % pin,
+            macro,
+        ))
+    return [("projects/mouse_demo/periph/user_config.h", patches)]
+
+
+def _apply_keys(board, root, tx):
+    uc_path = root / "projects/mouse_demo/periph/user_config.h"
+    ucc_path = root / "projects/mouse_demo/periph/user_config.c"
+    for p in (uc_path, ucc_path):
+        if not p.is_file():
+            raise PolicyError("缺少文件: %s" % p)
+
+    uc_text, uc_enc = _read_text_auto(uc_path)
+    ucc_text, _ = _read_text_auto(ucc_path)
+
+    # 文件活跃键集合（#define 存在，未被 // 注释）
+    active_macros = set()
+    for m in re.finditer(r"^\s*#define\s+(KEY_\w+_PIN)\s+\(P\d+\)", uc_text, re.M):
+        active_macros.add(m.group(1))
+
+    # board 声明的键集合
+    k = board["keys"]
+    want_macros = set()
+    for name in ("r0", "r1", "r2", "b", "p", "dpi"):
+        if k.get(name):
+            want_macros.add("KEY_%s_PIN" % name.upper())
+
+    # 数量+名字一致性：board 集合 == 文件集合
+    missing = want_macros - active_macros
+    extra = active_macros - want_macros
+    if missing:
+        raise PolicyError(
+            "board 声明但文件无定义的键: %r；v1 不做增删行，需人工" % (sorted(missing),))
+    if extra:
+        raise PolicyError(
+            "文件有定义但 board 未声明的键: %r；v1 不做增删行，"
+            "若为 KEY_C0_PIN 或 KEY_PAIR_PIN 属 v1 不支持范围，需人工" % (sorted(extra),))
+
+    # 语义等价：gpio_config_table[] 里每个 KEY 行第一字段必须是宏名（不是数字）
+    for macro in sorted(active_macros):
+        pat = r"\{%s,\s+USER_GPIO_MODE_\w+" % macro
+        if not re.search(pat, ucc_text):
+            raise PolicyError(
+                "gpio_config_table[] 缺少 %s 行（第一字段应为宏名）；"
+                "表结构不完整，需人工" % macro)
+
+    plan = _plan_keys(board, root)
+    applied = []
+    for file_rel, patches in plan:
+        text = uc_text
+        new_text = text
+        for pattern, repl, label in patches:
+            new_text, n = re.subn(pattern, repl, new_text, count=1)
+            if n == 0:
+                raise PolicyError("%s 锚点未匹配: %s" % (file_rel, label))
+        if new_text != text:
+            tx.write_text(uc_path, new_text, encoding=uc_enc)
+            applied.append("projects/mouse_demo/periph/user_config.h")
+    return applied
+
+
 def _apply_board_policy(pdef, board, root, tx):
     """board_patch kind 的分发。"""
     if pdef.id == "project_id":
@@ -870,6 +992,8 @@ def _apply_board_policy(pdef, board, root, tx):
         return _apply_led(board, root, tx)
     if pdef.id == "power":
         return _apply_power(board, root, tx)
+    if pdef.id == "keys":
+        return _apply_keys(board, root, tx)
     raise PolicyError("未知 board_patch 策略: %s" % pdef.id)
 
 
@@ -897,6 +1021,8 @@ def apply_policies(sdk_root, board, selected_ids, operation="apply_policies"):
                     errs = _validate_led(board)
                 elif pdef.id == "power":
                     errs = _validate_power(board)
+                elif pdef.id == "keys":
+                    errs = _validate_keys(board)
                 else:
                     errs = []
                 if errs:

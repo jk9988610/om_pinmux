@@ -91,6 +91,16 @@ POLICIES: tuple = (
         rels=("projects/mouse_demo/periph/user_config.h",),
     ),
     Policy(
+        id="keys",
+        title="按键引脚值替换（v1：标准 6 键；KEY_C0_PIN 与增删行需人工）",
+        kind="board_patch",
+        default_rgb=True, default_ledc=True,
+        rels=(
+            "projects/mouse_demo/periph/user_config.h",
+            "projects/mouse_demo/periph/user_config.c",
+        ),
+    ),
+    Policy(
         id="pins_user_config",
         title="写入脚位 user_config（由 UI 生成块）",
         kind="ui_pins",
