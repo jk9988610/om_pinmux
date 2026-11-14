@@ -7,7 +7,7 @@
   "state": "已初始化并生成（OMCFG 标记块 + board_features.h）",
   "file_count": 207,
   "size_bytes": 5694176,
-  "tree_sha256": "400b8abcd01b5c0ac0d444fb9d2f60dbeab9be3f0ef664363f0a03664e8bb889",
+  "tree_sha256": "d786a7f85b6cec66420fe9401b67332e3e46fbed72edb964b1036508cb1e1b90",
   "config_sha256": "eedfa00e45a4d1050cb6967aeb8d9d0dc4af1eec3c0568dc1bcef025c912507c",
   "license": "sdk/LICENSE.md (OM-SLA01)",
   "notes": "清理后的 CH04 SDK 基线：无 out/_build/.git/uvguix/日志；保留 uvprojx 引用的两个预编译 .o（rf_protocol_20260704.o、userdefined_key_20260724.o）；已初始化并生成（OMCFG 标记块 + board_features.h）。更新方式见 docs/PLAN-INTERNAL-SDK.md 3.1。"

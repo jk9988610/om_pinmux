@@ -38,6 +38,26 @@ extern bool     bpower_down;
 
 bool            bledc_data_send;
 uint8_t const dpi_color_tab[] = {LEDC_RED, LEDC_GREEN, LEDC_BULE, LEDC_RED|LEDC_BULE, LEDC_RED|LEDC_GREEN, LEDC_GREEN|LEDC_BULE};
+
+/* 未来参数化入口：接 board.ledc_colors 时，这里改为
+ *   #ifdef LEDC_COLOR_TAB_INIT
+ *   uint8_t const dpi_rgb_tab[8][3] = LEDC_COLOR_TAB_INIT;
+ *   #else
+ *   ...默认值...
+ *   #endif
+ * 当前（路径 C）保留硬编码，改色需同步 omcfg/templates/ledc/ledc.c
+ * 和 baseline/sdk/.../ledc.c 两份。
+ */
+uint8_t const dpi_rgb_tab[8][3] = {
+    {240,   0,   0},   /* 0: 红（CH04 现状） */
+    {  0, 240,   0},   /* 1: 绿（CH04 现状） */
+    {  0,   0, 240},   /* 2: 蓝（CH04 现状） */
+    {240,   0, 240},   /* 3: 紫（RED|BLUE 满亮，CH04 现状） */
+    {240, 240,   0},   /* 4: 黄（RED|GREEN 满亮，CH04 现状） */
+    {  0, 240, 240},   /* 5: 青（GREEN|BLUE 满亮，CH04 现状） */
+    {240, 240, 240},   /* 6: 白（新增，防越界） */
+    {  0,   0,   0},   /* 7: 黑（新增，保留） */
+};
 //-----------------------------------------------------------------------------;
 // table
 //
@@ -96,7 +116,7 @@ void ledc_data_write(uint8_t rgb_enable, uint8_t color_enable, uint8_t red_value
 
     if (color_enable & LEDC_BULE)
     {
-        ledc_val.ind_val.Rgb_data[rgb_enable*3+2] = green_value;
+        ledc_val.ind_val.Rgb_data[rgb_enable*3+2] = blue_value;
     }
     else
     {
@@ -217,7 +237,7 @@ uint32_t ledc_cmd(Ledc_Cmd_t cmd,void* arg)
             memcpy(&ledc_val.ind_val,&ind_lvd,sizeof(ledc_val.ind_val));
             for (uint8_t i = 0; i < LEDC_RGB_NUMBER; i++)
             {
-                ledc_data_write(i,dpi_color_tab[0],LEDC_DATA_MAX,LEDC_DATA_MAX,LEDC_DATA_MAX);
+                ledc_data_write(i,0x07,dpi_rgb_tab[0][0],dpi_rgb_tab[0][1],dpi_rgb_tab[0][2]);
             }
             blvd_hint_flag = true;
             break;
@@ -230,7 +250,7 @@ uint32_t ledc_cmd(Ledc_Cmd_t cmd,void* arg)
             memcpy(&ledc_val.ind_val,&ind_lvd,sizeof(ledc_val.ind_val));
             for (uint8_t i = 0; i < LEDC_RGB_NUMBER; i++)
             {
-                ledc_data_write(i,dpi_color_tab[dpi_grade],LEDC_DATA_MAX,LEDC_DATA_MAX,LEDC_DATA_MAX);
+                ledc_data_write(i,0x07,dpi_rgb_tab[dpi_grade&0x07][0],dpi_rgb_tab[dpi_grade&0x07][1],dpi_rgb_tab[dpi_grade&0x07][2]);
             }
             break;
 
@@ -243,9 +263,9 @@ uint32_t ledc_cmd(Ledc_Cmd_t cmd,void* arg)
             for (uint8_t i = 0; i < LEDC_RGB_NUMBER; i++)
             {
                 if (device_type == iDEVICE_TYPE_24G)
-                    ledc_data_write(i,dpi_color_tab[report_24g&0x03],LEDC_DATA_MAX,LEDC_DATA_MAX,LEDC_DATA_MAX);
+                    ledc_data_write(i,0x07,dpi_rgb_tab[report_24g&0x03][0],dpi_rgb_tab[report_24g&0x03][1],dpi_rgb_tab[report_24g&0x03][2]);
                 else
-                    ledc_data_write(i,dpi_color_tab[report_usb&0x03],LEDC_DATA_MAX,LEDC_DATA_MAX,LEDC_DATA_MAX);
+                    ledc_data_write(i,0x07,dpi_rgb_tab[report_usb&0x03][0],dpi_rgb_tab[report_usb&0x03][1],dpi_rgb_tab[report_usb&0x03][2]);
             }
             break;
 
