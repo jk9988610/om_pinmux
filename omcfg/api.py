@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import tempfile
 from pathlib import Path
 
@@ -634,6 +635,21 @@ class Api:
             for m in mods:
                 if m == "ledc":
                     ir = self.inject_ledc_files(workspace, LEDC_SOURCE_POOL)
+                    # 手动覆盖 drv_ledc.c：inject_ledc_files 只复制 4 个 periph 文件，
+                    # 不含 drv_ledc.c。KC536 模板自带 drv_ledc.c 用 PMU_LEDC_SEL_IO_01（P01），
+                    # 与注入源（PMU_LEDC_SEL_IO_05，P05）冲突，导致勾了灯带但 DIN 指向 P01。
+                    _rel = "hal/driver/om6239/drv_ledc.c"
+                    _src = os.path.join(LEDC_SOURCE_POOL, _rel.replace("/", os.sep))
+                    _dst = os.path.join(workspace, _rel.replace("/", os.sep))
+                    if os.path.isfile(_src) and os.path.isfile(_dst):
+                        with open(_src, "rb") as _f1:
+                            _src_bytes = _f1.read()
+                        with open(_dst, "rb") as _f2:
+                            _dst_bytes = _f2.read()
+                        if _src_bytes != _dst_bytes:
+                            with open(_dst, "wb") as _f3:
+                                _f3.write(_src_bytes)
+                            ir.setdefault("forced", []).append(_rel)
                     agg["modules"]["ledc"] = ir
                     if not ir.get("ok", False):
                         agg.update(error="ledc inject failed", detail=ir)
