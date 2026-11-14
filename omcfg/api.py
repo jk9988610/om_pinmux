@@ -124,6 +124,7 @@ def _sync_wheel(text: str) -> str:
     return text
 
 
+LEDC_SOURCE_POOL = r"E:\M_2026\516_BM2017\software\trunk\SE71M_0516_BM2017_V1_20261022"
 class Api:
     def load(self, sdk_path: str) -> dict:
         try:
@@ -315,6 +316,339 @@ class Api:
         except Exception as exc:
             return _error(str(exc), "确认工程已初始化、文件未被占用")
 
+    def choose_folder(self, initial: str | None = None) -> str | None:
+        """弹出原生文件夹选择框，返回选中路径；取消返回 None。"""
+        import os
+        import webview
+
+        directory = initial if (initial and os.path.isdir(initial)) else ""
+        if not webview.windows:
+            return None
+        result = webview.windows[0].create_file_dialog(
+            webview.FOLDER_DIALOG, directory=directory
+        )
+        if not result:
+            return None
+        return result[0]
+    def role_capabilities(self) -> dict:
+        """返回芯片全量角色能力表（不受当前工程限制）。"""
+        import json as _json
+        import os as _os
+        from . import pinmap as _pinmap, model as _model
+        chip = _model.load_chip()
+        cat_path = _os.path.join(_os.path.dirname(__file__), "data", "role_catalog.json")
+        cat = _json.load(open(cat_path, encoding="utf-8"))
+        roles = {}
+        for r in cat.get("roles", []):
+            rid = r.get("id")
+            aliases = list(r.get("aliases", {}).values())
+            if not aliases:
+                continue
+            primary = aliases[0]
+            try:
+                allowed = _pinmap.allowed_pins(chip, primary)
+            except Exception:
+                allowed = set()
+            roles[primary] = {
+                "role_id": rid,
+                "aliases": aliases,
+                "allowed_pins": sorted(allowed),
+                "v1": bool(r.get("v1", False)),
+                "display_name": r.get("display_name", ""),
+                "tier": r.get("tier", ""),
+                "trend": r.get("trend", ""),
+            }
+        return {"roles": roles, "demand_groups": cat.get("demand_groups", [])}
+
+    def prepare_workspace(self, template_path: str, workspace: str) -> dict:
+        """复制模板到工作区（排除编译产物/缓存），并写元数据标记。"""
+        import os as _os
+        import subprocess as _sp
+        import json as _json
+        if not _os.path.isdir(template_path):
+            return {"ok": False, "error": "模板不存在: " + template_path}
+        if _os.path.exists(workspace):
+            return {"ok": False, "error": "工作区已存在: " + workspace}
+        _os.makedirs(_os.path.dirname(workspace) or ". ", exist_ok=True)
+        excl_dirs = [".git", "Objects", "Listings", ".cache", "out", "_build", ".vscode"]
+        excl_files = ["*.d", "*.axf", "*.hex", "*.map", "*.bin", "*.htm", "*.lnp", "*.dep", "*.log", "*.idx"]
+        cmd = ["robocopy", template_path, workspace, "/E"]
+        for d in excl_dirs: cmd += ["/XD", d]
+        for f in excl_files: cmd += ["/XF", f]
+        res = _sp.run(cmd, capture_output=True, text=True)
+        if res.returncode >= 8:
+            return {"ok": False, "error": "robocopy 失败 code=" + str(res.returncode), "stderr": res.stderr[-500:]}
+        meta = {"template": template_path, "workspace": workspace}
+        with open(_os.path.join(workspace, ".omcfg_meta.json"), "w", encoding="utf-8") as f:
+            _json.dump(meta, f, ensure_ascii=False, indent=2)
+        return {"ok": True, "workspace": workspace}
+
+    def generate_project(self, workspace: str, target_path: str, proj_id: str,
+                         proj_name: str, consumer_name: str = "", version: int = 1) -> dict:
+        """从工作区生成工程：复制模板 + 覆盖改动 + 改 ID/名称 + 写 project.omcfg。"""
+        import os as _os
+        import subprocess as _sp
+        import json as _json
+        import re as _re
+        import hashlib as _hl
+        meta_path = _os.path.join(workspace, ".omcfg_meta.json")
+        if not _os.path.isfile(meta_path):
+            return {"ok": False, "error": "工作区缺少 .omcfg_meta.json，请先 prepare_workspace"}
+        meta = _json.load(open(meta_path, encoding="utf-8"))
+        template = meta["template"]
+        if _os.path.exists(target_path):
+            return {"ok": False, "error": "目标已存在: " + target_path}
+        if not _re.match(r'^0x[0-9A-Fa-f]{1,4}$', proj_id):
+            try: proj_id = "0x%04X" % int(proj_id, 16)
+            except Exception: return {"ok": False, "error": "ID 格式错误: " + proj_id}
+        excl_dirs = [".git", "Objects", "Listings", ".cache", "out", "_build", ".vscode"]
+        excl_files = ["*.d", "*.axf", "*.hex", "*.map", "*.bin", "*.htm", "*.lnp", "*.dep", "*.log", "*.idx"]
+        cmd = ["robocopy", template, target_path, "/E"]
+        for d in excl_dirs: cmd += ["/XD", d]
+        for f in excl_files: cmd += ["/XF", f]
+        res = _sp.run(cmd, capture_output=True, text=True)
+        if res.returncode >= 8:
+            return {"ok": False, "error": "复制模板失败 code=" + str(res.returncode)}
+        def _hash(p):
+            try: return _hl.sha256(open(p, "rb").read()).hexdigest()
+            except Exception: return None
+        def _rel(root, p):
+            r = _os.path.relpath(p, root).replace("\\", "/")
+            parts = r.split("/")
+            for i, x in enumerate(parts):
+                if x in ("projects", "hal", "common", "components", "mode_24g", "mode_usb", "utils"):
+                    return "/".join(parts[i:])
+            return r
+        tpl_files = {}
+        for dp, dns, fs in _os.walk(template):
+            dns[:] = [d for d in dns if d not in excl_dirs]
+            for f in fs:
+                if any(f.endswith(x.replace("*", "")) for x in excl_files): continue
+                p = _os.path.join(dp, f)
+                tpl_files[_rel(template, p)] = _hash(p)
+        changed, added = [], []
+        for dp, dns, fs in _os.walk(workspace):
+            dns[:] = [d for d in dns if d not in excl_dirs]
+            for f in fs:
+                if f == ".omcfg_meta.json": continue
+                if any(f.endswith(x.replace("*", "")) for x in excl_files): continue
+                p = _os.path.join(dp, f)
+                rel = _rel(workspace, p)
+                h = _hash(p)
+                tgt = _os.path.join(target_path, rel)
+                if rel not in tpl_files:
+                    _os.makedirs(_os.path.dirname(tgt), exist_ok=True)
+                    import shutil as _sh; _sh.copy2(p, tgt); added.append(rel); continue
+                if tpl_files[rel] != h:
+                    import shutil as _sh; _sh.copy2(p, tgt); changed.append(rel)
+        apply_info = {}
+        omcfg_dst = _os.path.join(target_path, "projects", "mouse_demo", "project.omcfg")
+        if _os.path.isfile(omcfg_dst):
+            try:
+                _ra = self.apply(target_path)
+                apply_info = {"ok": bool(_ra.get("ok")), "changed": _ra.get("changed", 0),
+                              "error": _ra.get("error")}
+            except Exception as _e:
+                apply_info = {"ok": False, "error": str(_e)}
+
+        # apply 会重建 uvprojx（按 config），把手工注入的 ledc.c/ledc_mode.c 覆盖掉。
+        # 若 target 存在 ledc.c 且 uvprojx 未登记，重新注入。
+        _ledc_c = _os.path.join(target_path, "projects", "mouse_demo", "periph", "ledc.c")
+        _ledc_mode_c = _os.path.join(target_path, "projects", "mouse_demo", "periph", "ledc_mode.c")
+        if _os.path.isfile(_ledc_c) or _os.path.isfile(_ledc_mode_c):
+            # 1. 更新 uvprojx：periph 组加 ledc.c/ledc_mode.c，driver 组加 drv_ledc.c
+            try:
+                from . import ledc_injector as _ledc_inj
+                _uv_res = _ledc_inj.update_uvprojx(target_path)
+                apply_info["uvprojx_after_apply"] = _uv_res
+            except Exception as _e:
+                apply_info["uvprojx_after_apply"] = {"ok": False, "reason": str(_e)}
+            # 2. 补 user_config.h 的 6 个宏（apply 会重建 user_config.h，必须 apply 后补）
+            try:
+                _uc = _os.path.join(target_path, "projects", "mouse_demo", "periph", "user_config.h")
+                if _os.path.isfile(_uc):
+                    _t = open(_uc, encoding="utf-8", errors="replace").read()
+                    _mod = False
+                    # 2a. GPIO_SET/GPIO_CLEAR 别名（KC536 只有小写 gpio_set/gpio_clear）
+                    if "#define GPIO_SET" not in _t:
+                        _anchor = "#define gpio_clear(pin)     (OM_GPIO0->DATAOUTCLR = (1<<(pin)))"
+                        if _anchor in _t:
+                            _inject = (_anchor + "\n" +
+                                       "#define GPIO_SET(pin)       (OM_GPIO0->DATAOUTSET = (1<<(pin)))\n" +
+                                       "#define GPIO_CLEAR(pin)     (OM_GPIO0->DATAOUTCLR = (1<<(pin)))")
+                            _t = _t.replace(_anchor, _inject, 1)
+                            _mod = True
+                    # 2b. LEDC 引脚宏
+                    if "#define LEDC_CTRL_PIN" not in _t:
+                        _marker = "//* USB 5V以及充电检测配置 */"
+                        if _marker in _t:
+                            _inject = ("//* LEDC 灯带配置 */\n"
+                                       "#define LEDC_CTRL_PIN           (P34)\n"
+                                       "#define LEDC_PIN                (P21)\n"
+                                       "#define LEDC_RGB_NUMBER         7\n"
+                                       "#define LEDC_RGB_DATA_SIZE      LEDC_RGB_NUMBER*3\n\n")
+                            _t = _t.replace(_marker, _inject + _marker, 1)
+                            _mod = True
+                    if _mod:
+                        open(_uc, "w", encoding="utf-8").write(_t)
+                        apply_info["ledc_macros_added"] = True
+                    else:
+                        apply_info["ledc_macros_added"] = False
+            except Exception as _e:
+                apply_info["ledc_macros_error"] = str(_e)
+        cfg_path = _os.path.join(target_path, "projects", "mouse_demo", "periph", "user_config.h")
+        if _os.path.isfile(cfg_path):
+            text = None
+            for enc in ("utf-8", "gbk"):
+                try: text = open(cfg_path, encoding=enc).read(); break
+                except Exception: pass
+            if text:
+                text = _re.sub(r'(#define\s+iPROJECT_ID_L\s+)0x[0-9A-Fa-f]+', r'\g<1>' + proj_id, text)
+                text = _re.sub(r'(#define\s+iPROJECT_NAME\s+)"[^"]*"', r'\g<1>"' + proj_name + '"', text)
+                if consumer_name:
+                    text = _re.sub(r'(#define\s+iCONSUMER_NAME\s+)"[^"]*"', r'\g<1>"' + consumer_name + '"', text)
+                text = _re.sub(r'(#define\s+iREAL_VERSION_ID\s+)\d+', r'\g<1>' + str(version), text)
+                open(cfg_path, "w", encoding="utf-8").write(text)
+        # 清理事务备份目录
+        import glob as _glob
+        import shutil as _sh2
+        cleaned = []
+        for bak in _glob.glob(_os.path.join(target_path, ".omcfg_bak_*")):
+            try:
+                _sh2.rmtree(bak)
+                cleaned.append(_os.path.basename(bak))
+            except Exception:
+                pass
+        return {"ok": True, "target": target_path, "changed": changed, "added": added,
+                "cleaned_backups": cleaned,
+                "changed_count": len(changed), "added_count": len(added),
+                "proj_id": proj_id, "proj_name": proj_name, "apply": apply_info}
+    def generate_project_to_root(self, workspace: str, output_root: str, proj_id: str,
+                                  proj_name: str, consumer_name: str = "", version: int = 1) -> dict:
+        """在 output_root 下按项目规范生成新工程。
+
+        目录结构: output_root/<id_nozero>_<name>/software/trunk/SE71M_<id4>_<name>_V<n>_<date>/
+        并创建 description/ 和 sample/ 空目录。
+        """
+        import os as _os
+        import datetime as _dt
+        import re as _re
+        if not _os.path.isdir(output_root):
+            return {"ok": False, "error": "输出根目录不存在: " + output_root}
+        id_str = (proj_id or "").strip()
+        id_hex = id_str[2:] if id_str.lower().startswith("0x") else id_str
+        try:
+            id_int = int(id_hex, 16)
+        except Exception:
+            return {"ok": False, "error": "ID 格式错误: " + str(proj_id)}
+        id_4digit = "%04X" % id_int
+        id_nozero = id_4digit.lstrip("0") or "0"
+        name = (proj_name or "").strip()
+        if not name:
+            return {"ok": False, "error": "项目名为空"}
+        if not _re.match(r'^[A-Za-z0-9_\-]+$', name):
+            return {"ok": False, "error": "项目名只能含字母数字下划线连字符: " + name}
+        date_str = _dt.datetime.now().strftime("%Y%m%d")
+        project_root_name = id_nozero + "_" + name
+        project_root = _os.path.join(output_root, project_root_name)
+        if _os.path.exists(project_root):
+            return {"ok": False, "error": "项目根目录已存在: " + project_root}
+        trunk_dir = _os.path.join(project_root, "software", "trunk")
+        _os.makedirs(trunk_dir, exist_ok=True)
+        target_name = "SE71M_" + id_4digit + "_" + name + "_V" + str(version) + "_" + date_str
+        target_path = _os.path.join(trunk_dir, target_name)
+        r = self.generate_project(workspace, target_path, proj_id, proj_name, consumer_name, version)
+        if not r.get("ok"):
+            return r
+        desc_dir = _os.path.join(project_root, "description")
+        sample_dir = _os.path.join(project_root, "sample")
+        _os.makedirs(desc_dir, exist_ok=True)
+        _os.makedirs(sample_dir, exist_ok=True)
+        r["project_root"] = project_root
+        r["target"] = target_path
+        r["description_dir"] = desc_dir
+        r["sample_dir"] = sample_dir
+        return r
+
+    def cleanup_workspace(self, workspace: str) -> dict:
+        """删除工作区目录（重新准备工程前调用）。"""
+        import os as _os
+        import shutil as _sh
+        if not _os.path.exists(workspace):
+            return {"ok": True, "msg": "工作区不存在"}
+        try:
+            _sh.rmtree(workspace)
+            return {"ok": True, "msg": "已清理"}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def open_folder(self, path: str) -> dict:
+        """用资源管理器打开目录。"""
+        import os as _os
+        import subprocess as _sp
+        if not _os.path.isdir(path):
+            return {"ok": False, "error": "目录不存在: " + path}
+        try:
+            if _os.name == "nt":
+                _sp.Popen(["explorer", path])
+            else:
+                _sp.Popen(["xdg-open", path])
+            return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def inject_ledc_files(self, workspace: str, source_pool: str, force: bool = False) -> dict:
+        """从 source_pool 注入 4 个 LEDC 文件到工作区，自动清洗缺失依赖。"""
+        from . import ledc_injector
+        import os as _os
+        if not _os.path.isdir(workspace):
+            return {"ok": False, "error": "工作区不存在: " + workspace}
+        if not _os.path.isdir(source_pool):
+            return {"ok": False, "error": "源工程不存在: " + source_pool}
+        return ledc_injector.inject(source_pool, workspace, force=force)
+
+    def prepare_workspace_with_modules(self, template_path: str, workspace: str, modules: list) -> dict:
+        """
+        modules 示例: ["ledc"]
+        返回: {ok, workspace, modules: {ledc: {...}}, error?}
+        """
+        mods = []
+        for m in (modules or []):
+            s = str(m).strip().lower()
+            if s and s not in mods:
+                mods.append(s)
+
+        agg = {"ok": False, "workspace": workspace, "modules": {}}
+
+        try:
+            r = self.prepare_workspace(template_path, workspace)
+            if isinstance(r, dict) and not r.get("ok", True):
+                agg.update(error="prepare_workspace failed", detail=r)
+                return agg
+
+            r = self.initialize_derived(workspace)
+            if isinstance(r, dict) and not r.get("ok", True):
+                agg.update(error="initialize_derived failed", detail=r)
+                return agg
+
+            for m in mods:
+                if m == "ledc":
+                    ir = self.inject_ledc_files(workspace, LEDC_SOURCE_POOL)
+                    agg["modules"]["ledc"] = ir
+                    if not ir.get("ok", False):
+                        agg.update(error="ledc inject failed", detail=ir)
+                        return agg
+                else:
+                    agg["modules"][m] = {"ok": False, "error": f"unknown module: {m}"}
+                    agg.update(error=f"unknown module: {m}")
+                    return agg
+
+            agg["ok"] = True
+            return agg
+
+        except Exception as e:
+            agg.update(ok=False, error=repr(e))
+            return agg
     def preview(self, sdk_path: str) -> dict:
         try:
             root = sdk.resolve_sdk(sdk_path)
