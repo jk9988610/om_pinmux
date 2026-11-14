@@ -136,6 +136,7 @@ def init_project(
     force: bool = False,
     verbose: bool = True,
     announce_next: bool = True,
+    tx: "FileTransaction | None" = None,
 ) -> Path | None:
     """安装配置并插入标记；成功返回 manifest 路径（无变化时 None）。
 
@@ -143,7 +144,8 @@ def init_project(
     """
     root_path = Path(root)
     source = Path(config_source)
-    transaction = FileTransaction.create(root_path, "omcfg_init")
+    owns_tx = tx is None
+    transaction = tx if tx is not None else FileTransaction.create(root_path, "omcfg_init")
     config_target = model.default_config_path(root_path)
     if config_target.is_file():
         if config_target.read_bytes() != source.read_bytes():
@@ -202,9 +204,14 @@ def init_project(
                 print(f"已补 USER CODE 保护区: {path}")
 
     if transaction.actions:
-        manifest = transaction.commit()
-        if verbose:
-            print(f"事务 manifest: {manifest}")
+        if owns_tx:
+            manifest = transaction.commit()
+            if verbose:
+                print(f"事务 manifest: {manifest}")
+        else:
+            manifest = None
+            if verbose:
+                print("标识并入外部事务（caller 统一 commit）")
     else:
         manifest = None
         if verbose:

@@ -126,8 +126,65 @@ def _check_markers(project_root: Path, scenario: Scenario) -> list[str]:
 
 
 
+_RMTREE_ATTEMPTS = 3
+_RMTREE_DELAY = 1.0
+
+
+def _locked_files(root: Path) -> list[str]:
+    """列出 root 下「打不开 r+b」的文件（近似被锁，非精确句柄枚举）。
+
+    只读文件也会被误报；实际排查够用，不引入 psutil 依赖。
+    """
+    locked: list[str] = []
+    root = Path(root)
+    if not root.is_dir():
+        return locked
+    for path in root.rglob("*"):
+        if not path.is_file():
+            continue
+        try:
+            path.open("r+b").close()
+        except (PermissionError, OSError):
+            try:
+                locked.append(path.relative_to(root).as_posix())
+            except ValueError:
+                locked.append(path.as_posix())
+    return locked
+
+
+def _rmtree_with_retry(
+    path: Path, attempts: int = _RMTREE_ATTEMPTS, delay: float = _RMTREE_DELAY
+) -> tuple[bool, list[str]]:
+    """删除目录；遇 PermissionError 重试 attempts 次（间隔 delay 秒）。
+
+    返回 (成功, 锁定文件相对路径列表)。
+    先预检锁文件，有锁则不开始删——避免 rmtree 删一半留下残缺目录。
+    非 PermissionError 的 OSError 直接上抛，不重试。
+    """
+    import time
+
+    path = Path(path)
+    if not path.exists():
+        return True, []
+    # 预检：有打不开的文件就不开始删，防止 rmtree 删一半失败
+    pre_locked = _locked_files(path)
+    if pre_locked:
+        return False, pre_locked
+    for i in range(attempts):
+        try:
+            shutil.rmtree(path)
+            return True, []
+        except PermissionError:
+            if i < attempts - 1:
+                time.sleep(delay)
+        except OSError:
+            raise
+    locked = _locked_files(path) if path.exists() else []
+    return False, locked
+
+
 def run_smoke(out_dir: Path | str, scenarios: list[Scenario] | None = None,
-              verbose: bool = True) -> list[dict]:
+              verbose: bool = True, skip_locked: bool = False) -> list[dict]:
     """重建全部冒烟工程；返回每个场景的结果 dict 列表。"""
     from . import cli  # 延迟 import 避免循环
 
@@ -143,16 +200,29 @@ def run_smoke(out_dir: Path | str, scenarios: list[Scenario] | None = None,
             print("=" * 70)
         target = out_dir / sc.name
         result = {"name": sc.name, "target": target, "ok": False,
-                  "steps": [], "problems": [], "hardware": sc.hardware}
+                  "steps": [], "problems": [], "hardware": sc.hardware,
+                  "skipped": False}
 
         if target.exists():
-            try:
-                shutil.rmtree(target)
-            except PermissionError as exc:
+            ok, locked = _rmtree_with_retry(target)
+            if not ok:
+                if skip_locked:
+                    result["skipped"] = True
+                    result["problems"].append(
+                        f"旧工程被占用，已跳过：{target}（锁定 {len(locked)} 个文件）"
+                    )
+                    results.append(result)
+                    if verbose:
+                        print(f"  [SKIP] {target} 被占用，跳过")
+                        for name in locked[:10]:
+                            print(f"         锁定: {name}")
+                    continue
                 msg = (
-                    f"无法删除旧工程 {target}（{exc}）。"
-                    "请关闭 Keil / 资源管理器 / 任何占用该目录的程序后重试，"
-                    "或改用 --out 指定另一个输出目录。"
+                    f"无法删除旧工程 {target}（重试 {_RMTREE_ATTEMPTS} 次仍失败）。"
+                    f"锁定 {len(locked)} 个文件："
+                    + (", ".join(locked[:10]) if locked else "(未能枚举)")
+                    + "。请关闭 Keil / 资源管理器 / 任何占用该目录的程序后重试，"
+                    "或改用 --out 指定另一个输出目录，或加 --skip-locked。"
                 )
                 result["problems"].append(msg)
                 results.append(result)
@@ -165,6 +235,7 @@ def run_smoke(out_dir: Path | str, scenarios: list[Scenario] | None = None,
         rc = _run_cli([
             "new", "--name", sc.name, "--target", str(target),
             "--id", sc.id_low, "--scan", str(out_dir),
+            "--no-keep-backup",
         ])
 
         if rc != 0:
@@ -190,6 +261,10 @@ def run_smoke(out_dir: Path | str, scenarios: list[Scenario] | None = None,
             if verbose: print(f"  [FAIL] gen rc={rc}")
             continue
         result["steps"].append("gen --apply")
+        # 冒烟工程是重建产物，不留 gen 事务备份（避免 _test_gen 里堆积 .omcfg_bak_*）
+        for _bak in target.glob(".omcfg_bak_*"):
+            if _bak.is_dir():
+                shutil.rmtree(_bak, ignore_errors=True)
 
         rc = _run_cli(["check", "--sdk", str(target), str(cfg)])
 
@@ -216,7 +291,10 @@ def run_smoke(out_dir: Path | str, scenarios: list[Scenario] | None = None,
         print("汇总")
         print("=" * 70)
         for r in results:
-            status = "PASS" if r["ok"] else "FAIL"
+            if r.get("skipped"):
+                status = "SKIP"
+            else:
+                status = "PASS" if r["ok"] else "FAIL"
             proj = r["target"] / "projects/mouse_demo/keil5/SE71M.uvprojx"
             print(f"  [{status}] {r['name']:<14} {proj}")
         print("\n下一步：Keil 打开上述 .uvprojx 逐个编译，按各场景硬件要点烧录验证。")

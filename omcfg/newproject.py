@@ -70,7 +70,7 @@ def copy_skeleton(source: Path | str, target: Path | str) -> int:
     return sum(1 for path in dst.rglob("*") if path.is_file())
 
 
-def _rewrite(path: Path, transform, records: list[Rewrite]) -> None:
+def _rewrite(path: Path, transform, records: list[Rewrite], tx=None) -> None:
     if not path.is_file():
         return
     source = sdk.read_source(path)
@@ -78,9 +78,11 @@ def _rewrite(path: Path, transform, records: list[Rewrite]) -> None:
     if after == source.text:
         return
     sdk.ensure_encodable(after, source.encoding)
-    path.write_bytes(
-        sdk.SourceFile(path, after, source.encoding, source.newline, source.bom).render()
-    )
+    rendered = sdk.SourceFile(path, after, source.encoding, source.newline, source.bom).render()
+    if tx is not None:
+        tx.write_bytes(path, rendered, "改写 BLE 广播名")
+    else:
+        path.write_bytes(rendered)
     records.extend(changes)
 
 
@@ -113,8 +115,11 @@ def _rewrite_adv_names(text: str, names: list[str], display: str) -> tuple[str, 
     return MOUSE_NAME_MEMCPY_RE.sub(replace, text), records
 
 
-def rewrite_identity(root: Path | str, config: dict) -> list[Rewrite]:
-    """按 project.ble_names 改写不属于生成区的 BLE 广播名。"""
+def rewrite_identity(root: Path | str, config: dict, tx=None) -> list[Rewrite]:
+    """按 project.ble_names 改写不属于生成区的 BLE 广播名。
+
+    tx 传入时改写并入外部 FileTransaction（供 new 整体回滚）；缺省就地写盘。
+    """
     names = model.ble_names(config)
     if not names:
         return []
@@ -124,11 +129,13 @@ def rewrite_identity(root: Path | str, config: dict) -> list[Rewrite]:
         root_path / MOUSE_NAME_PATH,
         lambda text: _rewrite_mouse_name(text, names[0], MOUSE_NAME_PATH.as_posix()),
         records,
+        tx=tx,
     )
     _rewrite(
         root_path / ADV_NAME_PATH,
         lambda text: _rewrite_adv_names(text, names, ADV_NAME_PATH.as_posix()),
         records,
+        tx=tx,
     )
     return records
 

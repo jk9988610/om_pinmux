@@ -119,7 +119,7 @@ def fake_baseline(tmp_path, monkeypatch):
 
 def test_new_copies_without_artifacts(fake_baseline, tmp_path, capsys):
     target = tmp_path / "new"
-    code = cli.main(["new", "--name", "KC536X", "--target", str(target)])
+    code = cli.main(["new", "--name", "KC536X", "--target", str(target), "--no-keep-backup"])
     assert code == cli.EXIT_OK
     output = capsys.readouterr().out
     assert "内置基线:" in output
@@ -178,6 +178,57 @@ def test_new_rewrites_identity(fake_baseline, tmp_path, capsys):
     adv = (target / "projects/mouse_demo/main/ex2_app_mouse.c").read_text(encoding="utf-8")
     assert '"KC536X Bt1"' in adv
     assert '"KC536X Bt2"' in adv
+
+
+def test_new_keep_backup_manifest_exists(fake_baseline, tmp_path, capsys):
+    target = tmp_path / "new"
+    code = cli.main(["new", "--name", "KC536X", "--target", str(target)])
+    assert code == cli.EXIT_OK
+    manifests = list(target.glob(".omcfg_bak_*/manifest.json"))
+    assert len(manifests) == 1, f"默认应保留 1 个 manifest，实际: {manifests}"
+    import json
+    payload = json.loads(manifests[0].read_text(encoding="utf-8"))
+    assert payload["schema"] == "om6239-file-transaction/v1"
+    paths = [entry["path"] for entry in payload["entries"]]
+    assert any("mouse_hw.c" in p for p in paths), f"BLE 名改写未进事务: {paths}"
+    assert any("ex2_app_mouse.c" in p for p in paths), f"BLE 广播名未进事务: {paths}"
+
+
+def test_new_then_rollback_restores_ble_name(fake_baseline, tmp_path, capsys):
+    from omcfg.transaction import rollback_manifest
+    target = tmp_path / "new"
+    code = cli.main(["new", "--name", "KC536X", "--target", str(target)])
+    assert code == cli.EXIT_OK
+    manifest = next(target.glob(".omcfg_bak_*/manifest.json"))
+    mouse_path = target / "projects/mouse_demo/main/mouse_hw.c"
+    assert "KC536X Bt1" in mouse_path.read_text(encoding="utf-8")
+    rollback_manifest(manifest)
+    assert "BT5.1Mouse" in mouse_path.read_text(encoding="utf-8")
+
+
+def test_rewrite_identity_uses_tx(fake_baseline):
+    """证明 rewrite_identity 在 tx 传入时走 tx.write_bytes，而非 path.write_bytes 直接落盘。"""
+    from omcfg import model
+    config = model.load_config(CONFIGS / "KC536.omcfg")
+
+    adv_path = fake_baseline / "projects/mouse_demo/main/ex2_app_mouse.c"
+    adv_before = adv_path.read_bytes()
+
+    class FakeTx:
+        def __init__(self):
+            self.writes = []
+        def write_bytes(self, path, data, detail="已写入事务"):
+            self.writes.append(str(path))
+
+    tx = FakeTx()
+    records = newproject.rewrite_identity(fake_baseline, config, tx=tx)
+
+    assert tx.writes, "rewrite_identity 必须走 tx.write_bytes"
+    assert any("ex2_app_mouse.c" in p for p in tx.writes), (
+        f"应经 tx 改写 adv 名，实际写入: {tx.writes}"
+    )
+    # FakeTx 不落盘；若内部绕过 tx 用 path.write_bytes 直接写，磁盘内容会变
+    assert adv_path.read_bytes() == adv_before, "FakeTx 模式下磁盘不应被直接改写"
 
 
 def test_new_rejects_invalid_name(fake_baseline, tmp_path, capsys):

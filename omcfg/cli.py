@@ -207,30 +207,41 @@ def cmd_init(args: argparse.Namespace) -> int:
 
 
 def _apply_outputs(
-    root: Path, outputs: list[generator.GeneratedFile], operation: str = "omcfg_apply"
+    root: Path,
+    outputs: list[generator.GeneratedFile],
+    operation: str = "omcfg_apply",
+    tx=None,
 ) -> tuple[int, Path | None]:
-    """把 changed 输出写盘并产出 manifest；new 与 gen 共用。"""
+    """把 changed 输出写盘并产出 manifest；new 与 gen 共用。
+
+    tx 传入时并入外部事务（caller 负责 commit / 回滚），本地不 commit。
+    """
     changed = [item for item in outputs if item.changed]
     if not changed:
         print("生成结果与 SDK 现状一致")
         return EXIT_OK, None
-    transaction = FileTransaction.create(root, operation)
+    owns_tx = tx is None
+    transaction = tx if tx is not None else FileTransaction.create(root, operation)
     try:
         for item in changed:
             transaction.write_bytes(item.path, item.render(), "按标记块写入生成内容")
-        manifest = transaction.commit()
+        manifest = transaction.commit() if owns_tx else None
     except OSError as exc:
         _error(f"写入失败，已按备份回滚: {exc}", "确认 SDK 副本未被 Keil 打开或占用")
-        for entry in transaction.entries:
-            target = transaction.target_root / entry["path"]
-            backup = transaction.backup_root / entry["backup"] if entry.get("backup") else None
-            if entry.get("existed") and backup and backup.is_file():
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_bytes(backup.read_bytes())
-            elif not entry.get("existed") and target.exists():
-                target.unlink()
+        if owns_tx:
+            for entry in transaction.entries:
+                target = transaction.target_root / entry["path"]
+                backup = transaction.backup_root / entry["backup"] if entry.get("backup") else None
+                if entry.get("existed") and backup and backup.is_file():
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(backup.read_bytes())
+                elif not entry.get("existed") and target.exists():
+                    target.unlink()
         return EXIT_WRITE, None
-    print(f"已写入 {len(changed)} 个文件；manifest: {manifest}")
+    if owns_tx:
+        print(f"已写入 {len(changed)} 个文件；manifest: {manifest}")
+    else:
+        print(f"已写入 {len(changed)} 个文件（并入外部事务）")
     return EXIT_OK, manifest
 
 
@@ -374,19 +385,24 @@ def cmd_new(args: argparse.Namespace) -> int:
     )
     print(f"BLE 广播名: {' / '.join(model.ble_names(config))}")
 
+    transaction = FileTransaction.create(target, "omcfg_new")
+    new_manifest: Path | None = None
     try:
         copied = newproject.copy_skeleton(source, target)
         print(f"新工程: {target}（复制 {copied} 个文件）")
         print(f"不复制: {newproject.NOT_COPIED_SUMMARY}")
         config_target = model.default_config_path(target)
         config_target.parent.mkdir(parents=True, exist_ok=True)
-        config_target.write_bytes(config_payload)
-        rewrites = newproject.rewrite_identity(target, config)
-        init_project(target, config_target, force=False, verbose=False, announce_next=False)
+        transaction.write_bytes(config_target, config_payload, "写入项目配置")
+        rewrites = newproject.rewrite_identity(target, config, tx=transaction)
+        init_project(
+            target, config_target, force=False, verbose=False, announce_next=False, tx=transaction
+        )
         outputs = generator.build_outputs(config, target)
-        code, _manifest = _apply_outputs(target, outputs, "omcfg_new")
+        code, _manifest = _apply_outputs(target, outputs, "omcfg_new", tx=transaction)
         if code != EXIT_OK:
             raise sdk.TargetError("生成内容写入失败")
+        new_manifest = transaction.commit()
     except sdk.TargetError as exc:
         print(f"[ERROR] {exc}", file=sys.stderr)
         shutil.rmtree(target, ignore_errors=True)
@@ -399,7 +415,11 @@ def cmd_new(args: argparse.Namespace) -> int:
 
     macros = newproject.identity_macro_records(source, target)
     records = macros + rewrites
-    newproject.remove_backups(target)
+    if args.keep_backup and new_manifest is not None:
+        print(f"事务 manifest 已保留，可回滚: {new_manifest}")
+    else:
+        newproject.remove_backups(target)
+        print("生成后的 .omcfg_bak_* 已清理（新工程基线不携带历史备份）")
 
     if records:
         print("标识改写（源 -> 新）:")
@@ -407,7 +427,6 @@ def cmd_new(args: argparse.Namespace) -> int:
             print(f"  {record.render()}")
     else:
         print("标识改写: 与源工程一致，未改写")
-    print("生成后的 .omcfg_bak_* 已清理（新工程基线不携带历史备份）")
     print(f"下一步: python -m omcfg check {config_target}")
     project = uvprojx.project_path(config, target)
     if project:
@@ -418,7 +437,7 @@ def cmd_new(args: argparse.Namespace) -> int:
 def cmd_smoke(args: argparse.Namespace) -> int:
     """重建三 logo 形态冒烟工程。"""
     out = Path(args.out).expanduser().resolve()
-    results = smoke.run_smoke(out)
+    results = smoke.run_smoke(out, skip_locked=getattr(args, "skip_locked", False))
     return EXIT_OK if all(r["ok"] for r in results) else EXIT_VALIDATION
 
 
@@ -603,6 +622,12 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="DIR",
         help="额外的已生成工程父目录，用于项目号碰撞检查（可重复）",
     )
+    new.add_argument(
+        "--keep-backup",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="保留 new 的事务备份与 manifest（默认保留，便于 rollback；--no-keep-backup 关闭）",
+    )
 
     rollback = sub.add_parser(
         "rollback",
@@ -638,6 +663,11 @@ def build_parser() -> argparse.ArgumentParser:
         default="_test_gen",
         metavar="DIR",
         help="冒烟工程输出目录（默认 _test_gen）",
+    )
+    smoke_cmd.add_argument(
+        "--skip-locked",
+        action="store_true",
+        help="旧工程被 Keil 占用时跳过该场景（记 [SKIP]），继续重建其余工程",
     )
 
     return parser
