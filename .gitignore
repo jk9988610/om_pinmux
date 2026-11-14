@@ -42,4 +42,7 @@ baseline/sdk/**/*.d
 # 转码/编辑备份（本地保留，不入仓库）
 omcfg/templates/_bak/
 
+# omcfg 事务备份（gen --apply 每次产生，可随时从 manifest 回滚，不入仓库）
+.omcfg_bak_*/
+
 
