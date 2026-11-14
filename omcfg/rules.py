@@ -247,13 +247,13 @@ def audit(config: dict, root: Path | str, strict: bool = False) -> validate.Repo
         add("led.polarity", "led_r_on()", "user_config.h 缺少 led_r_on() 宏")
 
     ledc_text = _read(root, sdk.PERIPH / "ledc.c")
-    ctrl = pins.get("LEDC_CTRL_PIN", {}).get("pin", "")
+    data_pin = pins.get("LEDC_PIN", {}).get("pin", "")
     sel = LEDC_SEL_RE.search(ledc_text) if ledc_text else None
-    if sel and ctrl and sel.group(1) != ctrl[1:]:
+    if sel and data_pin and sel.group(1) != data_pin[1:]:
         add(
             "led.driver",
-            "pins.LEDC_CTRL_PIN",
-            f"ledc.c 写死 PMU_LEDC_SEL_IO_{sel.group(1)}，与 LEDC_CTRL_PIN({ctrl}) 不对应",
+            "pins.LEDC_PIN",
+            f"ledc.c 写死 PMU_LEDC_SEL_IO_{sel.group(1)}，与 LEDC_PIN({data_pin}) 不对应",
             "LEDC 数据脚需手工改 ledc.c 并确认 PINMUX 解锁；本阶段只提示",
         )
 

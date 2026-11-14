@@ -155,8 +155,8 @@
 //}
 
 //* LOGO灯配置 */
-#define LEDC_CTRL_PIN           (P05)
-#define LEDC_PIN                (P34)
+#define LEDC_CTRL_PIN           (P34)
+#define LEDC_PIN                (P05)
 #define LEDC_RGB_NUMBER         6
 #define LEDC_RGB_DATA_SIZE      LEDC_RGB_NUMBER*3
 

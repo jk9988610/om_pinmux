@@ -74,7 +74,7 @@ def constraint_pins(
         return {str(pin) for pin in common} or None
     if role in ("WHEEL_A_PIN", "WHEEL_B_PIN"):
         return _encoder_pin_set(chip) or None
-    if role == "LEDC_CTRL_PIN":
+    if role == "LEDC_PIN":
         return _ledc_pin_set(chip) or None
     return None
 
@@ -111,7 +111,7 @@ def role_pin_problem(
         common = [str(item) for item in _mux(chip).get("LVD", {}).get("common_pins", [])]
         if common and pin not in common:
             return f"{pin} 不具备 LVD 功能（只能 {'/'.join(common)}）"
-    if role == "LEDC_CTRL_PIN":
+    if role == "LEDC_PIN":
         options = sorted(_ledc_pin_set(chip))
         if options and pin not in options:
             return f"{pin} 不具备 LEDC 功能（LEDC_SEL 只能 {'/'.join(options)}）"

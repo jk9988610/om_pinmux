@@ -39,9 +39,11 @@ def test_usb_pins_only_offer_usb_functions():
 
 
 def test_ledc_and_encoder_constraints():
-    pins = pinmap.constraint_pins(None, "LEDC_CTRL_PIN")
+    pins = pinmap.constraint_pins(None, "LEDC_PIN")
     assert pins == {"P01", "P05", "P21", "P33"}
-    assert pinmap.role_pin_problem(None, "LEDC_CTRL_PIN", "P34")
+    assert pinmap.role_pin_problem(None, "LEDC_PIN", "P34")
+    # LEDC_CTRL_PIN 是 MOS 控制脚，任意普通 GPIO，无 LEDC 功能约束
+    assert pinmap.constraint_pins(None, "LEDC_CTRL_PIN") is None
     assert pinmap.role_pin_problem(None, "WHEEL_A_PIN", "P10")
 
 

@@ -55,9 +55,14 @@ def test_wheel_mismatch_is_error():
 
 def test_ledc_control_must_be_selector_pin():
     config = _load("CH04")
-    config["pins"]["LEDC_CTRL_PIN"] = "P07"
+    config["pins"]["LEDC_PIN"] = "P07"
     report = validate.validate_config(config)
     assert any("LEDC_SEL" in issue.message for issue in report.errors)
+    # 对照：LEDC_CTRL_PIN 是 MOS 控制脚，任意普通 GPIO 合法，不应报 LEDC_SEL
+    config2 = _load("CH04")
+    config2["pins"]["LEDC_CTRL_PIN"] = "P07"
+    report2 = validate.validate_config(config2)
+    assert not any("LEDC_SEL" in issue.message for issue in report2.errors)
 
 
 def test_ledc_ctrl_pin_is_optional():
