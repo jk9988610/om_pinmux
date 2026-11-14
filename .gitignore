@@ -46,3 +46,7 @@ omcfg/templates/_bak/
 .omcfg_bak_*/
 
 
+
+*.bak
+*.bak-*
+docs/oneshot/

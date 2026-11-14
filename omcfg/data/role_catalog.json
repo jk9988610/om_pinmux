@@ -1,0 +1,754 @@
+{
+  "schema": "om6239-role-catalog/v1",
+  "generated_from": "E:/history + E:/M_2026 全量扫描（93 独立项目，66 宏名）",
+  "policy": "主流优先：>=80 项目入 core，10-80 入 main(optional)，<10 入 extended",
+  "roles": [
+    {
+      "id": "lvd",
+      "display_name": "低压检测",
+      "tier": "core",
+      "aliases": {
+        "*": "LVD_PIN"
+      },
+      "default_direction": "input",
+      "v1": true
+    },
+    {
+      "id": "sensor.sclk",
+      "display_name": "传感器时钟",
+      "tier": "core",
+      "aliases": {
+        "*": "SENSOR_SCLK_PIN"
+      },
+      "pin_stable": true,
+      "v1": true
+    },
+    {
+      "id": "usb.dn",
+      "display_name": "USB D-",
+      "tier": "core",
+      "aliases": {
+        "*": "USB_DN_PIN"
+      },
+      "fixed": true,
+      "pin_stable": true,
+      "v1": true
+    },
+    {
+      "id": "usb.dp",
+      "display_name": "USB D+",
+      "tier": "core",
+      "aliases": {
+        "*": "USB_DP_PIN"
+      },
+      "fixed": true,
+      "pin_stable": true,
+      "v1": true
+    },
+    {
+      "id": "wheel.a",
+      "display_name": "滚轮 A",
+      "tier": "core",
+      "aliases": {
+        "*": "WHEEL_A_PIN",
+        "406-V580": "H_ENCODER_A_PIN"
+      },
+      "pair_with": "wheel.b",
+      "v1": true
+    },
+    {
+      "id": "wheel.b",
+      "display_name": "滚轮 B",
+      "tier": "core",
+      "aliases": {
+        "*": "WHEEL_B_PIN",
+        "406-V580": "H_ENCODER_B_PIN"
+      },
+      "pair_with": "wheel.a",
+      "v1": true
+    },
+    {
+      "id": "flash.cs",
+      "display_name": "Flash CS",
+      "tier": "core",
+      "aliases": {
+        "*": "FLASH_CS_PIN"
+      },
+      "fixed": true,
+      "pin_stable": true,
+      "v1": true
+    },
+    {
+      "id": "flash.miso",
+      "display_name": "Flash MISO",
+      "tier": "core",
+      "aliases": {
+        "*": "FLASH_MISO_PIN"
+      },
+      "fixed": true,
+      "pin_stable": true,
+      "v1": true
+    },
+    {
+      "id": "flash.mosi",
+      "display_name": "Flash MOSI",
+      "tier": "core",
+      "aliases": {
+        "*": "FLASH_MOSI_PIN"
+      },
+      "fixed": true,
+      "pin_stable": true,
+      "v1": true
+    },
+    {
+      "id": "flash.sclk",
+      "display_name": "Flash SCLK",
+      "tier": "core",
+      "aliases": {
+        "*": "FLASH_SCLK_PIN"
+      },
+      "fixed": true,
+      "pin_stable": true,
+      "v1": true
+    },
+    {
+      "id": "key.r0",
+      "display_name": "按键 R0",
+      "tier": "core",
+      "aliases": {
+        "*": "KEY_R0_PIN"
+      },
+      "default_direction": "input",
+      "default_pull": "pullup",
+      "default_level": "high",
+      "note": "无 key.c0 时为独立键，有则为矩阵行",
+      "v1": true
+    },
+    {
+      "id": "key.r1",
+      "display_name": "按键 R1",
+      "tier": "core",
+      "aliases": {
+        "*": "KEY_R1_PIN"
+      },
+      "default_direction": "input",
+      "default_pull": "pullup",
+      "default_level": "high",
+      "v1": true
+    },
+    {
+      "id": "key.r2",
+      "display_name": "按键 R2",
+      "tier": "core",
+      "aliases": {
+        "*": "KEY_R2_PIN"
+      },
+      "default_direction": "input",
+      "default_pull": "pullup",
+      "default_level": "high",
+      "v1": true
+    },
+    {
+      "id": "mode_led.g",
+      "display_name": "模式灯 G",
+      "tier": "core",
+      "aliases": {
+        "*": "LED_MODE_G_PIN"
+      },
+      "default_direction": "output",
+      "default_level": "low",
+      "v1": true
+    },
+    {
+      "id": "mode_led.r",
+      "display_name": "模式灯 R",
+      "tier": "core",
+      "aliases": {
+        "*": "LED_MODE_R_PIN"
+      },
+      "default_direction": "output",
+      "default_level": "low",
+      "v1": true
+    },
+    {
+      "id": "sensor.motion",
+      "display_name": "传感器中断",
+      "tier": "core",
+      "aliases": {
+        "*": "SENSOR_MOTION_PIN"
+      },
+      "default_direction": "input",
+      "default_pull": "pullup",
+      "v1": true
+    },
+    {
+      "id": "mode_led.b",
+      "display_name": "模式灯 B",
+      "tier": "core",
+      "aliases": {
+        "*": "LED_MODE_B_PIN"
+      },
+      "default_direction": "output",
+      "default_level": "low",
+      "v1": true
+    },
+    {
+      "id": "key.dpi",
+      "display_name": "DPI 键",
+      "tier": "core",
+      "aliases": {
+        "*": "KEY_DPI_PIN"
+      },
+      "default_direction": "input",
+      "default_pull": "pullup",
+      "default_level": "high",
+      "v1": true
+    },
+    {
+      "id": "bat_chg",
+      "display_name": "充电检测",
+      "tier": "core",
+      "aliases": {
+        "*": "BAT_CHG_PIN",
+        "323-661/SE70M_0016_G800_RLS": "BAT_CHG_DET_PIN",
+        "342-HTS-A02/MS11/SE71M_0124_MS11_V5_20251209": "BAT_CHARGE_CHECK_PIN"
+      },
+      "default_direction": "input",
+      "v1": true
+    },
+    {
+      "id": "key.p",
+      "display_name": "按键 P",
+      "tier": "core",
+      "aliases": {
+        "*": "KEY_P_PIN"
+      },
+      "default_direction": "input",
+      "default_pull": "pullup",
+      "default_level": "high",
+      "v1": true
+    },
+    {
+      "id": "key.b",
+      "display_name": "按键 B",
+      "tier": "core",
+      "aliases": {
+        "*": "KEY_B_PIN"
+      },
+      "default_direction": "input",
+      "default_pull": "pullup",
+      "default_level": "high",
+      "v1": true
+    },
+    {
+      "id": "sensor.sdio",
+      "display_name": "传感器数据（三线）",
+      "tier": "core",
+      "aliases": {
+        "*": "SENSOR_SDIO_PIN"
+      },
+      "exclusive_with": [
+        "sensor.ncs",
+        "sensor.mosi",
+        "sensor.miso"
+      ],
+      "pin_stable": true,
+      "v1": true
+    },
+    {
+      "id": "key.pair",
+      "display_name": "对码键（已下线趋势）",
+      "tier": "core",
+      "aliases": {
+        "*": "KEY_PAIR_PIN"
+      },
+      "optional": true,
+      "deprecated": false,
+      "note": "近3月15次，末次2026-11-02；495注释PAIR是个案非趋势",
+      "v1": true
+    },
+    {
+      "id": "led.r",
+      "display_name": "业务灯 R",
+      "tier": "main",
+      "aliases": {
+        "*": "LED_R_PIN",
+        "331-M37/SE71M_0168_MA608_1_20260313": "LED_D1_PIN"
+      },
+      "optional": true,
+      "default_direction": "output",
+      "default_level": "low",
+      "v1": false
+    },
+    {
+      "id": "led.g",
+      "display_name": "业务灯 G",
+      "tier": "main",
+      "aliases": {
+        "*": "LED_G_PIN",
+        "331-M37/SE71M_0168_MA608_1_20260313": "LED_D2_PIN"
+      },
+      "optional": true,
+      "default_direction": "output",
+      "default_level": "low",
+      "v1": false
+    },
+    {
+      "id": "led.b",
+      "display_name": "业务灯 B",
+      "tier": "main",
+      "aliases": {
+        "*": "LED_B_PIN",
+        "331-M37/SE71M_0168_MA608_1_20260313": "LED_D3_PIN"
+      },
+      "optional": true,
+      "default_direction": "output",
+      "default_level": "low",
+      "v1": false
+    },
+    {
+      "id": "mode.24g",
+      "display_name": "2.4G 模式开关（双脚之一）",
+      "tier": "main",
+      "aliases": {
+        "*": "MODE_24G_PIN"
+      },
+      "optional": true,
+      "pair_with": "mode.ble",
+      "exclusive_with": [
+        "mode.switch"
+      ],
+      "v1": true
+    },
+    {
+      "id": "sensor.ncs",
+      "display_name": "传感器片选（四线 SPI）",
+      "tier": "main",
+      "aliases": {
+        "*": "SENSOR_NCS_PIN"
+      },
+      "optional": true,
+      "exclusive_with": [
+        "sensor.sdio"
+      ],
+      "pin_stable": true,
+      "v1": false
+    },
+    {
+      "id": "sensor.miso",
+      "display_name": "传感器 MISO（四线 SPI）",
+      "tier": "main",
+      "aliases": {
+        "*": "SENSOR_MISO_PIN"
+      },
+      "optional": true,
+      "exclusive_with": [
+        "sensor.sdio"
+      ],
+      "pin_stable": true,
+      "v1": false
+    },
+    {
+      "id": "sensor.mosi",
+      "display_name": "传感器 MOSI（四线 SPI）",
+      "tier": "main",
+      "aliases": {
+        "*": "SENSOR_MOSI_PIN"
+      },
+      "optional": true,
+      "exclusive_with": [
+        "sensor.sdio"
+      ],
+      "pin_stable": true,
+      "v1": false
+    },
+    {
+      "id": "mode.ble",
+      "display_name": "BLE 模式开关（双脚之一）",
+      "tier": "main",
+      "aliases": {
+        "*": "MODE_BLE_PIN"
+      },
+      "optional": true,
+      "pair_with": "mode.24g",
+      "exclusive_with": [
+        "mode.switch"
+      ],
+      "v1": true,
+      "note": "v1 补入：mode.24g 的配对角色，缺它双脚开关不成对"
+    },
+    {
+      "id": "mode.switch",
+      "display_name": "模式开关（单脚）",
+      "tier": "main",
+      "aliases": {
+        "*": "MODE_BLE_24G_PIN",
+        "323-661/SE70M_0016_G800_RLS": "MODE_SELECT_PIN",
+        "489_MW650/software/trunk/SE71M_0489_MW650_V1_20260918": "MODE_WIRED_PIN"
+      },
+      "optional": true,
+      "exclusive_with": [
+        "mode.ble",
+        "mode.24g"
+      ],
+      "trend": "declining",
+      "note": "近3月仅1次，新项目改双脚 MODE_BLE+MODE_24G",
+      "v1": false
+    },
+    {
+      "id": "ledc.ctrl",
+      "display_name": "灯带控制/使能",
+      "tier": "main",
+      "aliases": {
+        "*": "LEDC_CTRL_PIN"
+      },
+      "optional": true,
+      "pair_with": "ledc.din",
+      "trend": "rising",
+      "note": "2026-04/05 首现，近3月13次，占总量76%，实打实新热门",
+      "v1": true
+    },
+    {
+      "id": "ledc.din",
+      "display_name": "灯带数据 DIN",
+      "tier": "main",
+      "aliases": {
+        "*": "LEDC_PIN",
+        "323-661/SE70M_0016_G800_RLS": "LEDC_DATA_PIN"
+      },
+      "optional": true,
+      "pair_with": "ledc.ctrl",
+      "trend": "rising",
+      "note": "2026-04/05 首现，近3月13次，占总量76%，实打实新热门",
+      "v1": true
+    },
+    {
+      "id": "key.c0",
+      "display_name": "矩阵列 C0",
+      "tier": "main",
+      "aliases": {
+        "*": "KEY_C0_PIN"
+      },
+      "optional": true,
+      "note": "有 key.c0 的项目 = 矩阵扫描",
+      "v1": false
+    },
+    {
+      "id": "mode_led.24g_old",
+      "display_name": "旧版模式灯 24G",
+      "tier": "extended",
+      "aliases": {
+        "*": "LED_MODE_24G_PIN"
+      },
+      "deprecated": true,
+      "trend": "new_short_lived",
+      "note": "0x0330-0x0378 短暂出现，后被 LED_MODE_BLE 替代",
+      "v1": false
+    },
+    {
+      "id": "mode_led.bt0_old",
+      "display_name": "旧版模式灯 BT0",
+      "tier": "extended",
+      "aliases": {
+        "*": "LED_MODE_BT0_PIN"
+      },
+      "deprecated": true,
+      "trend": "new_short_lived",
+      "v1": false
+    },
+    {
+      "id": "mode_led.bt1_old",
+      "display_name": "旧版模式灯 BT1",
+      "tier": "extended",
+      "aliases": {
+        "*": "LED_MODE_BT1_PIN"
+      },
+      "deprecated": true,
+      "trend": "new_short_lived",
+      "v1": false
+    },
+    {
+      "id": "oled.power",
+      "display_name": "OLED 屏电源",
+      "tier": "extended",
+      "aliases": {
+        "*": "OLED_POWER_PIN"
+      },
+      "optional": true,
+      "v1": false
+    },
+    {
+      "id": "led.low",
+      "display_name": "低电指示灯",
+      "tier": "extended",
+      "aliases": {
+        "*": "LED_LOW_PIN"
+      },
+      "optional": true,
+      "v1": false
+    },
+    {
+      "id": "led.chg",
+      "display_name": "充电指示灯",
+      "tier": "extended",
+      "aliases": {
+        "*": "LED_CHG_PIN"
+      },
+      "optional": true,
+      "v1": false
+    },
+    {
+      "id": "led.cd",
+      "display_name": "充电/模式双色灯",
+      "tier": "main",
+      "aliases": {
+        "*": "LED_MODE_CD_PIN"
+      },
+      "optional": true,
+      "trend": "new",
+      "note": "0x0516 最新出现",
+      "v1": false
+    },
+    {
+      "id": "key.fire",
+      "display_name": "连发键",
+      "tier": "extended",
+      "aliases": {
+        "*": "KEY_FIRE_PIN"
+      },
+      "optional": true,
+      "v1": false
+    },
+    {
+      "id": "led.c0",
+      "display_name": "独立 LED 0",
+      "tier": "extended",
+      "aliases": {
+        "*": "LED_C0_PIN"
+      },
+      "optional": true,
+      "v1": false
+    },
+    {
+      "id": "led.c1",
+      "display_name": "独立 LED 1",
+      "tier": "extended",
+      "aliases": {
+        "*": "LED_C1_PIN"
+      },
+      "optional": true,
+      "v1": false
+    },
+    {
+      "id": "led.c2",
+      "display_name": "独立 LED 2",
+      "tier": "extended",
+      "aliases": {
+        "*": "LED_C2_PIN"
+      },
+      "optional": true,
+      "v1": false
+    },
+    {
+      "id": "led.c3",
+      "display_name": "独立 LED 3",
+      "tier": "extended",
+      "aliases": {
+        "*": "LED_C3_PIN"
+      },
+      "optional": true,
+      "v1": false
+    },
+    {
+      "id": "rgb",
+      "display_name": "RGB 组合灯",
+      "tier": "extended",
+      "aliases": {
+        "*": "RGB_PIN"
+      },
+      "optional": true,
+      "v1": false
+    },
+    {
+      "id": "rgb.on",
+      "display_name": "RGB 使能",
+      "tier": "extended",
+      "aliases": {
+        "*": "RGB_ON_PIN"
+      },
+      "optional": true,
+      "v1": false
+    },
+    {
+      "id": "uart.digital",
+      "display_name": "数字 UART",
+      "tier": "extended",
+      "aliases": {
+        "*": "DIGITAL_UART_PIN"
+      },
+      "optional": true,
+      "v1": false
+    },
+    {
+      "id": "logo.ctrl",
+      "display_name": "LOGO 灯控制",
+      "tier": "extended",
+      "aliases": {
+        "*": "LOGO_CTRL_PIN"
+      },
+      "optional": true,
+      "v1": false
+    },
+    {
+      "id": "usb.5v_check",
+      "display_name": "USB 5V 检测",
+      "tier": "extended",
+      "aliases": {
+        "*": "USB_5V_CHECK_PIN"
+      },
+      "optional": true,
+      "v1": false
+    },
+    {
+      "id": "power.on",
+      "display_name": "开机检测",
+      "tier": "extended",
+      "aliases": {
+        "*": "POWER_ON_PIN"
+      },
+      "optional": true,
+      "v1": false
+    },
+    {
+      "id": "key.left",
+      "display_name": "左键",
+      "tier": "extended",
+      "aliases": {
+        "*": "KEY_L_PIN"
+      },
+      "optional": true,
+      "v1": false
+    },
+    {
+      "id": "key.mid",
+      "display_name": "中键",
+      "tier": "extended",
+      "aliases": {
+        "*": "KEY_M_PIN"
+      },
+      "optional": true,
+      "v1": false
+    },
+    {
+      "id": "key.right",
+      "display_name": "右键",
+      "tier": "extended",
+      "aliases": {
+        "*": "KEY_R_PIN"
+      },
+      "optional": true,
+      "v1": false
+    },
+    {
+      "id": "h_encoder.a",
+      "display_name": "光编码器 A",
+      "tier": "main",
+      "trend": "new",
+      "aliases": {
+        "406-V580": "H_ENCODER_A_PIN"
+      },
+      "optional": true,
+      "pair_with": "h_encoder.b",
+      "note": "0x0406 新出现",
+      "v1": false
+    },
+    {
+      "id": "h_encoder.b",
+      "display_name": "光编码器 B",
+      "tier": "main",
+      "trend": "new",
+      "aliases": {
+        "406-V580": "H_ENCODER_B_PIN"
+      },
+      "optional": true,
+      "pair_with": "h_encoder.a",
+      "note": "0x0406 新出现",
+      "v1": false
+    },
+    {
+      "id": "mode.wired",
+      "display_name": "有线模式开关",
+      "tier": "main",
+      "trend": "new",
+      "aliases": {
+        "489_MW650": "MODE_WIRED_PIN"
+      },
+      "optional": true,
+      "note": "0x0489 新出现",
+      "v1": false
+    }
+  ],
+  "trend_vocab": {
+    "rising": "项目少但都是近期，代表未来方向",
+    "rising_pending": "疑似新方向，但 ID 受改造工程污染，需人工确认",
+    "new": "id_min >= 0x0300，真·新出现，值得关注",
+    "new_short_lived": "id_min >= 0x0300 但 id_max <= 0x0378，新出现又快速消失",
+    "declining": "老设计，id_max 早于最新项目，新项目不用了"
+  },
+  "v1_policy": "初期只显示 v1=true 的 26 个角色（近3月活跃>=13）；extended 折叠不显示",
+  "demand_groups": [
+    {
+      "id": "ledc.strip",
+      "display_name": "灯带",
+      "roles": [
+        "ledc.din",
+        "ledc.ctrl"
+      ],
+      "required": [
+        "ledc.din"
+      ],
+      "note": "DIN 有芯片约束(4 脚)，CTRL 自由(24 脚)"
+    },
+    {
+      "id": "wheel",
+      "display_name": "滚轮",
+      "roles": [
+        "wheel.a",
+        "wheel.b"
+      ],
+      "required": [
+        "wheel.a",
+        "wheel.b"
+      ],
+      "note": "A/B 必须成对，各 8 脚"
+    },
+    {
+      "id": "mode.switch",
+      "display_name": "模式开关",
+      "roles": [
+        "mode.24g",
+        "mode.ble"
+      ],
+      "required": [
+        "mode.24g",
+        "mode.ble"
+      ],
+      "note": "双脚模式，缺一不可"
+    },
+    {
+      "id": "key.main",
+      "display_name": "主按键",
+      "roles": [
+        "key.r0",
+        "key.r1",
+        "key.r2"
+      ],
+      "required": [
+        "key.r0",
+        "key.r1",
+        "key.r2"
+      ],
+      "note": "三键基础组合，各 24 脚无芯片约束"
+    }
+  ]
+}
