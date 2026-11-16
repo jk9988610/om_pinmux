@@ -9,86 +9,428 @@
     "硬件已定：本工具把原理图网名映射到固件宏 + GPIO 表，供 Keil 工程合并。"
   ],
   "fixed_package": {
-    "VDD": { "pkg": 4, "desc": "3.3V LDO out, 2.2uF~10uF" },
-    "VBUS": { "pkg": 5, "desc": "5V in, >=4.7uF" },
-    "XTALP": { "pkg": 18, "desc": "16MHz crystal +" },
-    "XTALN": { "pkg": 19, "desc": "16MHz crystal -" },
-    "BOOT": { "pkg": 20, "desc": "0=flash boot, 1=sram" },
-    "RF": { "pkg": 21, "desc": "2.4G RF antenna" }
+    "VDD": {
+      "pkg": 4,
+      "desc": "3.3V LDO out, 2.2uF~10uF"
+    },
+    "VBUS": {
+      "pkg": 5,
+      "desc": "5V in, >=4.7uF"
+    },
+    "XTALP": {
+      "pkg": 18,
+      "desc": "16MHz crystal +"
+    },
+    "XTALN": {
+      "pkg": 19,
+      "desc": "16MHz crystal -"
+    },
+    "BOOT": {
+      "pkg": 20,
+      "desc": "0=flash boot, 1=sram"
+    },
+    "RF": {
+      "pkg": 21,
+      "desc": "2.4G RF antenna"
+    }
   },
   "package_pins": [
-    { "pkg": 1, "name": "P32", "side": "left", "idx": 0, "alt": ["PWM"] },
-    { "pkg": 2, "name": "P00", "side": "left", "idx": 1, "alt": ["PWM", "ENCODER"] },
-    { "pkg": 3, "name": "P01", "side": "left", "idx": 2, "alt": ["PWM", "ENCODER", "LEDC"] },
-    { "pkg": 4, "name": "VDD", "side": "left", "idx": 3, "special": true },
-    { "pkg": 5, "name": "VBUS", "side": "left", "idx": 4, "special": true },
-    { "pkg": 6, "name": "P02", "side": "left", "idx": 5, "alt": ["USB_DN"] },
-    { "pkg": 7, "name": "P03", "side": "left", "idx": 6, "alt": ["USB_DP"] },
-    { "pkg": 8, "name": "P04", "side": "left", "idx": 7, "alt": ["PWM", "UART_TX"] },
-
-    { "pkg": 9, "name": "P05", "side": "bottom", "idx": 0, "alt": ["PWM", "LEDC"] },
-    { "pkg": 10, "name": "P06", "side": "bottom", "idx": 1, "alt": ["PWM", "UART_RX"] },
-    { "pkg": 11, "name": "P07", "side": "bottom", "idx": 2, "alt": [] },
-    { "pkg": 12, "name": "P10", "side": "bottom", "idx": 3, "alt": [] },
-    { "pkg": 13, "name": "P11", "side": "bottom", "idx": 4, "alt": ["SCLK", "UART"] },
-    { "pkg": 14, "name": "P12", "side": "bottom", "idx": 5, "alt": ["SDIO", "UART"] },
-    { "pkg": 15, "name": "P13", "side": "bottom", "idx": 6, "alt": [] },
-    { "pkg": 16, "name": "P33", "side": "bottom", "idx": 7, "alt": ["LVD", "LEDC"] },
-
-    { "pkg": 17, "name": "P34", "side": "right", "idx": 7, "alt": [] },
-    { "pkg": 18, "name": "XTALP", "side": "right", "idx": 6, "special": true },
-    { "pkg": 19, "name": "XTALN", "side": "right", "idx": 5, "special": true },
-    { "pkg": 20, "name": "BOOT", "side": "right", "idx": 4, "special": true },
-    { "pkg": 21, "name": "RF", "side": "right", "idx": 3, "special": true },
-    { "pkg": 22, "name": "P36", "side": "right", "idx": 2, "alt": [] },
-    { "pkg": 23, "name": "P20", "side": "right", "idx": 1, "alt": ["ENCODER"] },
-    { "pkg": 24, "name": "P21", "side": "right", "idx": 0, "alt": ["ENCODER", "LEDC"] },
-
-    { "pkg": 25, "name": "P22", "side": "top", "idx": 7, "alt": ["PWM", "UART"] },
-    { "pkg": 26, "name": "P23", "side": "top", "idx": 6, "alt": ["LVD"] },
-    { "pkg": 27, "name": "P24", "side": "top", "idx": 5, "alt": [] },
-    { "pkg": 28, "name": "P25", "side": "top", "idx": 4, "alt": ["UART"] },
-    { "pkg": 29, "name": "P26", "side": "top", "idx": 3, "alt": ["PWM"] },
-    { "pkg": 30, "name": "P27", "side": "top", "idx": 2, "alt": [] },
-    { "pkg": 31, "name": "P30", "side": "top", "idx": 1, "alt": [] },
-    { "pkg": 32, "name": "P31", "side": "top", "idx": 0, "alt": [] }
+    {
+      "pkg": 1,
+      "name": "P32",
+      "side": "left",
+      "idx": 0,
+      "alt": [
+        "PWM"
+      ]
+    },
+    {
+      "pkg": 2,
+      "name": "P00",
+      "side": "left",
+      "idx": 1,
+      "alt": [
+        "PWM",
+        "ENCODER"
+      ]
+    },
+    {
+      "pkg": 3,
+      "name": "P01",
+      "side": "left",
+      "idx": 2,
+      "alt": [
+        "PWM",
+        "ENCODER",
+        "LEDC"
+      ]
+    },
+    {
+      "pkg": 4,
+      "name": "VDD",
+      "side": "left",
+      "idx": 3,
+      "special": true
+    },
+    {
+      "pkg": 5,
+      "name": "VBUS",
+      "side": "left",
+      "idx": 4,
+      "special": true
+    },
+    {
+      "pkg": 6,
+      "name": "P02",
+      "side": "left",
+      "idx": 5,
+      "alt": [
+        "USB_DN"
+      ]
+    },
+    {
+      "pkg": 7,
+      "name": "P03",
+      "side": "left",
+      "idx": 6,
+      "alt": [
+        "USB_DP"
+      ]
+    },
+    {
+      "pkg": 8,
+      "name": "P04",
+      "side": "left",
+      "idx": 7,
+      "alt": [
+        "PWM",
+        "UART_TX"
+      ]
+    },
+    {
+      "pkg": 9,
+      "name": "P05",
+      "side": "bottom",
+      "idx": 0,
+      "alt": [
+        "PWM",
+        "LEDC"
+      ]
+    },
+    {
+      "pkg": 10,
+      "name": "P06",
+      "side": "bottom",
+      "idx": 1,
+      "alt": [
+        "PWM",
+        "UART_RX"
+      ]
+    },
+    {
+      "pkg": 11,
+      "name": "P07",
+      "side": "bottom",
+      "idx": 2,
+      "alt": []
+    },
+    {
+      "pkg": 12,
+      "name": "P10",
+      "side": "bottom",
+      "idx": 3,
+      "alt": []
+    },
+    {
+      "pkg": 13,
+      "name": "P11",
+      "side": "bottom",
+      "idx": 4,
+      "alt": [
+        "SCLK",
+        "UART"
+      ]
+    },
+    {
+      "pkg": 14,
+      "name": "P12",
+      "side": "bottom",
+      "idx": 5,
+      "alt": [
+        "SDIO",
+        "UART"
+      ]
+    },
+    {
+      "pkg": 15,
+      "name": "P13",
+      "side": "bottom",
+      "idx": 6,
+      "alt": []
+    },
+    {
+      "pkg": 16,
+      "name": "P33",
+      "side": "bottom",
+      "idx": 7,
+      "alt": [
+        "LVD",
+        "LEDC"
+      ]
+    },
+    {
+      "pkg": 17,
+      "name": "P34",
+      "side": "right",
+      "idx": 7,
+      "alt": []
+    },
+    {
+      "pkg": 18,
+      "name": "XTALP",
+      "side": "right",
+      "idx": 6,
+      "special": true
+    },
+    {
+      "pkg": 19,
+      "name": "XTALN",
+      "side": "right",
+      "idx": 5,
+      "special": true
+    },
+    {
+      "pkg": 20,
+      "name": "BOOT",
+      "side": "right",
+      "idx": 4,
+      "special": true
+    },
+    {
+      "pkg": 21,
+      "name": "RF",
+      "side": "right",
+      "idx": 3,
+      "special": true
+    },
+    {
+      "pkg": 22,
+      "name": "P36",
+      "side": "right",
+      "idx": 2,
+      "alt": []
+    },
+    {
+      "pkg": 23,
+      "name": "P20",
+      "side": "right",
+      "idx": 1,
+      "alt": [
+        "ENCODER"
+      ]
+    },
+    {
+      "pkg": 24,
+      "name": "P21",
+      "side": "right",
+      "idx": 0,
+      "alt": [
+        "ENCODER",
+        "LEDC"
+      ]
+    },
+    {
+      "pkg": 25,
+      "name": "P22",
+      "side": "top",
+      "idx": 7,
+      "alt": [
+        "PWM",
+        "UART"
+      ]
+    },
+    {
+      "pkg": 26,
+      "name": "P23",
+      "side": "top",
+      "idx": 6,
+      "alt": [
+        "LVD"
+      ]
+    },
+    {
+      "pkg": 27,
+      "name": "P24",
+      "side": "top",
+      "idx": 5,
+      "alt": []
+    },
+    {
+      "pkg": 28,
+      "name": "P25",
+      "side": "top",
+      "idx": 4,
+      "alt": [
+        "UART"
+      ]
+    },
+    {
+      "pkg": 29,
+      "name": "P26",
+      "side": "top",
+      "idx": 3,
+      "alt": [
+        "PWM"
+      ]
+    },
+    {
+      "pkg": 30,
+      "name": "P27",
+      "side": "top",
+      "idx": 2,
+      "alt": []
+    },
+    {
+      "pkg": 31,
+      "name": "P30",
+      "side": "top",
+      "idx": 1,
+      "alt": []
+    },
+    {
+      "pkg": 32,
+      "name": "P31",
+      "side": "top",
+      "idx": 0,
+      "alt": []
+    }
   ],
   "mux": {
     "LEDC_SEL": {
       "reg": "PINMUX_SEL[5:4]",
       "options": [
-        { "code": "0", "pins": ["P01"], "sdk_hint": "PMU_LEDC_SEL_IO_01" },
-        { "code": "1", "pins": ["P05"], "sdk_hint": "PMU_LEDC_SEL_IO_05" },
-        { "code": "2", "pins": ["P21"], "sdk_hint": "PMU_LEDC_SEL_IO_21" },
-        { "code": "3", "pins": ["P33"], "sdk_hint": "PMU_LEDC_SEL_IO_33" }
+        {
+          "code": "0",
+          "pins": [
+            "P01"
+          ],
+          "sdk_hint": "PMU_LEDC_SEL_IO_01",
+          "sdk_supported": true
+        },
+        {
+          "code": "1",
+          "pins": [
+            "P05"
+          ],
+          "sdk_hint": "PMU_LEDC_SEL_IO_05",
+          "sdk_supported": true
+        },
+        {
+          "code": "2",
+          "pins": [
+            "P21"
+          ],
+          "sdk_hint": null,
+          "sdk_supported": false
+        },
+        {
+          "code": "3",
+          "pins": [
+            "P33"
+          ],
+          "sdk_hint": null,
+          "sdk_supported": false
+        }
       ]
     },
     "UART_SEL": {
       "reg": "PINMUX_SEL[1:0]",
       "options": [
-        { "code": "0", "pins": ["P04", "P06"] },
-        { "code": "1", "pins": ["P11", "P12"] },
-        { "code": "2", "pins": ["P22", "P25"] }
+        {
+          "code": "0",
+          "pins": [
+            "P04",
+            "P06"
+          ]
+        },
+        {
+          "code": "1",
+          "pins": [
+            "P11",
+            "P12"
+          ]
+        },
+        {
+          "code": "2",
+          "pins": [
+            "P22",
+            "P25"
+          ]
+        }
       ]
     },
     "ENCODER": {
       "sdk_macros": [
-        { "macro": "ENCODER_PINMUX_SEL_IO_00_01", "pins": ["P00", "P01"] },
-        { "macro": "ENCODER_PINMUX_SEL_IO_05_06", "pins": ["P05", "P06"] },
-        { "macro": "ENCODER_PINMUX_SEL_IO_20_21", "pins": ["P20", "P21"] },
-        { "macro": "ENCODER_PINMUX_SEL_IO_24_25", "pins": ["P24", "P25"] }
+        {
+          "macro": "ENCODER_PINMUX_SEL_IO_00_01",
+          "pins": [
+            "P00",
+            "P01"
+          ]
+        },
+        {
+          "macro": "ENCODER_PINMUX_SEL_IO_05_06",
+          "pins": [
+            "P05",
+            "P06"
+          ]
+        },
+        {
+          "macro": "ENCODER_PINMUX_SEL_IO_20_21",
+          "pins": [
+            "P20",
+            "P21"
+          ]
+        },
+        {
+          "macro": "ENCODER_PINMUX_SEL_IO_24_25",
+          "pins": [
+            "P24",
+            "P25"
+          ]
+        }
       ]
     },
     "LVD": {
-      "common_pins": ["P23", "P33"],
+      "common_pins": [
+        "P23",
+        "P33"
+      ],
       "sdk_pattern": "POF_LVD_PIN_Pxx"
     },
     "USB": {
-      "fixed": { "USB_DN_PIN": "P02", "USB_DP_PIN": "P03" }
+      "fixed": {
+        "USB_DN_PIN": "P02",
+        "USB_DP_PIN": "P03"
+      }
     }
   },
-  "internal_not_on_package": ["P14", "P15", "P16", "P17", "P35", "P37"],
-  "reserved_pins": ["P14", "P15", "P16", "P17", "P35", "P37"],
+  "internal_not_on_package": [
+    "P14",
+    "P15",
+    "P16",
+    "P17",
+    "P35",
+    "P37"
+  ],
+  "reserved_pins": [
+    "P14",
+    "P15",
+    "P16",
+    "P17",
+    "P35",
+    "P37"
+  ],
   "internal_flash": {
     "FLASH_CS_PIN": "P17",
     "FLASH_SCLK_PIN": "P15",
@@ -108,7 +450,12 @@
       "id": "LEDC_WHEEL_COLLISION",
       "stage": "B/D",
       "summary": "drv_pmu_ledc_sel 占用的脚不可与 WHEEL_A/B 重叠（IO_01 抢 P01=滚轮 B 会导致灯带+滚轮同时挂）",
-      "sel_pins": ["P01", "P05", "P21", "P33"]
+      "sel_pins": [
+        "P01",
+        "P05",
+        "P21",
+        "P33"
+      ]
     },
     {
       "id": "LEDC_PINMUX_UNLOCK",
@@ -124,6 +471,12 @@
       "id": "RTE_LEDC",
       "stage": "C/D",
       "summary": "LOGO=LEDC 必须 RTE_LEDC=1，且 Keil 工程编译 ledc.c / ledc_mode.c / drv_ledc.c"
+    },
+    {
+      "id": "LEDC_SEL_SDK_GAP",
+      "stage": "C/D",
+      "summary": "P21/P33 芯片支持 LEDC，但当前 SDK drv_pmu.h 只暴露 PMU_LEDC_SEL_IO_01/05/17/27 枚举（IO_17/IO_27 是 internal flash 脚，实际不可用）。工具只允许 P01/P05 作 LEDC_PIN。若客户必须用 P21/P33，需手工扩 drv_pmu.h 的 pmu_ledc_sel_t 枚举 + 改 drv_pmu_ledc_sel 实现。",
+      "tool_policy": "P01/P05 可用；P21/P33 标记 sdk_supported=false"
     }
   ]
 }

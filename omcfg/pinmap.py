@@ -51,6 +51,8 @@ def _encoder_pin_set(chip: dict[str, Any]) -> set[str]:
 def _ledc_pin_set(chip: dict[str, Any]) -> set[str]:
     pins: set[str] = set()
     for option in _mux(chip).get("LEDC_SEL", {}).get("options", []):
+        if option.get("sdk_supported") is False:
+            continue
         pins.update(str(pin) for pin in option.get("pins", []))
     return pins
 
