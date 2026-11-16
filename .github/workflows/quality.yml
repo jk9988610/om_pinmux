@@ -48,6 +48,8 @@ jobs:
           }
 
       - name: Validate configs
+        env:
+          PYTHONUTF8: "1"
         run: python -m omcfg check --all configs
 
       - name: Pytest with timeout
