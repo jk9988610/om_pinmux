@@ -41,7 +41,7 @@ ADV_MOUSE = "\n".join(
     [
         "void adv_name(void)",
         "{",
-        '    if (device_type == iDEVICE_TYPE_BT0)',
+        "    if (device_type == iDEVICE_TYPE_BT0)",
         '        memcpy(mouse_name, "CH-04 Bt1", sizeof("CH-04 Bt1"));',
         "    else",
         '        memcpy(mouse_name, "CH-04 Bt2", sizeof("CH-04 Bt2"));',
@@ -187,6 +187,7 @@ def test_new_keep_backup_manifest_exists(fake_baseline, tmp_path, capsys):
     manifests = list(target.glob(".omcfg_bak_*/manifest.json"))
     assert len(manifests) == 1, f"默认应保留 1 个 manifest，实际: {manifests}"
     import json
+
     payload = json.loads(manifests[0].read_text(encoding="utf-8"))
     assert payload["schema"] == "om6239-file-transaction/v1"
     paths = [entry["path"] for entry in payload["entries"]]
@@ -196,6 +197,7 @@ def test_new_keep_backup_manifest_exists(fake_baseline, tmp_path, capsys):
 
 def test_new_then_rollback_restores_ble_name(fake_baseline, tmp_path, capsys):
     from omcfg.transaction import rollback_manifest
+
     target = tmp_path / "new"
     code = cli.main(["new", "--name", "KC536X", "--target", str(target)])
     assert code == cli.EXIT_OK
@@ -209,6 +211,7 @@ def test_new_then_rollback_restores_ble_name(fake_baseline, tmp_path, capsys):
 def test_rewrite_identity_uses_tx(fake_baseline):
     """证明 rewrite_identity 在 tx 传入时走 tx.write_bytes，而非 path.write_bytes 直接落盘。"""
     from omcfg import model
+
     config = model.load_config(CONFIGS / "KC536.omcfg")
 
     adv_path = fake_baseline / "projects/mouse_demo/main/ex2_app_mouse.c"
@@ -217,6 +220,7 @@ def test_rewrite_identity_uses_tx(fake_baseline):
     class FakeTx:
         def __init__(self):
             self.writes = []
+
         def write_bytes(self, path, data, detail="已写入事务"):
             self.writes.append(str(path))
 
@@ -224,9 +228,7 @@ def test_rewrite_identity_uses_tx(fake_baseline):
     newproject.rewrite_identity(fake_baseline, config, tx=tx)
 
     assert tx.writes, "rewrite_identity 必须走 tx.write_bytes"
-    assert any("ex2_app_mouse.c" in p for p in tx.writes), (
-        f"应经 tx 改写 adv 名，实际写入: {tx.writes}"
-    )
+    assert any("ex2_app_mouse.c" in p for p in tx.writes), f"应经 tx 改写 adv 名，实际写入: {tx.writes}"
     # FakeTx 不落盘；若内部绕过 tx 用 path.write_bytes 直接写，磁盘内容会变
     assert adv_path.read_bytes() == adv_before, "FakeTx 模式下磁盘不应被直接改写"
 

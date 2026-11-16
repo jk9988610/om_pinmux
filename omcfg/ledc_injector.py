@@ -5,6 +5,7 @@
 lvd.h / led.h / flash_process.h 和 key_io_scan()。这些在 KC536 基线里都有，
 所以不需要清洗。如果未来 KC536 版本删除了某依赖，注入器会自动注释相关行。
 """
+
 import os
 import re
 import shutil
@@ -21,10 +22,11 @@ LEDC_FILES = [
 # 每条：(依赖检测文件相对路径, 依赖检测正则, 目标文件相对路径, 清洗正则, 替换文本)
 SANITIZE_RULES = [
     (
-        "projects/mouse_demo/periph/key_io.c", r'void\s+key_io_scan\s*\(',
+        "projects/mouse_demo/periph/key_io.c",
+        r"void\s+key_io_scan\s*\(",
         "projects/mouse_demo/periph/ledc.c",
-        r'^(\s*)key_io_scan\(\);(\s*)$',
-        r'// key_io_scan();  // [OMCFG-AUTO] 该工程 key_io.c 无 key_io_scan() 定义，已注释',
+        r"^(\s*)key_io_scan\(\);(\s*)$",
+        r"// key_io_scan();  // [OMCFG-AUTO] 该工程 key_io.c 无 key_io_scan() 定义，已注释",
     ),
 ]
 
@@ -50,8 +52,7 @@ def sanitize(workspace):
         new_t, n = re.subn(san_pat, repl, t, flags=re.M)
         if n > 0:
             open(tp, "w", encoding="utf-8").write(new_t)
-            changes.append({"file": target_file, "lines_affected": n,
-                            "reason": "missing " + dep_file})
+            changes.append({"file": target_file, "lines_affected": n, "reason": "missing " + dep_file})
     return changes
 
 
@@ -81,16 +82,33 @@ def update_uvprojx(workspace):
             skipped.append(file_name)
             return False
         # 定位组
-        pat = r'(<GroupName>' + re.escape(group_name) + r'</GroupName>\s*<Files>.*?)(\s*</Files>)'
+        pat = r"(<GroupName>" + re.escape(group_name) + r"</GroupName>\s*<Files>.*?)(\s*</Files>)"
         mm = re.search(pat, text, re.DOTALL)
         if not mm:
             return False
         indent = " " * 12
-        block = (indent + "<File>" + nl +
-                 indent + "  <FileName>" + file_name + "</FileName>" + nl +
-                 indent + "  <FileType>" + str(file_type) + "</FileType>" + nl +
-                 indent + "  <FilePath>" + file_path + "</FilePath>" + nl +
-                 indent + "</File>")
+        block = (
+            indent
+            + "<File>"
+            + nl
+            + indent
+            + "  <FileName>"
+            + file_name
+            + "</FileName>"
+            + nl
+            + indent
+            + "  <FileType>"
+            + str(file_type)
+            + "</FileType>"
+            + nl
+            + indent
+            + "  <FilePath>"
+            + file_path
+            + "</FilePath>"
+            + nl
+            + indent
+            + "</File>"
+        )
         insert_pos = mm.start(2)
         text = text[:insert_pos] + nl + block + text[insert_pos:]
         added.append(file_name)
@@ -103,17 +121,17 @@ def update_uvprojx(workspace):
     # 2. driver 组：drv_ledc.c
     # 先探测 driver 组里已有文件路径前缀（通常是 ..\..\..\hal\driver\common\drv_xxx.c）
     drv_path = "..\\..\\..\\hal\\driver\\om6239\\drv_ledc.c"
-    mm = re.search(r'<GroupName>driver</GroupName>\s*<Files>(.*?)</Files>', text, re.DOTALL)
+    mm = re.search(r"<GroupName>driver</GroupName>\s*<Files>(.*?)</Files>", text, re.DOTALL)
     if mm:
         # 从已有文件推前缀
-        fm = re.search(r'<FilePath>([^<]+)</FilePath>', mm.group(1))
+        fm = re.search(r"<FilePath>([^<]+)</FilePath>", mm.group(1))
         if fm:
             sample = fm.group(1)
             # 例如 ..\..\..\hal\driver\common\drv_gpio.c → 取 ..\..\..\hal\driver\ 前缀
             if "drv_" in sample and "\\" in sample:
                 parts = sample.rsplit("\\", 1)
                 if len(parts) == 2 and parts[0].endswith("common"):
-                    base = parts[0][:-len("common")]
+                    base = parts[0][: -len("common")]
                     drv_path = base + "om6239\\drv_ledc.c"
     _insert_file("driver", "drv_ledc.c", 1, drv_path)
 
@@ -131,6 +149,7 @@ def enable_ledc_rte(workspace):
     注入 LEDC 文件后必须同步打开这个开关。
     """
     import re as _re
+
     candidates = [
         os.path.join(workspace, "projects", "mouse_demo", "config", "RTE_om6239.h"),
         os.path.join(workspace, "hal", "driver", "config_template", "RTE_om6239.h"),
@@ -145,8 +164,8 @@ def enable_ledc_rte(workspace):
         text = raw.decode(enc, errors="replace")
         # 精确匹配 #define RTE_LEDC 后面的值（保留前导空白和尾部注释）
         new_text, n = _re.subn(
-            r'(#define\s+RTE_LEDC\s+)0(\s*)',
-            r'\g<1>1\g<2>',
+            r"(#define\s+RTE_LEDC\s+)0(\s*)",
+            r"\g<1>1\g<2>",
             text,
         )
         if n > 0 and new_text != text:
@@ -181,5 +200,11 @@ def inject(source_pool, workspace, force=False):
     sanitized = sanitize(workspace) if copied else []
     uv_result = update_uvprojx(workspace) if copied else {"ok": True, "added": [], "skipped": [], "reason": "无新文件"}
     rte_result = enable_ledc_rte(workspace) if copied else {"ok": True, "changed": []}
-    return {"ok": True, "copied": copied, "skipped": skipped,
-            "sanitized": sanitized, "uvprojx": uv_result, "rte": rte_result}
+    return {
+        "ok": True,
+        "copied": copied,
+        "skipped": skipped,
+        "sanitized": sanitized,
+        "uvprojx": uv_result,
+        "rte": rte_result,
+    }

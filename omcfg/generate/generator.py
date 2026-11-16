@@ -138,11 +138,7 @@ def build_outputs(config: dict, sdk_root: Path | str) -> list[GeneratedFile]:
             raise sdk.TargetError(f"{src.path} 仍含旧 OM_PINMUX_GENERATED 标记，请先人工迁移")
         after = sdk.replace_block(src.text, BLOCK_FEATURES, features, path)
         sdk.check_user_code(src.text, sdk.USER_CODE_FEATURES, path)
-        outputs.append(
-            GeneratedFile(
-                path, src.text, after, src.encoding, src.newline, src.bom, True, [BLOCK_FEATURES]
-            )
-        )
+        outputs.append(GeneratedFile(path, src.text, after, src.encoding, src.newline, src.bom, True, [BLOCK_FEATURES]))
     else:
         after = _wrap(BLOCK_FEATURES, features) + "\n\n" + _empty_user_code(sdk.USER_CODE_FEATURES)
         outputs.append(
@@ -165,9 +161,7 @@ def build_outputs(config: dict, sdk_root: Path | str) -> list[GeneratedFile]:
             "/* 本文件已退场：periph_gpio_sleep_set() 由 omcfg 生成到 user_config.c 的"
             " OMCFG sleep 块，不再参与编译。 */\n"
         )
-        outputs.append(
-            GeneratedFile(retired, src.text, pointer, src.encoding, src.newline, src.bom, True, [])
-        )
+        outputs.append(GeneratedFile(retired, src.text, pointer, src.encoding, src.newline, src.bom, True, []))
 
     project = uvprojx.project_path(config, root)
     if project is not None:

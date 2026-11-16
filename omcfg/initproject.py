@@ -77,21 +77,13 @@ def is_initialized(root: Path | str) -> bool:
 
 
 def _anchor_index(lines: list[str], needle: str, starts: bool, path: Path, block: str) -> int:
-    hits = [
-        i
-        for i, line in enumerate(lines)
-        if (line.startswith(needle) if starts else line.strip() == needle)
-    ]
+    hits = [i for i, line in enumerate(lines) if (line.startswith(needle) if starts else line.strip() == needle)]
     if len(hits) != 1:
-        raise sdk.TargetError(
-            f"{path} 中定位 '{needle}' 命中 {len(hits)} 次，拒绝插入 '{block}' 标记"
-        )
+        raise sdk.TargetError(f"{path} 中定位 '{needle}' 命中 {len(hits)} 次，拒绝插入 '{block}' 标记")
     return hits[0]
 
 
-def _insert_block(
-    text: str, path: Path, block: str, start_needle: str, end_needle: str, starts: bool = True
-) -> str:
+def _insert_block(text: str, path: Path, block: str, start_needle: str, end_needle: str, starts: bool = True) -> str:
     if sdk.marker_begin(block) in text or sdk.marker_end(block) in text:
         if sdk.marker_begin(block) in text and sdk.marker_end(block) in text:
             return text
@@ -106,15 +98,9 @@ def _insert_block(
 
 def _init_header(text: str, path: Path) -> str:
     text = _insert_block(text, path, "pins", "//* 按键配置 */", "#define UART_PIN")
-    text = _insert_block(
-        text, path, "project_ids", "#define iPROJECT_ID_H", "#define iPROJECT_ID_L"
-    )
-    text = _insert_block(
-        text, path, "project_version", "#define iREAL_VERSION_ID", "#define iREAL_VERSION_ID"
-    )
-    text = _insert_block(
-        text, path, "project_names", "#define iCONSUMER_NAME", "#define iPROJECT_NAME"
-    )
+    text = _insert_block(text, path, "project_ids", "#define iPROJECT_ID_H", "#define iPROJECT_ID_L")
+    text = _insert_block(text, path, "project_version", "#define iREAL_VERSION_ID", "#define iREAL_VERSION_ID")
+    text = _insert_block(text, path, "project_names", "#define iCONSUMER_NAME", "#define iPROJECT_NAME")
     return text
 
 
@@ -173,9 +159,7 @@ def init_project(
             sdk.ensure_encodable(after, source_file.encoding)
             transaction.write_bytes(
                 path,
-                sdk.SourceFile(
-                    path, after, source_file.encoding, source_file.newline, source_file.bom
-                ).render(),
+                sdk.SourceFile(path, after, source_file.encoding, source_file.newline, source_file.bom).render(),
                 "插入 OMCFG/USER CODE 标记",
             )
             if verbose:
@@ -195,9 +179,7 @@ def init_project(
             sdk.ensure_encodable(after, source_file.encoding)
             transaction.write_bytes(
                 path,
-                sdk.SourceFile(
-                    path, after, source_file.encoding, source_file.newline, source_file.bom
-                ).render(),
+                sdk.SourceFile(path, after, source_file.encoding, source_file.newline, source_file.bom).render(),
                 "补 USER CODE 保护区",
             )
             if verbose:

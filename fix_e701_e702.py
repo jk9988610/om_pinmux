@@ -6,11 +6,13 @@ pat_e701 = re.compile(r"^(\s*)(if|for|while|try|except)(.*?):\s*(.+)$")
 # 匹配分号分隔 E702
 pat_semi = re.compile(r"(.+?);\s*(.+?)")
 
+
 def split_semi(line: str):
     """把 a; b; c 拆成多行，保持缩进"""
     parts = [p.strip() for p in line.split(";")]
     indent = re.match(r"^(\s*)", line).group(1)
     return "\n".join([indent + p for p in parts if p])
+
 
 def process_file(p: Path):
     src = p.read_text(encoding="utf-8")
@@ -32,6 +34,7 @@ def process_file(p: Path):
     if new_text != src:
         p.write_text(new_text, encoding="utf-8")
         print(f"fixed: {p}")
+
 
 if __name__ == "__main__":
     targets = [

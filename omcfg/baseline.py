@@ -56,7 +56,8 @@ def derive_id(name: str) -> str:
 
 
 def config_for_name(
-    name: str, config_path: Path | str | None = None,
+    name: str,
+    config_path: Path | str | None = None,
     id_low: int | str | None = None,
 ) -> dict:
     """读取基线配置，写入工程名、项目号与 BLE 广播名；id_low 手工指定时不再派生。"""
@@ -75,8 +76,9 @@ def config_for_name(
     return config
 
 
-def check(sdk_dir: Path | str | None = None, config_path: Path | str | None = None,
-          meta_path: Path | str | None = None) -> list[str]:
+def check(
+    sdk_dir: Path | str | None = None, config_path: Path | str | None = None, meta_path: Path | str | None = None
+) -> list[str]:
     """列出内置基线的问题；空列表即可用。"""
     root = Path(sdk_dir) if sdk_dir else SDK_DIR
     config = Path(config_path) if config_path else CONFIG_PATH
@@ -92,8 +94,9 @@ def check(sdk_dir: Path | str | None = None, config_path: Path | str | None = No
     return problems
 
 
-def resolve(sdk_dir: Path | str | None = None, config_path: Path | str | None = None,
-            meta_path: Path | str | None = None) -> tuple[Path, Path]:
+def resolve(
+    sdk_dir: Path | str | None = None, config_path: Path | str | None = None, meta_path: Path | str | None = None
+) -> tuple[Path, Path]:
     """校验并返回 (SDK 目录, 基线配置)；不完整时抛 BaselineError。"""
     root = Path(sdk_dir) if sdk_dir else SDK_DIR
     config = Path(config_path) if config_path else CONFIG_PATH
@@ -126,7 +129,6 @@ def tree_digest(root: Path | str) -> str:
     return hashlib.sha256("\n".join(entries).encode("utf-8")).hexdigest()
 
 
-
 def file_digest(path: Path | str) -> str:
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
@@ -137,15 +139,17 @@ def meta(sdk_dir: Path | str | None = None, meta_path: Path | str | None = None)
         return json.load(handle)
 
 
-def verify_meta(sdk_dir: Path | str | None = None, config_path: Path | str | None = None,
-                meta_path: Path | str | None = None) -> list[str]:
+def verify_meta(
+    sdk_dir: Path | str | None = None, config_path: Path | str | None = None, meta_path: Path | str | None = None
+) -> list[str]:
     """比对 META.json 与当前基线内容；返回差异说明。"""
     root = Path(sdk_dir) if sdk_dir else SDK_DIR
     config = Path(config_path) if config_path else CONFIG_PATH
     data = meta(root, meta_path)
     problems: list[str] = []
     actual_files = sum(
-        1 for path in root.rglob("*")
+        1
+        for path in root.rglob("*")
         if path.is_file() and not artifacts.is_artifact_path(path.relative_to(root).as_posix())
     )
 

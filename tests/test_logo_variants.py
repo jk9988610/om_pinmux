@@ -57,11 +57,9 @@ def test_logo_none_emits_no_logo_macros():
     config = _config()
     config["board"]["logo"] = "none"
     config["board"].pop("ledc_rgb_number", None)
-    _drop(config, "LEDC_PIN", "LEDC_CTRL_PIN",
-          "LED_R_PIN", "LED_G_PIN", "LED_B_PIN")
+    _drop(config, "LEDC_PIN", "LEDC_CTRL_PIN", "LED_R_PIN", "LED_G_PIN", "LED_B_PIN")
     pins = model.resolved_pins(config)
     text = templates.render_pins(config, pins)
     assert "LOGO灯配置" in text
-    for key in ("LEDC_PIN", "LEDC_CTRL_PIN", "LEDC_RGB_NUMBER",
-                "LED_R_PIN", "LED_G_PIN", "LED_B_PIN"):
+    for key in ("LEDC_PIN", "LEDC_CTRL_PIN", "LEDC_RGB_NUMBER", "LED_R_PIN", "LED_G_PIN", "LED_B_PIN"):
         assert f"#define {key}" not in text, f"logo=none 不应生成 {key}"

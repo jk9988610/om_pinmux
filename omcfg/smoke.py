@@ -29,15 +29,15 @@ class Scenario:
 
 def _logo_none(cfg_text: str) -> str:
     """logo: ledc -> none，并删掉 LEDC 相关 board/pins 行。"""
-    cfg_text = re.sub(r'^  logo: ledc\s*$', '  logo: none', cfg_text, flags=re.M)
-    cfg_text = re.sub(r'^  ledc_rgb_number:.*\n', '', cfg_text, flags=re.M)
-    cfg_text = re.sub(r'^  LEDC_(CTRL_)?PIN:.*\n', '', cfg_text, flags=re.M)
+    cfg_text = re.sub(r"^  logo: ledc\s*$", "  logo: none", cfg_text, flags=re.M)
+    cfg_text = re.sub(r"^  ledc_rgb_number:.*\n", "", cfg_text, flags=re.M)
+    cfg_text = re.sub(r"^  LEDC_(CTRL_)?PIN:.*\n", "", cfg_text, flags=re.M)
     return cfg_text
 
 
 def _drop_ctrl(cfg_text: str) -> str:
     """删 LEDC_CTRL_PIN 行（保留 LEDC_PIN）。"""
-    return re.sub(r'^  LEDC_CTRL_PIN:.*\n', '', cfg_text, flags=re.M)
+    return re.sub(r"^  LEDC_CTRL_PIN:.*\n", "", cfg_text, flags=re.M)
 
 
 def _run_cli(argv: list[str]) -> int:
@@ -59,6 +59,7 @@ def _run_cli(argv: list[str]) -> int:
         rc = int(exc.code or 0)
     except Exception:
         import traceback
+
         traceback.print_exc(file=err)
         rc = -1
     if rc != 0:
@@ -67,7 +68,6 @@ def _run_cli(argv: list[str]) -> int:
 
 
 SCENARIOS = [
-
     Scenario(
         name="TEST_CLI",
         id_low="0x8888",
@@ -124,7 +124,6 @@ def _check_markers(project_root: Path, scenario: Scenario) -> list[str]:
         if key in uh_text:
             problems.append(f"user_config.h 不应有 {key!r}")
     return problems
-
 
 
 _RMTREE_ATTEMPTS = 3
@@ -184,8 +183,9 @@ def _rmtree_with_retry(
     return False, locked
 
 
-def run_smoke(out_dir: Path | str, scenarios: list[Scenario] | None = None,
-              verbose: bool = True, skip_locked: bool = False) -> list[dict]:
+def run_smoke(
+    out_dir: Path | str, scenarios: list[Scenario] | None = None, verbose: bool = True, skip_locked: bool = False
+) -> list[dict]:
     """重建全部冒烟工程；返回每个场景的结果 dict 列表。"""
 
     out_dir = Path(out_dir)
@@ -199,23 +199,26 @@ def run_smoke(out_dir: Path | str, scenarios: list[Scenario] | None = None,
             print(f"[{sc.name}]")
             print("=" * 70)
         target = out_dir / sc.name
-        result = {"name": sc.name, "target": target, "ok": False,
-                  "steps": [], "problems": [], "hardware": sc.hardware,
-                  "skipped": False}
+        result = {
+            "name": sc.name,
+            "target": target,
+            "ok": False,
+            "steps": [],
+            "problems": [],
+            "hardware": sc.hardware,
+            "skipped": False,
+        }
 
         if target.exists():
             ok, locked = _rmtree_with_retry(target)
             if not ok:
                 if skip_locked:
                     result["skipped"] = True
-                    result["problems"].append(
-                        f"旧工程被占用，已跳过：{target}（锁定 {len(locked)} 个文件）"
-                    )
+                    result["problems"].append(f"旧工程被占用，已跳过：{target}（锁定 {len(locked)} 个文件）")
                     results.append(result)
                     if verbose:
                         print(f"  [SKIP] {target} 被占用，跳过")
-                        for name in locked[:
-                            10]:
+                        for name in locked[:10]:
                             print(f"         锁定: {name}")
                     continue
                 msg = (
@@ -232,12 +235,20 @@ def run_smoke(out_dir: Path | str, scenarios: list[Scenario] | None = None,
                 continue
             result["steps"].append("清理旧工程")
 
-
-        rc = _run_cli([
-            "new", "--name", sc.name, "--target", str(target),
-            "--id", sc.id_low, "--scan", str(out_dir),
-            "--no-keep-backup",
-        ])
+        rc = _run_cli(
+            [
+                "new",
+                "--name",
+                sc.name,
+                "--target",
+                str(target),
+                "--id",
+                sc.id_low,
+                "--scan",
+                str(out_dir),
+                "--no-keep-backup",
+            ]
+        )
 
         if rc != 0:
             result["problems"].append(f"new 返回 {rc}")

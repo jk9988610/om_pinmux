@@ -101,7 +101,7 @@ def _expected_table_roles(pins: dict[str, dict[str, str]]) -> list[str]:
 
 def _strip_ifdef_block(text: str, macro: str) -> str:
     """去掉 #ifdef <macro> ... #endif 块的内容（保留 #ifndef 块）。支持单层。
-    
+
     用于 key_io.refs 规则：被 #ifdef KEY_PAIR_PIN 包裹的引用视为条件引用，
     当 pins 未配置 KEY_PAIR_PIN 时不应报"未定义"warning。
     """
@@ -111,8 +111,8 @@ def _strip_ifdef_block(text: str, macro: str) -> str:
     depth_ifndef = 0
     for line in lines:
         stripped = line.strip()
-        m_ifdef = re.match(r'#ifdef\s+(\w+)\b', stripped)
-        m_ifndef = re.match(r'#ifndef\s+(\w+)\b', stripped)
+        m_ifdef = re.match(r"#ifdef\s+(\w+)\b", stripped)
+        m_ifndef = re.match(r"#ifndef\s+(\w+)\b", stripped)
         if m_ifdef and m_ifdef.group(1) == macro:
             depth_ifdef += 1
             continue
@@ -120,7 +120,7 @@ def _strip_ifdef_block(text: str, macro: str) -> str:
             depth_ifndef += 1
             out.append(line)
             continue
-        if stripped == '#endif':
+        if stripped == "#endif":
             if depth_ifndef > 0:
                 depth_ifndef -= 1
                 out.append(line)
@@ -130,7 +130,7 @@ def _strip_ifdef_block(text: str, macro: str) -> str:
                 continue
         if depth_ifdef == 0:
             out.append(line)
-    return ''.join(out)
+    return "".join(out)
 
 
 def audit(config: dict, root: Path | str, strict: bool = False) -> validate.Report:
@@ -228,24 +228,21 @@ def audit(config: dict, root: Path | str, strict: bool = False) -> validate.Repo
     key_io_c = _read(root, sdk.PERIPH / "key_io.c")
     if key_io_h or key_io_c:
         KEY_MODE_TO_PIN = {
-            'KEY_MODE_PAIR': 'KEY_PAIR_PIN',
-            'KEY_MODE_R0': 'KEY_R0_PIN',
-            'KEY_MODE_R1': 'KEY_R1_PIN',
-            'KEY_MODE_R2': 'KEY_R2_PIN',
-            'KEY_MODE_R3': 'KEY_B_PIN',
-            'KEY_MODE_R4': 'KEY_P_PIN',
-            'KEY_MODE_R5': 'KEY_DPI_SUB_PIN',
-            'KEY_MODE_R7': 'KEY_DPI_ADD_PIN',
+            "KEY_MODE_PAIR": "KEY_PAIR_PIN",
+            "KEY_MODE_R0": "KEY_R0_PIN",
+            "KEY_MODE_R1": "KEY_R1_PIN",
+            "KEY_MODE_R2": "KEY_R2_PIN",
+            "KEY_MODE_R3": "KEY_B_PIN",
+            "KEY_MODE_R4": "KEY_P_PIN",
+            "KEY_MODE_R5": "KEY_DPI_SUB_PIN",
+            "KEY_MODE_R7": "KEY_DPI_ADD_PIN",
         }
         key_io_c_effective = key_io_c
         if "KEY_PAIR_PIN" not in pins:
-            key_io_c_effective = _strip_ifdef_block(key_io_c, 'KEY_PAIR_PIN')
+            key_io_c_effective = _strip_ifdef_block(key_io_c, "KEY_PAIR_PIN")
         used_modes = set(KEY_MODE_USE_RE.findall(key_io_c_effective))
         refs = {KEY_MODE_TO_PIN[m] for m in used_modes if m in KEY_MODE_TO_PIN}
-        refs |= {
-            role for role in ROLE_REF_RE.findall(key_io_c_effective)
-            if role in model.ROLE_ORDER
-        }
+        refs |= {role for role in ROLE_REF_RE.findall(key_io_c_effective) if role in model.ROLE_ORDER}
         configured = {role for role in pins if role.startswith("KEY_")}
         for role in sorted(configured - refs):
             add(

@@ -262,9 +262,7 @@ def resolve_sdk(sdk_root: Path | str) -> Path:
     return root
 
 
-DEFINE_STR_RE = re.compile(
-    r'^\s*#define\s+(?P<name>iPROJECT_NAME|iCONSUMER_NAME)\s+"(?P<value>[^"]*)"', re.M
-)
+DEFINE_STR_RE = re.compile(r'^\s*#define\s+(?P<name>iPROJECT_NAME|iCONSUMER_NAME)\s+"(?P<value>[^"]*)"', re.M)
 
 
 def existing_project(root: Path | str) -> dict[str, str]:
@@ -285,11 +283,9 @@ def project_mismatch(root: Path | str, name: object, customer: object) -> str | 
     actual_name = current.get("iPROJECT_NAME", "")
     actual_customer = current.get("iCONSUMER_NAME", "")
     if expected_name and actual_name and expected_name != actual_name:
-        problems.append(f"project.name={expected_name}，SDK 现有 iPROJECT_NAME=\"{actual_name}\"")
+        problems.append(f'project.name={expected_name}，SDK 现有 iPROJECT_NAME="{actual_name}"')
     if expected_customer and actual_customer and expected_customer != actual_customer:
-        problems.append(
-            f"project.customer={expected_customer}，SDK 现有 iCONSUMER_NAME=\"{actual_customer}\""
-        )
+        problems.append(f'project.customer={expected_customer}，SDK 现有 iCONSUMER_NAME="{actual_customer}"')
     return "；".join(problems) or None
 
 

@@ -281,8 +281,7 @@ def _role_line(lines: list[str], role: str, start: int, stop: int) -> int | None
         (
             index
             for index in range(start + 1, stop)
-            if lines[index].lstrip().startswith(f"{role}:")
-            and not lines[index].lstrip().startswith("#")
+            if lines[index].lstrip().startswith(f"{role}:") and not lines[index].lstrip().startswith("#")
         ),
         None,
     )
@@ -299,8 +298,7 @@ def remove_pin_text(text: str, role: str) -> str:
         (
             index
             for index in range(start + 1, stop)
-            if lines[index].lstrip().startswith(f"{role}:")
-            and not lines[index].lstrip().startswith("#")
+            if lines[index].lstrip().startswith(f"{role}:") and not lines[index].lstrip().startswith("#")
         ),
         None,
     )
@@ -355,8 +353,7 @@ def set_board_value_text(text: str, key: str, value: str) -> str:
         (
             index
             for index in range(start + 1, stop)
-            if lines[index].lstrip().startswith(f"{key}:")
-            and not lines[index].lstrip().startswith("#")
+            if lines[index].lstrip().startswith(f"{key}:") and not lines[index].lstrip().startswith("#")
         ),
         None,
     )
@@ -477,9 +474,7 @@ def project_id(config: dict[str, Any]) -> dict[str, str]:
     }
 
 
-def features(
-    config: dict[str, Any], pins: dict[str, dict[str, str]] | None = None
-) -> dict[str, bool]:
+def features(config: dict[str, Any], pins: dict[str, dict[str, str]] | None = None) -> dict[str, bool]:
     pins = pins or pin_entries(config)
     b = board(config)
     return {

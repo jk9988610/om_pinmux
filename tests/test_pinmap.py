@@ -12,9 +12,7 @@ def _load(name: str = "CH04") -> dict:
 def test_rows_cover_package_and_internal_pins():
     data = pinmap.rows(_load())
     assert [row["pkg"] for row in data["package"]] == list(range(1, 33))
-    assert {row["name"] for row in data["internal"]} == {
-        "P14", "P15", "P16", "P17", "P35", "P37"
-    }
+    assert {row["name"] for row in data["internal"]} == {"P14", "P15", "P16", "P17", "P35", "P37"}
     vdd = next(row for row in data["package"] if row["name"] == "VDD")
     assert vdd["special"] is True
     assert vdd["candidates"] == []

@@ -1,4 +1,5 @@
 """§4 keys PAIR 可选：CH04 有 PAIR / CH04_6K 无 PAIR 的 model 与 baseline 校验。"""
+
 from pathlib import Path
 
 from omcfg import baseline, model
@@ -8,6 +9,7 @@ CONFIGS = Path(__file__).resolve().parent.parent / "configs"
 
 def _load(name):
     import yaml
+
     text = (CONFIGS / f"{name}.omcfg").read_text(encoding="utf-8")
     return yaml.safe_load(text)
 

@@ -23,9 +23,7 @@ NOT_COPIED_SUMMARY = (
 MOUSE_NAME_PATH = Path("projects/mouse_demo/main/mouse_hw.c")
 ADV_NAME_PATH = Path("projects/mouse_demo/main/ex2_app_mouse.c")
 
-MOUSE_NAME_ASSIGN_RE = re.compile(
-    r'(?P<pre>mouse_name\s*\[[^\]]*\]\s*=\s*)"(?P<value>[^"]*)"'
-)
+MOUSE_NAME_ASSIGN_RE = re.compile(r'(?P<pre>mouse_name\s*\[[^\]]*\]\s*=\s*)"(?P<value>[^"]*)"')
 MOUSE_NAME_MEMCPY_RE = re.compile(
     r'(?P<pre>memcpy\s*\(\s*mouse_name\s*,\s*)"(?P<first>[^"]*)"'
     r'(?P<mid>\s*,\s*sizeof\s*\(\s*)"(?P<second>[^"]*)"(?P<post>\s*\)\s*\))'
@@ -53,7 +51,6 @@ class Rewrite:
 
 def _excluded(name: str) -> bool:
     return artifacts.is_artifact(name)
-
 
 
 def _ignore(_directory: str, names: list[str]) -> set[str]:

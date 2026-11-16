@@ -15,6 +15,7 @@
   1 = 归一化后仍不一致（存在换行符之外的真实差异）
   2 = 文件缺失
 """
+
 import argparse
 import hashlib
 import sys
@@ -51,9 +52,14 @@ def describe(nl):
 def analyze(path):
     raw = path.read_bytes()
     norm = normalize(raw)
-    return {"path": str(path), "size_raw": len(raw),
-            "sha1_raw": sha1(raw), "sha1_norm": sha1(norm),
-            "newlines": count_newlines(raw), "norm": norm}
+    return {
+        "path": str(path),
+        "size_raw": len(raw),
+        "sha1_raw": sha1(raw),
+        "sha1_norm": sha1(norm),
+        "newlines": count_newlines(raw),
+        "norm": norm,
+    }
 
 
 def main(argv=None):
@@ -84,9 +90,9 @@ def main(argv=None):
         print("=" * 70)
         print("比较结论")
         print("=" * 70)
-        raw_eq  = a["sha1_raw"]  == b["sha1_raw"]
+        raw_eq = a["sha1_raw"] == b["sha1_raw"]
         norm_eq = a["sha1_norm"] == b["sha1_norm"]
-        byte_eq = a["norm"]      == b["norm"]
+        byte_eq = a["norm"] == b["norm"]
         print(f"  原始 SHA1 相等     : {raw_eq}")
         print(f"  归一化 SHA1 相等   : {norm_eq}")
         print(f"  归一化后逐字节相等 : {byte_eq}")

@@ -49,10 +49,7 @@ def _needs_init(root: Path, missing: list[str]) -> dict:
     elif existing:
         hint = "工程内已有 project.omcfg，可直接用它初始化（只补标记块）"
     else:
-        hint = (
-            "该工程尚无可用配置：从 configs/ 选择 .omcfg 后点「初始化」，"
-            "或点「从工程现状生成配置初稿」"
-        )
+        hint = "该工程尚无可用配置：从 configs/ 选择 .omcfg 后点「初始化」，或点「从工程现状生成配置初稿」"
     return {
         "ok": False,
         "needs_init": True,
@@ -71,9 +68,7 @@ def _needs_init(root: Path, missing: list[str]) -> dict:
 def _payload(root: Path, config: dict, report: validate.Report) -> dict:
     pins = model.resolved_pins(config)
     pinmap_data = pinmap.editable(config)
-    pinmap_data["protected_roles"] = sorted(
-        set(validate.required_roles(config, pins)) | {"KEY_C0_PIN"}
-    )
+    pinmap_data["protected_roles"] = sorted(set(validate.required_roles(config, pins)) | {"KEY_C0_PIN"})
     return {
         "ok": report.ok,
         "sdk": str(root),
@@ -126,6 +121,8 @@ def _sync_wheel(text: str) -> str:
 
 
 LEDC_SOURCE_POOL = r"E:\M_2026\516_BM2017\software\trunk\SE71M_0516_BM2017_V1_20261022"
+
+
 class Api:
     def load(self, sdk_path: str) -> dict:
         try:
@@ -209,8 +206,7 @@ class Api:
             return self._init_error(
                 root,
                 _first_line(exc),
-                "检查文件是否只读/被 Keil 占用；若提示标记块残缺，"
-                "请按上方缺失项人工修掉后重试",
+                "检查文件是否只读/被 Keil 占用；若提示标记块残缺，请按上方缺失项人工修掉后重试",
             )
 
     def initialize_derived(self, sdk_path: str) -> dict:
@@ -228,8 +224,7 @@ class Api:
             return self._init_error(
                 root,
                 f"无法从工程现状推导配置: {_first_line(exc)}",
-                "确认 user_config.h/.c 完整、未被占用；也可复制邻近板配置到 configs/ "
-                "后手工改引脚再初始化",
+                "确认 user_config.h/.c 完整、未被占用；也可复制邻近板配置到 configs/ 后手工改引脚再初始化",
             )
         report = validate.validate_config(config)
         if not report.ok:
@@ -248,9 +243,7 @@ class Api:
             if result.get("ok"):
                 target = model.default_config_path(root)
                 pins = len(model.pin_entries(config))
-                result["message"] = (
-                    f"已按工程现状生成配置初稿（{pins} 个引脚）并初始化；初稿写入 {target}"
-                )
+                result["message"] = f"已按工程现状生成配置初稿（{pins} 个引脚）并初始化；初稿写入 {target}"
                 result["derived"] = {
                     "pins": pins,
                     "project": model.project(config).get("name", ""),
@@ -261,8 +254,7 @@ class Api:
             return self._init_error(
                 root,
                 f"初始化失败: {_first_line(exc)}",
-                "检查文件是否只读/被 Keil 占用；若提示标记块残缺，"
-                "请按上方缺失项人工修掉后重试",
+                "检查文件是否只读/被 Keil 占用；若提示标记块残缺，请按上方缺失项人工修掉后重试",
             )
 
     def check(self, sdk_path: str) -> dict:
@@ -286,9 +278,7 @@ class Api:
                 )
             for role, pin in (assignments or {}).items():
                 value = str(pin or "").strip()
-                text = model.remove_pin_text(text, role) if not value else model.add_pin_text(
-                    text, role, value
-                )
+                text = model.remove_pin_text(text, role) if not value else model.add_pin_text(text, role, value)
             text = _sync_wheel(text)
             config = model.load_config_text(text)
             report = validate.validate_config(config)
@@ -306,9 +296,7 @@ class Api:
             transaction = FileTransaction.create(root, "omcfg_gui_save")
             transaction.write_bytes(
                 config_path,
-                sdk.SourceFile(
-                    config_path, text, source.encoding, source.newline, source.bom
-                ).render(),
+                sdk.SourceFile(config_path, text, source.encoding, source.newline, source.bom).render(),
                 "GUI 修改引脚",
             )
             result["manifest"] = str(transaction.commit())
@@ -327,12 +315,11 @@ class Api:
         directory = initial if (initial and os.path.isdir(initial)) else ""
         if not webview.windows:
             return None
-        result = webview.windows[0].create_file_dialog(
-            webview.FOLDER_DIALOG, directory=directory
-        )
+        result = webview.windows[0].create_file_dialog(webview.FOLDER_DIALOG, directory=directory)
         if not result:
             return None
         return result[0]
+
     def role_capabilities(self) -> dict:
         """返回芯片全量角色能力表（不受当前工程限制）。"""
         import json as _json
@@ -340,6 +327,7 @@ class Api:
 
         from . import model as _model
         from . import pinmap as _pinmap
+
         chip = _model.load_chip()
         cat_path = _os.path.join(_os.path.dirname(__file__), "data", "role_catalog.json")
         cat = _json.load(open(cat_path, encoding="utf-8"))
@@ -370,6 +358,7 @@ class Api:
         import json as _json
         import os as _os
         import subprocess as _sp
+
         if not _os.path.isdir(template_path):
             return {"ok": False, "error": "模板不存在: " + template_path}
         if _os.path.exists(workspace):
@@ -390,14 +379,16 @@ class Api:
             _json.dump(meta, f, ensure_ascii=False, indent=2)
         return {"ok": True, "workspace": workspace}
 
-    def generate_project(self, workspace: str, target_path: str, proj_id: str,
-                         proj_name: str, consumer_name: str = "", version: int = 1) -> dict:
+    def generate_project(
+        self, workspace: str, target_path: str, proj_id: str, proj_name: str, consumer_name: str = "", version: int = 1
+    ) -> dict:
         """从工作区生成工程：复制模板 + 覆盖改动 + 改 ID/名称 + 写 project.omcfg。"""
         import hashlib as _hl
         import json as _json
         import os as _os
         import re as _re
         import subprocess as _sp
+
         meta_path = _os.path.join(workspace, ".omcfg_meta.json")
         if not _os.path.isfile(meta_path):
             return {"ok": False, "error": "工作区缺少 .omcfg_meta.json，请先 prepare_workspace"}
@@ -405,7 +396,7 @@ class Api:
         template = meta["template"]
         if _os.path.exists(target_path):
             return {"ok": False, "error": "目标已存在: " + target_path}
-        if not _re.match(r'^0x[0-9A-Fa-f]{1,4}$', proj_id):
+        if not _re.match(r"^0x[0-9A-Fa-f]{1,4}$", proj_id):
             try:
                 proj_id = "0x%04X" % int(proj_id, 16)
             except Exception:
@@ -420,11 +411,13 @@ class Api:
         res = _sp.run(cmd, capture_output=True, text=True)
         if res.returncode >= 8:
             return {"ok": False, "error": "复制模板失败 code=" + str(res.returncode)}
+
         def _hash(p):
             try:
                 return _hl.sha256(open(p, "rb").read()).hexdigest()
             except Exception:
                 return None
+
         def _rel(root, p):
             r = _os.path.relpath(p, root).replace("\\", "/")
             parts = r.split("/")
@@ -432,6 +425,7 @@ class Api:
                 if x in ("projects", "hal", "common", "components", "mode_24g", "mode_usb", "utils"):
                     return "/".join(parts[i:])
             return r
+
         tpl_files = {}
         for dp, dns, fs in _os.walk(template):
             dns[:] = [d for d in dns if d not in excl_dirs]
@@ -455,11 +449,13 @@ class Api:
                 if rel not in tpl_files:
                     _os.makedirs(_os.path.dirname(tgt), exist_ok=True)
                     import shutil as _sh
+
                     _sh.copy2(p, tgt)
                     added.append(rel)
                     continue
                 if tpl_files[rel] != h:
                     import shutil as _sh
+
                     _sh.copy2(p, tgt)
                     changed.append(rel)
         apply_info = {}
@@ -467,8 +463,7 @@ class Api:
         if _os.path.isfile(omcfg_dst):
             try:
                 _ra = self.apply(target_path)
-                apply_info = {"ok": bool(_ra.get("ok")), "changed": _ra.get("changed", 0),
-                              "error": _ra.get("error")}
+                apply_info = {"ok": bool(_ra.get("ok")), "changed": _ra.get("changed", 0), "error": _ra.get("error")}
             except Exception as _e:
                 apply_info = {"ok": False, "error": str(_e)}
 
@@ -480,6 +475,7 @@ class Api:
             # 1. 更新 uvprojx：periph 组加 ledc.c/ledc_mode.c，driver 组加 drv_ledc.c
             try:
                 from . import ledc_injector as _ledc_inj
+
                 _uv_res = _ledc_inj.update_uvprojx(target_path)
                 apply_info["uvprojx_after_apply"] = _uv_res
             except Exception as _e:
@@ -494,20 +490,25 @@ class Api:
                     if "#define GPIO_SET" not in _t:
                         _anchor = "#define gpio_clear(pin)     (OM_GPIO0->DATAOUTCLR = (1<<(pin)))"
                         if _anchor in _t:
-                            _inject = (_anchor + "\n" +
-                                       "#define GPIO_SET(pin)       (OM_GPIO0->DATAOUTSET = (1<<(pin)))\n" +
-                                       "#define GPIO_CLEAR(pin)     (OM_GPIO0->DATAOUTCLR = (1<<(pin)))")
+                            _inject = (
+                                _anchor
+                                + "\n"
+                                + "#define GPIO_SET(pin)       (OM_GPIO0->DATAOUTSET = (1<<(pin)))\n"
+                                + "#define GPIO_CLEAR(pin)     (OM_GPIO0->DATAOUTCLR = (1<<(pin)))"
+                            )
                             _t = _t.replace(_anchor, _inject, 1)
                             _mod = True
                     # 2b. LEDC 引脚宏
                     if "#define LEDC_CTRL_PIN" not in _t:
                         _marker = "//* USB 5V以及充电检测配置 */"
                         if _marker in _t:
-                            _inject = ("//* LEDC 灯带配置 */\n"
-                                       "#define LEDC_CTRL_PIN           (P34)\n"
-                                       "#define LEDC_PIN                (P21)\n"
-                                       "#define LEDC_RGB_NUMBER         7\n"
-                                       "#define LEDC_RGB_DATA_SIZE      LEDC_RGB_NUMBER*3\n\n")
+                            _inject = (
+                                "//* LEDC 灯带配置 */\n"
+                                "#define LEDC_CTRL_PIN           (P34)\n"
+                                "#define LEDC_PIN                (P21)\n"
+                                "#define LEDC_RGB_NUMBER         7\n"
+                                "#define LEDC_RGB_DATA_SIZE      LEDC_RGB_NUMBER*3\n\n"
+                            )
                             _t = _t.replace(_marker, _inject + _marker, 1)
                             _mod = True
                     if _mod:
@@ -522,20 +523,21 @@ class Api:
             text = None
             for enc in ("utf-8", "gbk"):
                 try:
-                    text = open(cfg_path, encoding=enc).read() 
+                    text = open(cfg_path, encoding=enc).read()
                     break
                 except Exception:
                     pass
             if text:
-                text = _re.sub(r'(#define\s+iPROJECT_ID_L\s+)0x[0-9A-Fa-f]+', r'\g<1>' + proj_id, text)
+                text = _re.sub(r"(#define\s+iPROJECT_ID_L\s+)0x[0-9A-Fa-f]+", r"\g<1>" + proj_id, text)
                 text = _re.sub(r'(#define\s+iPROJECT_NAME\s+)"[^"]*"', r'\g<1>"' + proj_name + '"', text)
                 if consumer_name:
                     text = _re.sub(r'(#define\s+iCONSUMER_NAME\s+)"[^"]*"', r'\g<1>"' + consumer_name + '"', text)
-                text = _re.sub(r'(#define\s+iREAL_VERSION_ID\s+)\d+', r'\g<1>' + str(version), text)
+                text = _re.sub(r"(#define\s+iREAL_VERSION_ID\s+)\d+", r"\g<1>" + str(version), text)
                 open(cfg_path, "w", encoding="utf-8").write(text)
         # 清理事务备份目录
         import glob as _glob
         import shutil as _sh2
+
         cleaned = []
         for bak in _glob.glob(_os.path.join(target_path, ".omcfg_bak_*")):
             try:
@@ -543,12 +545,22 @@ class Api:
                 cleaned.append(_os.path.basename(bak))
             except Exception:
                 pass
-        return {"ok": True, "target": target_path, "changed": changed, "added": added,
-                "cleaned_backups": cleaned,
-                "changed_count": len(changed), "added_count": len(added),
-                "proj_id": proj_id, "proj_name": proj_name, "apply": apply_info}
-    def generate_project_to_root(self, workspace: str, output_root: str, proj_id: str,
-                                  proj_name: str, consumer_name: str = "", version: int = 1) -> dict:
+        return {
+            "ok": True,
+            "target": target_path,
+            "changed": changed,
+            "added": added,
+            "cleaned_backups": cleaned,
+            "changed_count": len(changed),
+            "added_count": len(added),
+            "proj_id": proj_id,
+            "proj_name": proj_name,
+            "apply": apply_info,
+        }
+
+    def generate_project_to_root(
+        self, workspace: str, output_root: str, proj_id: str, proj_name: str, consumer_name: str = "", version: int = 1
+    ) -> dict:
         """在 output_root 下按项目规范生成新工程。
 
         目录结构: output_root/<id_nozero>_<name>/software/trunk/SE71M_<id4>_<name>_V<n>_<date>/
@@ -557,6 +569,7 @@ class Api:
         import datetime as _dt
         import os as _os
         import re as _re
+
         if not _os.path.isdir(output_root):
             return {"ok": False, "error": "输出根目录不存在: " + output_root}
         id_str = (proj_id or "").strip()
@@ -570,7 +583,7 @@ class Api:
         name = (proj_name or "").strip()
         if not name:
             return {"ok": False, "error": "项目名为空"}
-        if not _re.match(r'^[A-Za-z0-9_\-]+$', name):
+        if not _re.match(r"^[A-Za-z0-9_\-]+$", name):
             return {"ok": False, "error": "项目名只能含字母数字下划线连字符: " + name}
         date_str = _dt.datetime.now().strftime("%Y%m%d")
         project_root_name = id_nozero + "_" + name
@@ -600,6 +613,7 @@ class Api:
         """删除工作区目录（重新准备工程前调用）。"""
         import os as _os
         import shutil as _sh
+
         if not _os.path.exists(workspace):
             return {"ok": True, "msg": "工作区不存在"}
         try:
@@ -612,6 +626,7 @@ class Api:
         """用资源管理器打开目录。"""
         import os as _os
         import subprocess as _sp
+
         if not _os.path.isdir(path):
             return {"ok": False, "error": "目录不存在: " + path}
         try:
@@ -628,6 +643,7 @@ class Api:
         import os as _os
 
         from . import ledc_injector
+
         if not _os.path.isdir(workspace):
             return {"ok": False, "error": "工作区不存在: " + workspace}
         if not _os.path.isdir(source_pool):
@@ -640,7 +656,7 @@ class Api:
         返回: {ok, workspace, modules: {ledc: {...}}, error?}
         """
         mods = []
-        for m in (modules or []):
+        for m in modules or []:
             s = str(m).strip().lower()
             if s and s not in mods:
                 mods.append(s)
@@ -691,6 +707,7 @@ class Api:
         except Exception as e:
             agg.update(ok=False, error=repr(e))
             return agg
+
     def finalize_ledc_sel(self, target_path: str) -> dict:
         """按 project.omcfg 的 LEDC_PIN 校正 ledc.c / drv_ledc.c 的 PMU_LEDC_SEL_IO_xx。
 
@@ -701,6 +718,7 @@ class Api:
         返回: {ok, changed: [...], ledc_pin, sel, reason?}
         """
         import re as _re
+
         root = Path(target_path)
         config_path = root / "projects" / "mouse_demo" / "project.omcfg"
         if not config_path.is_file():
@@ -761,9 +779,7 @@ class Api:
             if not report.ok:
                 return result
             outputs = generator.build_outputs(config, root)
-            result["diffs"] = [
-                {"path": str(item.path), "diff": item.diff()} for item in outputs if item.changed
-            ]
+            result["diffs"] = [{"path": str(item.path), "diff": item.diff()} for item in outputs if item.changed]
             result["changed"] = len(result["diffs"])
             return result
         except Exception as exc:

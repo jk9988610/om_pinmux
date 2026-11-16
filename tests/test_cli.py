@@ -57,21 +57,11 @@ def _make_sdk(tmp_path: Path, with_markers: bool = True) -> Path:
 
 def test_gen_apply_and_idempotent(tmp_path, capsys):
     sdk_root = _make_sdk(tmp_path)
-    assert (
-        cli.main(
-            ["gen", "--config", str(CONFIGS / "KC536.omcfg"), "--sdk", str(sdk_root), "--apply"]
-        )
-        == 0
-    )
+    assert cli.main(["gen", "--config", str(CONFIGS / "KC536.omcfg"), "--sdk", str(sdk_root), "--apply"]) == 0
     header = (sdk_root / "projects/mouse_demo/periph/user_config.h").read_text(encoding="utf-8")
     assert "#define KEY_R0_PIN" in header
     assert "iPROJECT_ID_L" in header
-    assert (
-        cli.main(
-            ["gen", "--config", str(CONFIGS / "KC536.omcfg"), "--sdk", str(sdk_root), "--dry-run"]
-        )
-        == 0
-    )
+    assert cli.main(["gen", "--config", str(CONFIGS / "KC536.omcfg"), "--sdk", str(sdk_root), "--dry-run"]) == 0
     assert "生成结果与 SDK 现状一致" in capsys.readouterr().out
 
 
@@ -112,9 +102,7 @@ def test_new_rejects_duplicate_manual_id(tmp_path, capsys):
 
 
 def test_new_rejects_invalid_id(tmp_path, capsys):
-    code = cli.main(
-        ["new", "--name", "OM_BAD", "--id", "0x10000", "--target", str(tmp_path / "OM_BAD")]
-    )
+    code = cli.main(["new", "--name", "OM_BAD", "--id", "0x10000", "--target", str(tmp_path / "OM_BAD")])
     assert code == 1
     assert "超出范围" in capsys.readouterr().err
 
@@ -132,9 +120,7 @@ def test_new_rejects_derived_collision(tmp_path, capsys, monkeypatch):
 
 def test_missing_markers_exit_2(tmp_path, capsys):
     sdk_root = _make_sdk(tmp_path, with_markers=False)
-    code = cli.main(
-        ["gen", "--config", str(CONFIGS / "KC536.omcfg"), "--sdk", str(sdk_root), "--apply"]
-    )
+    code = cli.main(["gen", "--config", str(CONFIGS / "KC536.omcfg"), "--sdk", str(sdk_root), "--apply"])
     assert code == cli.EXIT_ENVIRONMENT
     assert "缺少 OMCFG 标记块" in capsys.readouterr().err
 
@@ -148,9 +134,7 @@ def test_missing_user_code_exit_2(tmp_path, capsys):
         text = text.replace(f"/* USER CODE BEGIN {block} */\n", "")
         text = text.replace(f"/* USER CODE END {block} */\n", "")
         path.write_text(text, encoding="utf-8")
-    code = cli.main(
-        ["gen", "--config", str(CONFIGS / "KC536.omcfg"), "--sdk", str(sdk_root), "--dry-run"]
-    )
+    code = cli.main(["gen", "--config", str(CONFIGS / "KC536.omcfg"), "--sdk", str(sdk_root), "--dry-run"])
     assert code == cli.EXIT_ENVIRONMENT
     stderr = capsys.readouterr().err
     assert "USER CODE" in stderr
@@ -160,20 +144,13 @@ def test_missing_user_code_exit_2(tmp_path, capsys):
 def test_user_code_preserved_on_regen(tmp_path):
     sdk_root = _make_sdk(tmp_path)
     header = sdk_root / "projects/mouse_demo/periph/user_config.h"
-    assert (
-        cli.main(["init", "--config", str(CONFIGS / "KC536.omcfg"), "--sdk", str(sdk_root)]) == 0
-    )
+    assert cli.main(["init", "--config", str(CONFIGS / "KC536.omcfg"), "--sdk", str(sdk_root)]) == 0
     text = header.read_text(encoding="utf-8").replace(
         "/* USER CODE END user_config_h */",
         "#define OMCFG_USER_TEST 1\n/* USER CODE END user_config_h */",
     )
     header.write_text(text, encoding="utf-8")
-    assert (
-        cli.main(
-            ["gen", "--config", str(CONFIGS / "KC536.omcfg"), "--sdk", str(sdk_root), "--apply"]
-        )
-        == 0
-    )
+    assert cli.main(["gen", "--config", str(CONFIGS / "KC536.omcfg"), "--sdk", str(sdk_root), "--apply"]) == 0
     after = header.read_text(encoding="utf-8")
     assert "#define OMCFG_USER_TEST 1" in after
     assert "/* USER CODE BEGIN user_config_h */" in after
@@ -210,17 +187,10 @@ def test_init_inserts_markers_and_is_idempotent(tmp_path, capsys):
 
 def test_rollback_command(tmp_path):
     sdk_root = _make_sdk(tmp_path)
-    assert (
-        cli.main(
-            ["gen", "--config", str(CONFIGS / "KC536.omcfg"), "--sdk", str(sdk_root), "--apply"]
-        )
-        == 0
-    )
+    assert cli.main(["gen", "--config", str(CONFIGS / "KC536.omcfg"), "--sdk", str(sdk_root), "--apply"]) == 0
     manifest = next((sdk_root).glob(".omcfg_bak_*/manifest.json"))
     assert cli.main(["rollback", "--manifest", str(manifest)]) == 0
-    assert "old" in (sdk_root / "projects/mouse_demo/periph/user_config.h").read_text(
-        encoding="utf-8"
-    )
+    assert "old" in (sdk_root / "projects/mouse_demo/periph/user_config.h").read_text(encoding="utf-8")
 
 
 def test_subcommand_help_is_usable(capsys):
@@ -262,9 +232,7 @@ def test_init_bad_yaml_exit_2(tmp_path, capsys):
     sdk_root = _make_sdk(tmp_path)
     bad = tmp_path / "bad.omcfg"
     bad.write_text("schema: [\n", encoding="utf-8")
-    assert (
-        cli.main(["init", "--config", str(bad), "--sdk", str(sdk_root)]) == cli.EXIT_ENVIRONMENT
-    )
+    assert cli.main(["init", "--config", str(bad), "--sdk", str(sdk_root)]) == cli.EXIT_ENVIRONMENT
     assert "YAML 解析失败" in capsys.readouterr().err
 
 
@@ -277,10 +245,7 @@ def test_gen_before_init_exit_2(tmp_path, capsys):
 
 
 def test_rollback_missing_manifest_exit_2(tmp_path, capsys):
-    assert (
-        cli.main(["rollback", "--manifest", str(tmp_path / "nope" / "manifest.json")])
-        == cli.EXIT_ENVIRONMENT
-    )
+    assert cli.main(["rollback", "--manifest", str(tmp_path / "nope" / "manifest.json")]) == cli.EXIT_ENVIRONMENT
     stderr = capsys.readouterr().err
     assert "manifest 不存在" in stderr
     assert ".omcfg_bak_" in stderr
@@ -288,18 +253,11 @@ def test_rollback_missing_manifest_exit_2(tmp_path, capsys):
 
 def test_rollback_accepts_backup_dir(tmp_path):
     sdk_root = _make_sdk(tmp_path)
-    assert (
-        cli.main(
-            ["gen", "--config", str(CONFIGS / "KC536.omcfg"), "--sdk", str(sdk_root), "--apply"]
-        )
-        == 0
-    )
+    assert cli.main(["gen", "--config", str(CONFIGS / "KC536.omcfg"), "--sdk", str(sdk_root), "--apply"]) == 0
     backups = list(sdk_root.glob(".omcfg_bak_*"))
     assert backups
     assert cli.main(["rollback", "--manifest", str(backups[0])]) == 0
-    assert "old" in (sdk_root / "projects/mouse_demo/periph/user_config.h").read_text(
-        encoding="utf-8"
-    )
+    assert "old" in (sdk_root / "projects/mouse_demo/periph/user_config.h").read_text(encoding="utf-8")
 
 
 def test_dry_run_and_apply_conflict(tmp_path):
@@ -316,12 +274,7 @@ def test_config_board_mismatch_warns(tmp_path, capsys):
         '#define iPROJECT_NAME  "KC536"\n#define iCONSUMER_NAME "BYC"\n' + HEADER_WITH_MARKERS,
         encoding="utf-8",
     )
-    assert (
-        cli.main(
-            ["gen", "--config", str(CONFIGS / "CH04.omcfg"), "--sdk", str(sdk_root), "--dry-run"]
-        )
-        == 0
-    )
+    assert cli.main(["gen", "--config", str(CONFIGS / "CH04.omcfg"), "--sdk", str(sdk_root), "--dry-run"]) == 0
     output = capsys.readouterr().out
     assert "配置与 SDK 现有工程不一致" in output
     assert "CH04" in output and "KC536" in output

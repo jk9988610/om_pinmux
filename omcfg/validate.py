@@ -116,9 +116,7 @@ def validate_config(config: dict, chip: dict | None = None) -> Report:
         report.add_error("chip", f"必须为 {model.CHIP_MODEL!r}")
 
     for key in sorted(model.FORBIDDEN_TOP_KEYS & set(config)):
-        report.add_error(
-            key, "派生字段不允许写进配置，应由 pins/board 计算", "删除该字段，生成器会自动派生"
-        )
+        report.add_error(key, "派生字段不允许写进配置，应由 pins/board 计算", "删除该字段，生成器会自动派生")
     b = model.board(config)
     for key in b:
         if str(key).startswith("BOARD_") or str(key).startswith("has"):
@@ -129,20 +127,16 @@ def validate_config(config: dict, chip: dict | None = None) -> Report:
 
     proj = model.project(config)
     if not str(proj.get("name") or "").strip():
-        report.add_error(
-            "project.name", "不能为空", "补 project.name（如 KC536），可对照 configs/*.omcfg"
-        )
+        report.add_error("project.name", "不能为空", "补 project.name（如 KC536），可对照 configs/*.omcfg")
     if not str(proj.get("customer") or "").strip():
-        report.add_error(
-            "project.customer", "不能为空", "补 project.customer（如 BYC），可对照 configs/*.omcfg"
-        )
+        report.add_error("project.customer", "不能为空", "补 project.customer（如 BYC），可对照 configs/*.omcfg")
     if "ble_names" in proj:
         names = proj.get("ble_names")
         if not isinstance(names, list) or not 1 <= len(names) <= 2:
             report.add_error(
                 "project.ble_names",
                 "必须是 1~2 个字符串的列表",
-                "例如 ble_names: [\"BT5.1Mouse\"]；BT0/BT1 两个广播名各占一项",
+                '例如 ble_names: ["BT5.1Mouse"]；BT0/BT1 两个广播名各占一项',
             )
         else:
             for index, name in enumerate(names):
@@ -193,9 +187,7 @@ def validate_config(config: dict, chip: dict | None = None) -> Report:
     levels = model.dpi_levels(config)
     if levels:
         if len(levels) > 8:
-            report.add_error(
-                "board.sensor.dpi_levels", "最多 8 档（dpi_value_tbl 长度）", "删掉多余档位"
-            )
+            report.add_error("board.sensor.dpi_levels", "最多 8 档（dpi_value_tbl 长度）", "删掉多余档位")
         for index, level in enumerate(levels):
             if level < 200 or level > 6400 or level % 200:
                 report.add_error(
@@ -205,9 +197,7 @@ def validate_config(config: dict, chip: dict | None = None) -> Report:
                 )
         default = model.dpi_default(config)
         if default is None:
-            report.add_warning(
-                "board.sensor.dpi_default", "已声明 dpi_levels，但缺少 dpi_default"
-            )
+            report.add_warning("board.sensor.dpi_default", "已声明 dpi_levels，但缺少 dpi_default")
         elif not 0 <= default < len(levels):
             report.add_error(
                 "board.sensor.dpi_default",
@@ -215,9 +205,7 @@ def validate_config(config: dict, chip: dict | None = None) -> Report:
                 "下标从 0 开始，对应 dpi_levels 第一档",
             )
     elif model.dpi_default(config) is not None:
-        report.add_error(
-            "board.sensor.dpi_levels", "声明了 dpi_default 但缺少 dpi_levels"
-        )
+        report.add_error("board.sensor.dpi_levels", "声明了 dpi_default 但缺少 dpi_levels")
 
     pins = model.pin_entries(config)
     if not pins:
@@ -231,9 +219,7 @@ def validate_config(config: dict, chip: dict | None = None) -> Report:
             report.add_error(f"pins.{role}.pin", f"{item['pin']} 不在 OM6239 可用 GPIO 列表")
         problem = pinmap.role_pin_problem(chip, role, item["pin"])
         if problem:
-            report.add_error(
-                f"pins.{role}.pin", problem, "在封装脚位表里选具备该功能的脚；片内脚不可占用"
-            )
+            report.add_error(f"pins.{role}.pin", problem, "在封装脚位表里选具备该功能的脚；片内脚不可占用")
         for name, value, valid in (
             ("mode", item["mode"], model.GPIO_MODES),
             ("pull", item["pull"], model.GPIO_PULLS),
@@ -259,9 +245,7 @@ def validate_config(config: dict, chip: dict | None = None) -> Report:
     }
     for pin, roles in by_pin.items():
         if len(roles) > 1 and frozenset(roles) not in led_aliases:
-            report.add_error(
-                "pins", f"{pin} 被重复分配: {', '.join(roles)}", "一个封装脚只能有一个功能"
-            )
+            report.add_error("pins", f"{pin} 被重复分配: {', '.join(roles)}", "一个封装脚只能有一个功能")
 
     for role in _required_roles(config, pins):
         if role not in pins:

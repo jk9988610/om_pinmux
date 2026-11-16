@@ -73,7 +73,6 @@ def test_ledc_ctrl_pin_is_optional():
     assert report.ok, [issue.render() for issue in report.errors]
 
 
-
 def test_usb_fixed_pins():
     config = _load("KC536")
     config["pins"]["USB_DN_PIN"] = "P04"

@@ -11,15 +11,9 @@ from pathlib import Path
 from . import model
 from .targets import sdk
 
-PIN_RE = re.compile(
-    r"^[ \t]*#define[ \t]+(?P<role>[A-Z][A-Z0-9_]*)[ \t]+\((?P<pin>P\d{2})\)[ \t]*$", re.M
-)
-DEFINE_RE = re.compile(
-    r"^[ \t]*#define[ \t]+(?P<name>[A-Za-z_][A-Za-z0-9_]*)[ \t]+(?P<value>[^\s/]+)", re.M
-)
-STRING_RE = re.compile(
-    r'^[ \t]*#define[ \t]+(?P<name>iPROJECT_NAME|iCONSUMER_NAME)[ \t]+"(?P<value>[^"]*)"', re.M
-)
+PIN_RE = re.compile(r"^[ \t]*#define[ \t]+(?P<role>[A-Z][A-Z0-9_]*)[ \t]+\((?P<pin>P\d{2})\)[ \t]*$", re.M)
+DEFINE_RE = re.compile(r"^[ \t]*#define[ \t]+(?P<name>[A-Za-z_][A-Za-z0-9_]*)[ \t]+(?P<value>[^\s/]+)", re.M)
+STRING_RE = re.compile(r'^[ \t]*#define[ \t]+(?P<name>iPROJECT_NAME|iCONSUMER_NAME)[ \t]+"(?P<value>[^"]*)"', re.M)
 LED_ON_RE = re.compile(r"led_r_on\(\)[ \t]*(?:\([ \t]*)?(?P<fn>gpio_set|gpio_clear)\(")
 DIR_CLOCK_RE = re.compile(r"SENSOR_DIR_DEFINE[ \t]+SENSOR_DIR_CLOCK_(?P<value>0|3|6|9)")
 DPI_INI_RE = re.compile(r"sensor_dpi_ini\s*\[\s*\]\s*=\s*\{([^}]*)\}", re.S)

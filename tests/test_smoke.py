@@ -21,13 +21,7 @@ def test_drop_ctrl_removes_only_ctrl_pin():
 
 
 def test_logo_none_clears_logo_section():
-    src = (
-        "  logo: ledc\n"
-        "  ledc_rgb_number: 6\n"
-        "  LEDC_PIN: P34\n"
-        "  LEDC_CTRL_PIN: P05\n"
-        "  USB_5V: P25\n"
-    )
+    src = "  logo: ledc\n  ledc_rgb_number: 6\n  LEDC_PIN: P34\n  LEDC_CTRL_PIN: P05\n  USB_5V: P25\n"
     out = smoke._logo_none(src)
     assert "logo: none" in out
     assert "ledc_rgb_number" not in out
@@ -43,7 +37,9 @@ def test_check_markers_passes_for_matching_scenario(tmp_path):
     (periph / "user_config.h").write_text("#define LEDC_PIN (P34)\n", encoding="utf-8")
     (periph / "ledc.h").write_text("#if defined(LEDC_PIN)\n#endif\n", encoding="utf-8")
     sc = smoke.Scenario(
-        name="X", id_low="0x0001", modify=None,
+        name="X",
+        id_low="0x0001",
+        modify=None,
         expect_have=["#define LEDC_PIN", "#if defined(LEDC_PIN)"],
         expect_not_have=["#define LED_R_PIN"],
     )
@@ -56,7 +52,9 @@ def test_check_markers_reports_missing_and_unexpected(tmp_path):
     periph.mkdir(parents=True)
     (periph / "user_config.h").write_text("#define LED_R_PIN (P04)\n", encoding="utf-8")
     sc = smoke.Scenario(
-        name="X", id_low="0x0001", modify=None,
+        name="X",
+        id_low="0x0001",
+        modify=None,
         expect_have=["#define LEDC_PIN"],
         expect_not_have=["#define LED_R_PIN"],
     )
@@ -64,9 +62,11 @@ def test_check_markers_reports_missing_and_unexpected(tmp_path):
     assert any("缺少" in p for p in problems)
     assert any("不应有" in p for p in problems)
 
+
 def test_locked_files_reports_permission_error(tmp_path, monkeypatch):
     """_locked_files：open("r+b") 抛 PermissionError 的文件应被列入。"""
     from pathlib import Path as _P
+
     root = tmp_path / "root"
     root.mkdir()
     (root / "ok.txt").write_text("x", encoding="utf-8")
@@ -74,6 +74,7 @@ def test_locked_files_reports_permission_error(tmp_path, monkeypatch):
     locked.write_text("x", encoding="utf-8")
 
     real_open = _P.open
+
     def fake_open(self, mode="r", *args, **kwargs):
         if self == locked and "b" in mode and ("+" in mode or "w" in mode):
             raise PermissionError("in use")
@@ -93,6 +94,7 @@ def test_rmtree_with_retry_retries_then_succeeds(tmp_path, monkeypatch):
 
     calls = {"n": 0}
     real_rmtree = smoke.shutil.rmtree
+
     def fake_rmtree(path, *args, **kwargs):
         calls["n"] += 1
         if calls["n"] < 2:
@@ -111,8 +113,7 @@ def test_run_smoke_skip_locked_marks_skipped(tmp_path, monkeypatch):
     """run_smoke(skip_locked=True)：被锁场景记 skipped，不拖垮其余。"""
     out_dir = tmp_path / "smoke"
     out_dir.mkdir()
-    sc = smoke.Scenario(name="X", id_low="0x0001", modify=None,
-                        expect_have=[], expect_not_have=[])
+    sc = smoke.Scenario(name="X", id_low="0x0001", modify=None, expect_have=[], expect_not_have=[])
     (out_dir / sc.name).mkdir()
 
     monkeypatch.setattr(smoke, "_rmtree_with_retry", lambda p, **kw: (False, ["a.c", "b.c"]))
@@ -129,8 +130,7 @@ def test_run_smoke_locked_fails_without_skip_flag(tmp_path, monkeypatch):
     """run_smoke(skip_locked=False)：被锁场景仍判 FAIL，带锁定文件名。"""
     out_dir = tmp_path / "smoke"
     out_dir.mkdir()
-    sc = smoke.Scenario(name="X", id_low="0x0001", modify=None,
-                        expect_have=[], expect_not_have=[])
+    sc = smoke.Scenario(name="X", id_low="0x0001", modify=None, expect_have=[], expect_not_have=[])
     (out_dir / sc.name).mkdir()
 
     monkeypatch.setattr(smoke, "_rmtree_with_retry", lambda p, **kw: (False, ["a.c", "b.c"]))
@@ -143,6 +143,7 @@ def test_run_smoke_locked_fails_without_skip_flag(tmp_path, monkeypatch):
     assert any("无法删除" in p for p in results[0]["problems"])
     assert any("a.c" in p and "b.c" in p for p in results[0]["problems"])
 
+
 def test_rmtree_precheck_locked_does_not_start_delete(tmp_path, monkeypatch):
     """_rmtree_with_retry：预检有锁时直接返回，不开始 rmtree（防残缺）。"""
     root = tmp_path / "root"
@@ -151,13 +152,10 @@ def test_rmtree_precheck_locked_does_not_start_delete(tmp_path, monkeypatch):
 
     monkeypatch.setattr(smoke, "_locked_files", lambda p: ["a.txt"])
     rmtree_called = {"n": 0}
-    monkeypatch.setattr(smoke.shutil, "rmtree",
-                        lambda *a, **kw: rmtree_called.__setitem__("n", rmtree_called["n"] + 1))
+    monkeypatch.setattr(smoke.shutil, "rmtree", lambda *a, **kw: rmtree_called.__setitem__("n", rmtree_called["n"] + 1))
 
     ok, locked = smoke._rmtree_with_retry(root, attempts=3, delay=0)
     assert ok is False
     assert locked == ["a.txt"]
     assert rmtree_called["n"] == 0, "预检有锁时不应调用 rmtree"
     assert root.is_dir(), "预检有锁时目录应完好"
-
-

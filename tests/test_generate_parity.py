@@ -20,9 +20,7 @@ REAL_SDK = Path(
 CONFIG = Path(__file__).resolve().parent.parent / "configs" / "KC536.omcfg"
 
 
-@pytest.mark.skipif(
-    not (REAL_SDK / "projects/mouse_demo/periph/user_config.h").is_file(), reason="无真实 SDK"
-)
+@pytest.mark.skipif(not (REAL_SDK / "projects/mouse_demo/periph/user_config.h").is_file(), reason="无真实 SDK")
 def test_kc536_generation_is_byte_identical(tmp_path):
     periph = tmp_path / "sdk" / "projects" / "mouse_demo" / "periph"
     periph.mkdir(parents=True)

@@ -28,6 +28,7 @@
 
 ```python
 import subprocess, sys, os
+
 env = dict(os.environ)
 env["PYTHONIOENCODING"] = "utf-8"
 env["PYTHONUTF8"] = "1"
@@ -35,8 +36,13 @@ env["PYTHONUTF8"] = "1"
 # 1. pytest（以 returncode 为准；汇总行在捕获环境可能不进 stdout）
 r = subprocess.run(
     [sys.executable, "-X", "utf8", "-m", "pytest", "-q", "--no-header"],
-    capture_output=True, text=True, encoding="utf-8", errors="replace",
-    env=env, timeout=600, cwd=r"E:\tools\om_pinmux",
+    capture_output=True,
+    text=True,
+    encoding="utf-8",
+    errors="replace",
+    env=env,
+    timeout=600,
+    cwd=r"E:\tools\om_pinmux",
 )
 print("RC =", r.returncode)
 print(r.stdout[-1500:])
@@ -45,8 +51,13 @@ print(r.stdout[-1500:])
 # 2. smoke（先确认 Keil 没开 _test_gen 里的工程）
 r = subprocess.run(
     [sys.executable, "-X", "utf8", "-m", "omcfg", "smoke"],
-    capture_output=True, text=True, encoding="utf-8", errors="replace",
-    env=env, timeout=600, cwd=r"E:\tools\om_pinmux",
+    capture_output=True,
+    text=True,
+    encoding="utf-8",
+    errors="replace",
+    env=env,
+    timeout=600,
+    cwd=r"E:\tools\om_pinmux",
 )
 print("RC =", r.returncode)
 print(r.stdout[-1500:])

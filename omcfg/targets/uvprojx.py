@@ -62,9 +62,7 @@ def _ensure_include_path(text: str, path: Path) -> str:
 
 def _rewrite_periph_group(text: str, config: dict, path: Path) -> str:
     if text.count(GROUPS_OPEN) != 1:
-        raise sdk.TargetError(
-            f"{path} 中 <Groups> 出现 {text.count(GROUPS_OPEN)} 次，无法定位源码分组"
-        )
+        raise sdk.TargetError(f"{path} 中 <Groups> 出现 {text.count(GROUPS_OPEN)} 次，无法定位源码分组")
     groups_start = text.index(GROUPS_OPEN)
     inner_start = groups_start + len(GROUPS_OPEN)
     groups_end = text.find(GROUPS_CLOSE, groups_start)
@@ -72,15 +70,9 @@ def _rewrite_periph_group(text: str, config: dict, path: Path) -> str:
         raise sdk.TargetError(f"{path} 缺少 </Groups>，工程文件结构不完整")
     groups_inner = text[inner_start:groups_end]
 
-    periph = [
-        match
-        for match in GROUP_RE.finditer(groups_inner)
-        if _group_name(match.group(0)) == "periph"
-    ]
+    periph = [match for match in GROUP_RE.finditer(groups_inner) if _group_name(match.group(0)) == "periph"]
     if len(periph) != 1:
-        raise sdk.TargetError(
-            f"{path} 中名为 periph 的 <Group> 有 {len(periph)} 个，无法安全更新"
-        )
+        raise sdk.TargetError(f"{path} 中名为 periph 的 <Group> 有 {len(periph)} 个，无法安全更新")
     match = periph[0]
     new_group = _rewrite_group(match.group(0), config, path)
     new_inner = groups_inner[: match.start()] + new_group + groups_inner[match.end() :]

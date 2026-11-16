@@ -104,9 +104,7 @@ def test_add_pin_text_to_empty_block():
 def test_set_board_value_text_keeps_comment():
     text = (CONFIGS / "CH04.omcfg").read_text(encoding="utf-8")
     after = model.set_board_value_text(text, "wheel", "ENCODER_PINMUX_SEL_IO_05_06")
-    assert after.replace(
-        "wheel: ENCODER_PINMUX_SEL_IO_05_06", "wheel: ENCODER_PINMUX_SEL_IO_00_01"
-    ) == text
+    assert after.replace("wheel: ENCODER_PINMUX_SEL_IO_05_06", "wheel: ENCODER_PINMUX_SEL_IO_00_01") == text
 
 
 def test_set_pin_text_rejects_unknown_role():

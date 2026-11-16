@@ -1,4 +1,5 @@
 """board 段 schema 字段：uart_pin / ledc_rgb_number / sensor.dpi_levels / sensor.v2_en。"""
+
 import json
 from pathlib import Path
 
@@ -22,7 +23,10 @@ def test_schema_has_uart_pin_field():
     s = _load_schema()
     assert "uart_pin" in s["properties"]["board"]["properties"]
     assert set(s["properties"]["board"]["properties"]["uart_pin"]["enum"]) == {
-        "KEY_R0_PIN", "KEY_R1_PIN", "KEY_R2_PIN", "KEY_PAIR_PIN",
+        "KEY_R0_PIN",
+        "KEY_R1_PIN",
+        "KEY_R2_PIN",
+        "KEY_PAIR_PIN",
     }
 
 

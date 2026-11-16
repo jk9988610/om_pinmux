@@ -55,9 +55,7 @@ def _make_sdk(tmp_path: Path) -> Path:
 
 def test_gui_save_preview_apply(tmp_path):
     sdk_root = _make_sdk(tmp_path)
-    assert (
-        cli.main(["init", "--config", str(CONFIGS / "KC536.omcfg"), "--sdk", str(sdk_root)]) == 0
-    )
+    assert cli.main(["init", "--config", str(CONFIGS / "KC536.omcfg"), "--sdk", str(sdk_root)]) == 0
     api = Api()
     loaded = api.load(str(sdk_root))
     assert loaded["ok"] is True
@@ -314,9 +312,7 @@ def test_sync_wheel_follows_encoder_pair():
     from omcfg import api as api_module
 
     text = (CONFIGS / "CH04.omcfg").read_text(encoding="utf-8")
-    moved = text.replace("WHEEL_A_PIN: P00", "WHEEL_A_PIN: P20").replace(
-        "WHEEL_B_PIN: P01", "WHEEL_B_PIN: P21"
-    )
+    moved = text.replace("WHEEL_A_PIN: P00", "WHEEL_A_PIN: P20").replace("WHEEL_B_PIN: P01", "WHEEL_B_PIN: P21")
     after = api_module._sync_wheel(moved)
     assert "wheel: ENCODER_PINMUX_SEL_IO_20_21" in after
     config = model.load_config_text(after)
@@ -325,9 +321,7 @@ def test_sync_wheel_follows_encoder_pair():
 
 def test_gui_rejects_invalid_pin_without_writing(tmp_path):
     sdk_root = _make_sdk(tmp_path)
-    assert (
-        cli.main(["init", "--config", str(CONFIGS / "KC536.omcfg"), "--sdk", str(sdk_root)]) == 0
-    )
+    assert cli.main(["init", "--config", str(CONFIGS / "KC536.omcfg"), "--sdk", str(sdk_root)]) == 0
     api = Api()
     config_path = sdk_root / "projects/mouse_demo/project.omcfg"
     before = config_path.read_text(encoding="utf-8")

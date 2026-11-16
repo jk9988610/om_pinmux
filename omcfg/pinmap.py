@@ -34,11 +34,15 @@ def free_gpio(chip: dict[str, Any] | None = None) -> set[str]:
     """任意功能都能接的普通 GPIO：非 special、非保留、非 USB 专用脚。"""
     chip = chip or model.load_chip()
     usb = set(_mux(chip).get("USB", {}).get("fixed", {}).values())
-    return {
-        str(item.get("name"))
-        for item in chip.get("package_pins", [])
-        if not item.get("special") and str(item.get("name", "")).startswith("P")
-    } - reserved_pins(chip) - usb
+    return (
+        {
+            str(item.get("name"))
+            for item in chip.get("package_pins", [])
+            if not item.get("special") and str(item.get("name", "")).startswith("P")
+        }
+        - reserved_pins(chip)
+        - usb
+    )
 
 
 def _encoder_pin_set(chip: dict[str, Any]) -> set[str]:
@@ -57,9 +61,7 @@ def _ledc_pin_set(chip: dict[str, Any]) -> set[str]:
     return pins
 
 
-def constraint_pins(
-    chip: dict[str, Any] | None, role: str
-) -> set[str] | None:
+def constraint_pins(chip: dict[str, Any] | None, role: str) -> set[str] | None:
     """角色的硬件/板型允许脚位；None 表示任意普通 GPIO。
 
     只含真正有硬件约束的功能，不把 SCLK/SDIO 的 alt 当约束。
@@ -87,9 +89,7 @@ def allowed_pins(chip: dict[str, Any] | None, role: str) -> set[str]:
     return set(constrained) if constrained else free_gpio(chip)
 
 
-def role_pin_problem(
-    chip: dict[str, Any] | None, role: str, pin: str
-) -> str | None:
+def role_pin_problem(chip: dict[str, Any] | None, role: str, pin: str) -> str | None:
     """该脚是否具备该功能；合法返回 None，否则给出可操作提示。"""
     chip = chip or model.load_chip()
     pin = str(pin).strip()
@@ -120,10 +120,7 @@ def role_pin_problem(
     if role in ("WHEEL_A_PIN", "WHEEL_B_PIN"):
         options = sorted(_encoder_pin_set(chip))
         if options and pin not in options:
-            return (
-                f"{pin} 不具备 ENCODER 功能，滚轮只能接四对之一："
-                "P00/P01、P05/P06、P20/P21、P24/P25"
-            )
+            return f"{pin} 不具备 ENCODER 功能，滚轮只能接四对之一：P00/P01、P05/P06、P20/P21、P24/P25"
     return None
 
 
@@ -134,9 +131,7 @@ def _assigned_by_pin(config: dict[str, Any]) -> dict[str, list[str]]:
     return by_pin
 
 
-def assignable_roles(
-    chip: dict[str, Any] | None, config: dict[str, Any], pin: str
-) -> list[str]:
+def assignable_roles(chip: dict[str, Any] | None, config: dict[str, Any], pin: str) -> list[str]:
     """当前配置下可以放到该脚的角色：排除已被其它角色占用的脚。"""
     chip = chip or model.load_chip()
     by_pin = _assigned_by_pin(config)
@@ -152,9 +147,7 @@ def assignable_roles(
     return out
 
 
-def rows(
-    config: dict[str, Any], chip: dict[str, Any] | None = None
-) -> dict[str, list[dict[str, Any]]]:
+def rows(config: dict[str, Any], chip: dict[str, Any] | None = None) -> dict[str, list[dict[str, Any]]]:
     """按封装脚位 1–32 生成界面行；片内/保留脚单列一组。"""
     chip = chip or model.load_chip()
     by_pin = _assigned_by_pin(config)

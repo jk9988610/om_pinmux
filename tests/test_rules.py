@@ -54,7 +54,6 @@ KEY_IO_SOURCE_BASE = (
 )
 
 
-
 def test_ch04_baseline_strict_audit_has_no_errors():
     config = model.load_config(BASELINE / "project.omcfg")
     report = rules.audit(config, BASELINE / "sdk", strict=True)
@@ -109,7 +108,6 @@ def test_key_io_header_definition_does_not_trigger_warning(tmp_path):
     assert not matched, [w.render() for w in matched]
 
 
-
 def test_key_io_mode_macro_used_triggers_warning(tmp_path):
     """key_io.c 调 KEY_MODE_R4（→KEY_P_PIN），config 未配置则报 warning。"""
     config = _load()
@@ -125,15 +123,12 @@ def test_key_io_mode_macro_used_triggers_warning(tmp_path):
     assert matched, [w.render() for w in report.warnings]
 
 
-
-
 def test_dpi_table_mismatch_is_warning(tmp_path):
     config = _load()
     root = _write_sdk(tmp_path / "sdk", config)
     periph = root / "projects/mouse_demo/periph"
     (periph / "sensor.c").write_text(
-        "unsigned char const sensor_dpi_ini[] = {\n"
-        "    1200L/200L-1,\n    1600L/200L-1,\n    2000L/200L-1,\n};\n",
+        "unsigned char const sensor_dpi_ini[] = {\n    1200L/200L-1,\n    1600L/200L-1,\n    2000L/200L-1,\n};\n",
         encoding="utf-8",
     )
     (periph / "sensor.h").write_text("#define DEFAULT_DPI_GRADE 1\n", encoding="utf-8")

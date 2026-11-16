@@ -56,9 +56,7 @@ def render_pins(config: dict, pins: dict[str, dict[str, str]]) -> str:
             lines.append(pin_line(role, pins[role]["pin"], 24))
     wheel = model.wheel_select(config)
     if model.board(config).get("wheel") == "SOFT_GPIO":
-        lines.append(
-            "/* 滚轮不在硬件 Encoder 对上：业务侧请 GPIO 软解码；下列宏仅满足 drv_encoder 编译 */"
-        )
+        lines.append("/* 滚轮不在硬件 Encoder 对上：业务侧请 GPIO 软解码；下列宏仅满足 drv_encoder 编译 */")
         lines.append("#define WHEEL_SOFT_GPIO         1")
         lines.append("#ifndef WHEEL_IO_SELECT")
         lines.append(f"#define {pad('WHEEL_IO_SELECT', 24)}{wheel}")
@@ -80,10 +78,7 @@ def render_pins(config: dict, pins: dict[str, dict[str, str]]) -> str:
     if model.sensor_v2_en(config):
         lines.append(f"#define {pad('SENSOR_2V_IN_EN', 24)}(1<<7|1<<6)")
     lines.append("")
-    lines.append(
-        f"#define {pad('SENSOR_DIR_DEFINE', 24)}"
-        f"SENSOR_DIR_CLOCK_{model.sensor(config).get('dir_clock')}"
-    )
+    lines.append(f"#define {pad('SENSOR_DIR_DEFINE', 24)}SENSOR_DIR_CLOCK_{model.sensor(config).get('dir_clock')}")
     lines.append("#define SENSOR_DIR_CLOCK_0      1")
     lines.append("#define SENSOR_DIR_CLOCK_3      2")
     lines.append("#define SENSOR_DIR_CLOCK_6      3")
@@ -192,9 +187,7 @@ def render_pins(config: dict, pins: dict[str, dict[str, str]]) -> str:
     return "\n".join(lines)
 
 
-def _wake_macro(
-    name: str, wake: list[str], kind: str, tail_spaces: dict[str, int], sensor_spaces: int
-) -> list[str]:
+def _wake_macro(name: str, wake: list[str], kind: str, tail_spaces: dict[str, int], sensor_spaces: int) -> list[str]:
     lines: list[str] = []
     prefix = f"#define {pad(name, 24)}"
     for index, key in enumerate(wake):
@@ -203,9 +196,7 @@ def _wake_macro(
             lines.append(prefix + call + " " * tail_spaces.get(key, 1) + "\\")
         else:
             lines.append(" " * 32 + call + " " * tail_spaces.get(key, 1) + "\\")
-    lines.append(
-        " " * 32 + f"drv_pmu_wakeup_pin_set(SENSOR_MOTION_PIN, {kind});" + " " * sensor_spaces
-    )
+    lines.append(" " * 32 + f"drv_pmu_wakeup_pin_set(SENSOR_MOTION_PIN, {kind});" + " " * sensor_spaces)
     return lines
 
 
@@ -352,8 +343,7 @@ def render_sleep(config: dict, pins: dict[str, dict[str, str]]) -> str:
         " */",
         "void periph_gpio_sleep_set()",
         "{",
-        "    gpio_set_pad_buffer(LVD_PIN,PAD_IN_BUFFER_OFF);     "
-        "/* 关掉LVD的输入BUFFER，避免漏电 */",
+        "    gpio_set_pad_buffer(LVD_PIN,PAD_IN_BUFFER_OFF);     /* 关掉LVD的输入BUFFER，避免漏电 */",
         "",
         "    gpio_set_pd(WHEEL_A_PIN);",
         "    gpio_set_pd(WHEEL_B_PIN);",

@@ -21,30 +21,61 @@ import re
 import shutil
 
 PIN_MACROS = [
-    "KEY_R0_PIN", "KEY_R1_PIN", "KEY_R2_PIN", "KEY_PAIR_PIN", "KEY_C0_PIN",
-    "KEY_B_PIN", "KEY_P_PIN", "KEY_DPI_PIN", "KEY_DPI_SUB_PIN", "KEY_DPI_ADD_PIN",
-    "WHEEL_A_PIN", "WHEEL_B_PIN", "WHEEL_IO_SELECT", "WHEEL_SOFT_GPIO",
-    "MODE_24G_PIN", "MODE_BLE_PIN", "MODE_BLE_24G_PIN", "MODE_BLE_CHECK", "MODE_24G_CHECK",
-    "SENSOR_MOTION_PIN", "SENSOR_SCLK_PIN", "SENSOR_SDIO_PIN", "SENSOR_NCS_PIN",
-    "LED_MODE_R_PIN", "LED_MODE_G_PIN", "LED_MODE_B_PIN", "LED_LOW_PIN",
-    "LED_R_PIN", "LED_G_PIN", "LED_B_PIN", "LEDC_PIN", "LEDC_CTRL_PIN",
-    "USB_5V", "BAT_CHG_PIN", "LVD_PIN", "LVD_CHECK_INDEX",
+    "KEY_R0_PIN",
+    "KEY_R1_PIN",
+    "KEY_R2_PIN",
+    "KEY_PAIR_PIN",
+    "KEY_C0_PIN",
+    "KEY_B_PIN",
+    "KEY_P_PIN",
+    "KEY_DPI_PIN",
+    "KEY_DPI_SUB_PIN",
+    "KEY_DPI_ADD_PIN",
+    "WHEEL_A_PIN",
+    "WHEEL_B_PIN",
+    "WHEEL_IO_SELECT",
+    "WHEEL_SOFT_GPIO",
+    "MODE_24G_PIN",
+    "MODE_BLE_PIN",
+    "MODE_BLE_24G_PIN",
+    "MODE_BLE_CHECK",
+    "MODE_24G_CHECK",
+    "SENSOR_MOTION_PIN",
+    "SENSOR_SCLK_PIN",
+    "SENSOR_SDIO_PIN",
+    "SENSOR_NCS_PIN",
+    "LED_MODE_R_PIN",
+    "LED_MODE_G_PIN",
+    "LED_MODE_B_PIN",
+    "LED_LOW_PIN",
+    "LED_R_PIN",
+    "LED_G_PIN",
+    "LED_B_PIN",
+    "LEDC_PIN",
+    "LEDC_CTRL_PIN",
+    "USB_5V",
+    "BAT_CHG_PIN",
+    "LVD_PIN",
+    "LVD_CHECK_INDEX",
 ]
 
 SCAN_EXTS = {".c", ".h"}
 SKIP_DIR_NAMES = {
-    "out", "Objects", "Listings", "DebugConfig", "lib_build", ".git",
-    "node_modules", "__pycache__",
+    "out",
+    "Objects",
+    "Listings",
+    "DebugConfig",
+    "lib_build",
+    ".git",
+    "node_modules",
+    "__pycache__",
 }
 
 
 def _iter_source_files(root: str):
     root = os.path.abspath(root)
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [
-            d for d in dirnames
-            if d not in SKIP_DIR_NAMES and not d.startswith("_pinmux_bak")
-        ]
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIR_NAMES and not d.startswith("_pinmux_bak")]
         for name in filenames:
             if os.path.splitext(name)[1].lower() in SCAN_EXTS:
                 yield os.path.join(dirpath, name)
@@ -76,11 +107,13 @@ def scan_project_refs(project_hint: str) -> dict:
                 for m in macro_re.finditer(line):
                     total += 1
                     mac = m.group(1)
-                    by_macro.setdefault(mac, []).append({
-                        "file": rel,
-                        "line": i,
-                        "text": line.strip()[:160],
-                    })
+                    by_macro.setdefault(mac, []).append(
+                        {
+                            "file": rel,
+                            "line": i,
+                            "text": line.strip()[:160],
+                        }
+                    )
 
     if "MODE_BLE_24G_PIN" in by_macro and "MODE_24G_PIN" in by_macro:
         issues.append("同时发现 MODE_BLE_24G_PIN 与 MODE_24G_PIN，可能混用单/双模式契约")
@@ -103,9 +136,7 @@ def scan_project_refs(project_hint: str) -> dict:
         "roots": roots,
         "ref_count": total,
         "macros": {k: v[:30] for k, v in sorted(by_macro.items())},
-        "macro_files": {
-            k: sorted({x["file"] for x in v}) for k, v in sorted(by_macro.items())
-        },
+        "macro_files": {k: sorted({x["file"] for x in v}) for k, v in sorted(by_macro.items())},
         "issues": issues,
         "pins": pin_map,
     }
@@ -221,21 +252,25 @@ def scan_port_checklist(project_hint: str, feat: dict | None = None) -> dict:
     items: list[dict] = []
 
     def add(item_id: str, stage: str, level: str, title: str, ok: bool, detail: str = ""):
-        items.append({
-            "id": item_id,
-            "stage": stage,
-            "level": level if not ok else "ok",
-            "title": title,
-            "pass": ok,
-            "detail": detail,
-        })
+        items.append(
+            {
+                "id": item_id,
+                "stage": stage,
+                "level": level if not ok else "ok",
+                "title": title,
+                "pass": ok,
+                "detail": detail,
+            }
+        )
 
     # —— C 业务骨架 ——
     for name in ("ledc.c", "ledc.h", "ledc_mode.c", "ledc_mode.h"):
         path = os.path.join(periph, name)
         ok = os.path.isfile(path)
         add(
-            f"file_{name}", "C", "error" if logo_ledc else "info",
+            f"file_{name}",
+            "C",
+            "error" if logo_ledc else "info",
             f"存在 {name}",
             ok if logo_ledc else True,
             "" if ok else "LOGO=LEDC 时需从金机拷贝并加入 Keil",
@@ -245,17 +280,20 @@ def scan_port_checklist(project_hint: str, feat: dict | None = None) -> dict:
         (os.path.join(demo, "main", "mouse_hw.c"), "mouse_hw 调用 ledc_polling"),
     ]
     if sdk:
-        poll_targets.extend([
-            (os.path.join(sdk, "mode_24g", "main_24g.c"), "main_24g 调用 ledc_polling"),
-            (os.path.join(sdk, "mode_usb", "main_usb.c"), "main_usb 调用 ledc_polling"),
-        ])
+        poll_targets.extend(
+            [
+                (os.path.join(sdk, "mode_24g", "main_24g.c"), "main_24g 调用 ledc_polling"),
+                (os.path.join(sdk, "mode_usb", "main_usb.c"), "main_usb 调用 ledc_polling"),
+            ]
+        )
     else:
         add("sdk_root", "C", "warn", "定位 SDK 根目录", False, "未找到含 hal/ 的 SDK 根，跳过 mode_24g/usb 检查")
 
     for path, title in poll_targets:
         ok = _file_contains(path, r"\bledc_polling\s*\(")
         add(
-            f"poll_{os.path.basename(path)}", "C",
+            f"poll_{os.path.basename(path)}",
+            "C",
             "error" if logo_ledc else "info",
             title,
             ok if logo_ledc else True,
@@ -264,15 +302,20 @@ def scan_port_checklist(project_hint: str, feat: dict | None = None) -> dict:
 
     key_io = os.path.join(periph, "key_io.c")
     add(
-        "ledc_mode_switch", "C", "warn",
+        "ledc_mode_switch",
+        "C",
+        "warn",
         "key_io 含 ledc_mode_switch（组合键切灯效）",
         _file_contains(key_io, r"\bledc_mode_switch\s*\("),
         "" if _file_contains(key_io, r"\bledc_mode_switch\s*\(") else "组合键灯效依赖此函数",
     )
     add(
-        "cmd_idle_cfg", "E", "warn",
+        "cmd_idle_cfg",
+        "E",
+        "warn",
         "改灯后使用 Cmd_Idle_Cfg（无线立即重载）",
-        _file_contains(key_io, r"Cmd_Idle_Cfg") or _file_contains(
+        _file_contains(key_io, r"Cmd_Idle_Cfg")
+        or _file_contains(
             os.path.join(sdk or "", "mode_usb", "hid_process.c") if sdk else "",
             r"Cmd_Idle_Cfg",
         ),
@@ -283,7 +326,9 @@ def scan_port_checklist(project_hint: str, feat: dict | None = None) -> dict:
     rte = os.path.join(demo, "config", "RTE_om6239.h")
     rte_ok = _file_contains(rte, r"#define\s+RTE_LEDC\s+1\b")
     add(
-        "rte_ledc", "D", "error" if logo_ledc else "info",
+        "rte_ledc",
+        "D",
+        "error" if logo_ledc else "info",
         "RTE_LEDC=1",
         rte_ok if logo_ledc else True,
         "" if rte_ok else f"请打开 {rte}",
@@ -300,7 +345,9 @@ def scan_port_checklist(project_hint: str, feat: dict | None = None) -> dict:
                     break
     uv_ok = _file_contains(uv, r"ledc\.c") and _file_contains(uv, r"ledc_mode\.c")
     add(
-        "uvproj_ledc", "D", "warn" if logo_ledc else "info",
+        "uvproj_ledc",
+        "D",
+        "warn" if logo_ledc else "info",
         "Keil 工程包含 ledc.c / ledc_mode.c",
         uv_ok if logo_ledc else True,
         "" if uv_ok else f"检查 {uv}",
@@ -309,7 +356,9 @@ def scan_port_checklist(project_hint: str, feat: dict | None = None) -> dict:
     ledc_c = os.path.join(periph, "ledc.c")
     sel_ok = _file_contains(ledc_c, r"drv_pmu_ledc_sel\s*\(|PMU_LEDC_SEL_IO_")
     add(
-        "drv_ledc_sel", "D", "warn" if logo_ledc else "info",
+        "drv_ledc_sel",
+        "D",
+        "warn" if logo_ledc else "info",
         "ledc.c 调用 drv_pmu_ledc_sel",
         sel_ok if logo_ledc else True,
         "" if sel_ok else "无 SEL 则灯带数据脚不会接到封装脚",
@@ -327,7 +376,9 @@ def scan_port_checklist(project_hint: str, feat: dict | None = None) -> dict:
                 unlock_ok = True
                 break
     add(
-        "pinmux_unlock", "D", "warn" if logo_ledc else "info",
+        "pinmux_unlock",
+        "D",
+        "warn" if logo_ledc else "info",
         "HAL 含 PINMUX 解锁 0x5A5A（drv_pmu_ledc_sel）",
         unlock_ok if logo_ledc else True,
         "" if unlock_ok else "写 LEDC SEL 前需解锁，否则选脚不生效",
@@ -336,20 +387,25 @@ def scan_port_checklist(project_hint: str, feat: dict | None = None) -> dict:
     pins = _parse_user_config_pins(os.path.join(periph, "user_config.h"))
     coll = _ledc_wheel_collision_from_pins(pins, periph)
     add(
-        "ledc_wheel", "B/D", "error" if coll else "ok",
+        "ledc_wheel",
+        "B/D",
+        "error" if coll else "ok",
         "LEDC_SEL 与滚轮脚无冲突",
         coll is None,
-        coll or (
-            f"滚轮 {pins.get('WHEEL_A_PIN')}/{pins.get('WHEEL_B_PIN')}，"
-            f"SEL={_infer_ledc_mux_pin(pins, periph)[0]}"
-        ),
+        coll
+        or (f"滚轮 {pins.get('WHEEL_A_PIN')}/{pins.get('WHEEL_B_PIN')}，SEL={_infer_ledc_mux_pin(pins, periph)[0]}"),
     )
 
     if has_key_c0:
-        uc = open(os.path.join(periph, "user_config.h"), encoding="utf-8", errors="replace").read() \
-            if os.path.isfile(os.path.join(periph, "user_config.h")) else ""
+        uc = (
+            open(os.path.join(periph, "user_config.h"), encoding="utf-8", errors="replace").read()
+            if os.path.isfile(os.path.join(periph, "user_config.h"))
+            else ""
+        )
         add(
-            "key_c0", "B", "warn",
+            "key_c0",
+            "B",
+            "warn",
             "user_config 定义 KEY_C0_PIN（矩阵列）",
             "KEY_C0_PIN" in uc,
             "" if "KEY_C0_PIN" in uc else "CH04 类矩阵键需要 KEY_C0",
@@ -358,16 +414,18 @@ def scan_port_checklist(project_hint: str, feat: dict | None = None) -> dict:
     # RGB 板：明确不要求 ledc；若工程仍依赖 LEDC_PIN 动画则 warn
     if not logo_ledc:
         add(
-            "rgb_no_ledc_required", "C", "ok",
+            "rgb_no_ledc_required",
+            "C",
+            "ok",
             "RGB LOGO 板：不强制 ledc* 文件",
             True,
             "请用 board_pack 的 rgb_logo_pack，勿对 RGB 板跑 CH04 port_apply 整包",
         )
-        ledc_pin_used = _file_contains(
-            os.path.join(periph, "user_config.h"), r"#define\s+LEDC_PIN\b"
-        )
+        ledc_pin_used = _file_contains(os.path.join(periph, "user_config.h"), r"#define\s+LEDC_PIN\b")
         add(
-            "rgb_ledc_pin_absent", "B", "warn",
+            "rgb_ledc_pin_absent",
+            "B",
+            "warn",
             "RGB 板 user_config 不宜再定义 LEDC_PIN",
             not ledc_pin_used,
             "" if not ledc_pin_used else "发现 LEDC_PIN：确认是否误用灯带脚位",
@@ -387,18 +445,19 @@ def scan_port_checklist(project_hint: str, feat: dict | None = None) -> dict:
     if def_rw and not def_const:
         mouse_ok = decl_rw and not decl_const
         add(
-            "mouse_name_rw", "C", "error",
+            "mouse_name_rw",
+            "C",
+            "error",
             "mouse_name 声明与定义同为可写（非 const）",
             mouse_ok,
-            "" if mouse_ok else (
-                f"mouse_hw.c 为 char mouse_name[]，但 mouse.h 仍为 const："
-                f"{mouse_h}"
-            ),
+            "" if mouse_ok else (f"mouse_hw.c 为 char mouse_name[]，但 mouse.h 仍为 const：{mouse_h}"),
         )
     elif def_const:
         mouse_ok = decl_const
         add(
-            "mouse_name_rw", "C", "error",
+            "mouse_name_rw",
+            "C",
+            "error",
             "mouse_name 声明与定义 const 一致",
             mouse_ok,
             "" if mouse_ok else f"定义带 const 但声明不一致：{mouse_h}",
@@ -408,7 +467,9 @@ def scan_port_checklist(project_hint: str, feat: dict | None = None) -> dict:
     deep_ok = _file_contains(sensor_h, r"\bsensor_deepsleep_wakeup\s*\(")
     if hw_calls_deep:
         add(
-            "sensor_deepsleep_decl", "C", "error",
+            "sensor_deepsleep_decl",
+            "C",
+            "error",
             "sensor.h 声明 sensor_deepsleep_wakeup",
             deep_ok,
             "" if deep_ok else f"mouse_hw 调用此函数，缺声明：{sensor_h}",
@@ -418,7 +479,9 @@ def scan_port_checklist(project_hint: str, feat: dict | None = None) -> dict:
     charg_ok = _file_contains(lvd_h, r"\bcharg_led_sleep_process\s*\(")
     if hw_calls_charg:
         add(
-            "charg_led_sleep_decl", "C", "error",
+            "charg_led_sleep_decl",
+            "C",
+            "error",
             "lvd.h 声明 charg_led_sleep_process",
             charg_ok,
             "" if charg_ok else f"mouse_hw 调用此函数，缺声明：{lvd_h}",
@@ -578,10 +641,7 @@ def _patch_key_io_c(text: str, feat: dict) -> tuple[str, list[str]]:
         )
         if not already:
             new, n = pat.subn(
-                "#ifdef KEY_PAIR_PIN\n"
-                "    if(0 == KEY_MODE_PAIR)\n"
-                "        key_status |= bkey_pair;\n"
-                "#endif",
+                "#ifdef KEY_PAIR_PIN\n    if(0 == KEY_MODE_PAIR)\n        key_status |= bkey_pair;\n#endif",
                 text,
                 count=1,
             )
@@ -724,20 +784,27 @@ def _sync_rte_ledc(periph: str, feat: dict, bak_dir: str) -> tuple[list[dict], l
 
     rte = os.path.join(os.path.dirname(periph), "config", "RTE_om6239.h")
     if not os.path.isfile(rte):
-        actions.append({
-            "file": "RTE_om6239.h", "rule": "warn",
-            "detail": "未找到 config/RTE_om6239.h，无法打开 RTE_LEDC",
-            "applied": False,
-        })
+        actions.append(
+            {
+                "file": "RTE_om6239.h",
+                "rule": "warn",
+                "detail": "未找到 config/RTE_om6239.h，无法打开 RTE_LEDC",
+                "applied": False,
+            }
+        )
         return actions, written
 
     try:
         old = open(rte, encoding="utf-8", errors="replace").read()
     except OSError as e:
-        actions.append({
-            "file": "RTE_om6239.h", "rule": "error",
-            "detail": str(e), "applied": False,
-        })
+        actions.append(
+            {
+                "file": "RTE_om6239.h",
+                "rule": "error",
+                "detail": str(e),
+                "applied": False,
+            }
+        )
         return actions, written
 
     new, n = re.subn(
@@ -750,17 +817,23 @@ def _sync_rte_ledc(periph: str, feat: dict, bak_dir: str) -> tuple[list[dict], l
         _backup_file(bak_dir, rte)
         open(rte, "w", encoding="utf-8", newline="\n").write(new)
         written.append(rte)
-        actions.append({
-            "file": "RTE_om6239.h", "rule": "patch",
-            "detail": "RTE_LEDC → 1（启用 drv_ledc 类型/API）",
-            "applied": True,
-        })
+        actions.append(
+            {
+                "file": "RTE_om6239.h",
+                "rule": "patch",
+                "detail": "RTE_LEDC → 1（启用 drv_ledc 类型/API）",
+                "applied": True,
+            }
+        )
     else:
-        actions.append({
-            "file": "RTE_om6239.h", "rule": "noop",
-            "detail": "RTE_LEDC 已为 1 或未匹配到宏",
-            "applied": False,
-        })
+        actions.append(
+            {
+                "file": "RTE_om6239.h",
+                "rule": "noop",
+                "detail": "RTE_LEDC 已为 1 或未匹配到宏",
+                "applied": False,
+            }
+        )
     return actions, written
 
 
@@ -778,13 +851,14 @@ def _sync_logo_ledc(periph: str, feat: dict, bak_dir: str) -> tuple[list[dict], 
         except OSError:
             body = ""
         if "LED_R_PIN" in body and not os.path.isfile(ledc_c):
-            actions.append({
-                "file": "led.c",
-                "rule": "warn",
-                "detail": "LOGO=LEDC 但 led.c 仍引用 LED_R/G/B 且无 ledc.c："
-                          "需从金标准拷贝 ledc* 并改 Keil 工程",
-                "applied": False,
-            })
+            actions.append(
+                {
+                    "file": "led.c",
+                    "rule": "warn",
+                    "detail": "LOGO=LEDC 但 led.c 仍引用 LED_R/G/B 且无 ledc.c：需从金标准拷贝 ledc* 并改 Keil 工程",
+                    "applied": False,
+                }
+            )
 
     golden = (feat.get("golden_periph") or "").strip()
     if not golden or not os.path.isdir(golden):
@@ -806,11 +880,14 @@ def _sync_logo_ledc(periph: str, feat: dict, bak_dir: str) -> tuple[list[dict], 
                 _backup_file(bak_dir, dst)
             shutil.copy2(src, dst)
             written.append(dst)
-            actions.append({
-                "file": name, "rule": "copy",
-                "detail": f"从金标准拷贝 {name}",
-                "applied": True,
-            })
+            actions.append(
+                {
+                    "file": name,
+                    "rule": "copy",
+                    "detail": f"从金标准拷贝 {name}",
+                    "applied": True,
+                }
+            )
     return actions, written
 
 
@@ -827,18 +904,26 @@ def sync_board_contracts(periph: str, feat: dict, bak_dir: str) -> dict:
 
     for label, path, patcher in targets:
         if not os.path.isfile(path):
-            actions.append({
-                "file": label, "rule": "skip",
-                "detail": "文件不存在", "applied": False,
-            })
+            actions.append(
+                {
+                    "file": label,
+                    "rule": "skip",
+                    "detail": "文件不存在",
+                    "applied": False,
+                }
+            )
             continue
         try:
             old = open(path, encoding="utf-8", errors="replace").read()
         except OSError as e:
-            actions.append({
-                "file": label, "rule": "error",
-                "detail": str(e), "applied": False,
-            })
+            actions.append(
+                {
+                    "file": label,
+                    "rule": "error",
+                    "detail": str(e),
+                    "applied": False,
+                }
+            )
             continue
         new, notes = patcher(old, feat)
         if new != old:
@@ -846,16 +931,23 @@ def sync_board_contracts(periph: str, feat: dict, bak_dir: str) -> dict:
             open(path, "w", encoding="utf-8", newline="\n").write(new)
             written.append(path)
             for n in notes:
-                actions.append({
-                    "file": label, "rule": "patch",
-                    "detail": n, "applied": True,
-                })
+                actions.append(
+                    {
+                        "file": label,
+                        "rule": "patch",
+                        "detail": n,
+                        "applied": True,
+                    }
+                )
         else:
-            actions.append({
-                "file": label, "rule": "noop",
-                "detail": "无需改写或未匹配到可替换模板",
-                "applied": False,
-            })
+            actions.append(
+                {
+                    "file": label,
+                    "rule": "noop",
+                    "detail": "无需改写或未匹配到可替换模板",
+                    "applied": False,
+                }
+            )
 
     logo_actions, logo_written = _sync_logo_ledc(periph, feat, bak_dir)
     actions.extend(logo_actions)

@@ -7,20 +7,14 @@ from omcfg.transaction import FileTransaction, rollback_manifest
 def test_gbk_crlf_block_roundtrip(tmp_path):
     path = tmp_path / "user_config.c"
     original = (
-        "/* 中文注释 */\r\n"
-        "/* OMCFG BEGIN gpio_table */\r\n"
-        "old\r\n"
-        "/* OMCFG END gpio_table */\r\n"
-        "tail\r\n"
+        "/* 中文注释 */\r\n/* OMCFG BEGIN gpio_table */\r\nold\r\n/* OMCFG END gpio_table */\r\ntail\r\n"
     ).encode("gbk")
     path.write_bytes(original)
     source = sdk.read_source(path)
     assert source.encoding == "gbk"
     assert source.newline == "\r\n"
     after = sdk.replace_block(source.text, "gpio_table", "新内容\n第二行", path)
-    path.write_bytes(
-        sdk.SourceFile(path, after, source.encoding, source.newline, source.bom).render()
-    )
+    path.write_bytes(sdk.SourceFile(path, after, source.encoding, source.newline, source.bom).render())
     raw = path.read_bytes()
     assert raw.decode("gbk").replace("\r\n", "\n").splitlines() == [
         "/* 中文注释 */",
@@ -39,10 +33,7 @@ def test_missing_and_duplicate_markers(tmp_path):
     with pytest.raises(sdk.MissingBlockError):
         sdk.replace_block(path.read_text(encoding="utf-8"), "pins", "x", path)
 
-    duplicate = (
-        "/* OMCFG BEGIN pins */\n/* OMCFG END pins */\n"
-        "/* OMCFG BEGIN pins */\n/* OMCFG END pins */\n"
-    )
+    duplicate = "/* OMCFG BEGIN pins */\n/* OMCFG END pins */\n/* OMCFG BEGIN pins */\n/* OMCFG END pins */\n"
     with pytest.raises(sdk.DuplicateBlockError):
         sdk.replace_block(duplicate, "pins", "x", path)
 

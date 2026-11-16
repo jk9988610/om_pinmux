@@ -58,9 +58,7 @@ class FileTransaction:
     entries: list[dict] = field(default_factory=list)
 
     @classmethod
-    def create(
-        cls, target_root: str | Path, operation: str, stamp: str | None = None
-    ) -> "FileTransaction":
+    def create(cls, target_root: str | Path, operation: str, stamp: str | None = None) -> "FileTransaction":
         root = Path(target_root).resolve()
         stamp = stamp or datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         backup_root = root / f".omcfg_bak_{stamp}"
@@ -91,9 +89,7 @@ class FileTransaction:
             }
         )
 
-    def write_bytes(
-        self, path: str | Path, data: bytes, detail: str = "已写入事务"
-    ) -> ActionResult:
+    def write_bytes(self, path: str | Path, data: bytes, detail: str = "已写入事务") -> ActionResult:
         target = Path(path).resolve()
         self.backup(target)
         before = sha1_file(target)
@@ -133,9 +129,7 @@ class FileTransaction:
             "entries": self.entries,
             "actions": [action.as_dict() for action in self.actions],
         }
-        self.manifest_path().write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-        )
+        self.manifest_path().write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         return self.manifest_path()
 
     def manifest_path(self) -> Path:

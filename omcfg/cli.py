@@ -254,8 +254,7 @@ def cmd_gen(args: argparse.Namespace) -> int:
     if not config_path.is_file():
         _error(
             f"配置不存在: {config_path}",
-            "先运行 python -m omcfg init 安装 project.omcfg，"
-            "或用 --config configs/KC536.omcfg 指定板模板",
+            "先运行 python -m omcfg init 安装 project.omcfg，或用 --config configs/KC536.omcfg 指定板模板",
         )
         return EXIT_ENVIRONMENT
     try:
@@ -309,6 +308,7 @@ def cmd_gen(args: argparse.Namespace) -> int:
         # 按 LEDC_PIN 校正 ledc.c / drv_ledc.c 的 PMU_LEDC_SEL_IO_xx
         try:
             from .api import Api as _Api
+
             _fix = _Api().finalize_ledc_sel(str(root))
             if _fix.get("ok") and _fix.get("changed"):
                 print("LEDC SEL 校正: %s -> %s" % (_fix.get("sel"), ",".join(_fix["changed"])))
@@ -326,16 +326,11 @@ def cmd_new(args: argparse.Namespace) -> int:
     if problem:
         _error(problem, "例如 --name KC536X；工程名会写入 iPROJECT_NAME 并派生 BLE 广播名")
         return EXIT_VALIDATION
-    target = (
-        Path(args.target).expanduser().resolve()
-        if args.target
-        else (Path.cwd() / name).resolve()
-    )
+    target = Path(args.target).expanduser().resolve() if args.target else (Path.cwd() / name).resolve()
     if target.exists():
         _error(
             f"目标路径已存在: {target}",
-            "new 不覆盖任何现有目录；换一个不存在的路径，"
-            "或确认旧目录无用后手工删除再执行",
+            "new 不覆盖任何现有目录；换一个不存在的路径，或确认旧目录无用后手工删除再执行",
         )
         return EXIT_ENVIRONMENT
 
@@ -389,10 +384,7 @@ def cmd_new(args: argparse.Namespace) -> int:
     print(f"新工程: {target}（目录由工具生成）")
     print(f"工程名: {name}")
     source_note = "手工指定" if id_low is not None else "按名称派生"
-    print(
-        f"项目号: {project_id['low']} / {project_id['high']} / v{project_id['version']}"
-        f"（{source_note}）"
-    )
+    print(f"项目号: {project_id['low']} / {project_id['high']} / v{project_id['version']}（{source_note}）")
     print(f"BLE 广播名: {' / '.join(model.ble_names(config))}")
 
     transaction = FileTransaction.create(target, "omcfg_new")
@@ -405,9 +397,7 @@ def cmd_new(args: argparse.Namespace) -> int:
         config_target.parent.mkdir(parents=True, exist_ok=True)
         transaction.write_bytes(config_target, config_payload, "写入项目配置")
         rewrites = newproject.rewrite_identity(target, config, tx=transaction)
-        init_project(
-            target, config_target, force=False, verbose=False, announce_next=False, tx=transaction
-        )
+        init_project(target, config_target, force=False, verbose=False, announce_next=False, tx=transaction)
         outputs = generator.build_outputs(config, target)
         code, _manifest = _apply_outputs(target, outputs, "omcfg_new", tx=transaction)
         if code != EXIT_OK:
@@ -466,8 +456,7 @@ def cmd_rollback(args: argparse.Namespace) -> int:
     if not manifest.is_file():
         _error(
             f"manifest 不存在: {manifest}",
-            "manifest 位于 <SDK>/.omcfg_bak_<时间戳>/manifest.json；"
-            "也可以直接把该目录传给 --manifest",
+            "manifest 位于 <SDK>/.omcfg_bak_<时间戳>/manifest.json；也可以直接把该目录传给 --manifest",
         )
         return EXIT_ENVIRONMENT
     try:
@@ -510,18 +499,12 @@ def build_parser() -> argparse.ArgumentParser:
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    sub = parser.add_subparsers(
-        dest="command", required=True, metavar="{init,check,gen,new,rollback,smoke}"
-
-    )
+    sub = parser.add_subparsers(dest="command", required=True, metavar="{init,check,gen,new,rollback,smoke}")
 
     init = sub.add_parser(
         "init",
         help="安装 project.omcfg 并插入 OMCFG/USER CODE 标记（一次性）",
-        description=(
-            "把板模板安装为 <SDK>/projects/mouse_demo/project.omcfg，"
-            "并在生成目标里插入标记块。"
-        ),
+        description=("把板模板安装为 <SDK>/projects/mouse_demo/project.omcfg，并在生成目标里插入标记块。"),
         epilog=(
             "示例:\n"
             "  python -m omcfg init --config configs\\CH04.omcfg --sdk E:\\copy\\CH04_SDK\n"
@@ -541,19 +524,13 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="DIR",
         help="SDK 根目录（其下有 projects/mouse_demo/periph）",
     )
-    init.add_argument(
-        "--force", action="store_true", help="覆盖内容不同的 project.omcfg（默认拒绝）"
-    )
+    init.add_argument("--force", action="store_true", help="覆盖内容不同的 project.omcfg（默认拒绝）")
 
     check = sub.add_parser(
         "check",
         help="校验配置（不写盘）",
         description="解析 .omcfg 并跑引脚/板型规则；退出码 1 表示存在 error。",
-        epilog=(
-            "示例:\n"
-            "  python -m omcfg check configs\\KC536.omcfg\n"
-            "  python -m omcfg check --all configs"
-        ),
+        epilog=("示例:\n  python -m omcfg check configs\\KC536.omcfg\n  python -m omcfg check --all configs"),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     check.add_argument("paths", nargs="*", metavar="FILE", help="一个或多个 .omcfg 路径")
@@ -590,9 +567,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     dry = gen.add_mutually_exclusive_group()
     dry.add_argument("--dry-run", action="store_true", help="只打印 diff，不落盘（默认行为）")
-    dry.add_argument(
-        "--apply", action="store_true", help="真正写入标记块，并生成可回滚 manifest"
-    )
+    dry.add_argument("--apply", action="store_true", help="真正写入标记块，并生成可回滚 manifest")
 
     new = sub.add_parser(
         "new",
@@ -661,11 +636,7 @@ def build_parser() -> argparse.ArgumentParser:
         "smoke",
         help="重建三种 logo 形态的冒烟工程（TEST_CLI / TEST_NOCTRL / TEST_NONE）",
         description="重建三种 logo 形态的冒烟工程，供 Keil 批量编译 + 烧录。",
-        epilog=(
-            "示例:\n"
-            "  python -m omcfg smoke\n"
-            "  python -m omcfg smoke --out D:\\tmp\\smoke"
-        ),
+        epilog=("示例:\n  python -m omcfg smoke\n  python -m omcfg smoke --out D:\\tmp\\smoke"),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     smoke_cmd.add_argument(
@@ -681,7 +652,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     return parser
-
 
 
 def main(argv: list[str] | None = None) -> int:

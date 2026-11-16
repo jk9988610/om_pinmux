@@ -1,4 +1,5 @@
 """finalize_ledc_sel：按 LEDC_PIN 校正 ledc.c / drv_ledc.c 的 PMU_LEDC_SEL_IO_xx。"""
+
 from pathlib import Path
 
 from omcfg.api import Api
@@ -9,10 +10,10 @@ MIN_CFG = (
     "project:\n"
     "  name: TEST\n"
     "  customer: TEST\n"
-    "  ble_names: [\"TEST Bt1\", \"TEST Bt2\"]\n"
+    '  ble_names: ["TEST Bt1", "TEST Bt2"]\n'
     "  id:\n"
-    "    low: \"0x0001\"\n"
-    "    high: \"0x071\"\n"
+    '    low: "0x0001"\n'
+    '    high: "0x071"\n'
     "    version: 1\n"
     "board:\n"
     "  mode_pins: dual\n"

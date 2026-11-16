@@ -107,13 +107,16 @@ def _apply_xxx(board, root, tx):
 
 ~~~python
 # ① policy.py 的 POLICIES 里加（在 pins_user_config 之前）
-Policy(
-    id="xxx",
-    title="简短标题",
-    kind="board_patch",
-    default_rgb=True, default_ledc=True,
-    rels=("projects/mouse_demo/periph/user_config.h",),
-),
+(
+    Policy(
+        id="xxx",
+        title="简短标题",
+        kind="board_patch",
+        default_rgb=True,
+        default_ledc=True,
+        rels=("projects/mouse_demo/periph/user_config.h",),
+    ),
+)
 
 # ② workflow.py 的 _apply_board_policy 里加
 if pdef.id == "xxx":
@@ -181,7 +184,7 @@ elif pdef.id == "xxx":
 ~~~python
 import sys, re
 
-for mod in ('omcfg.workflow', 'omcfg.policy', 'omcfg.biz_sync'):
+for mod in ("omcfg.workflow", "omcfg.policy", "omcfg.biz_sync"):
     if mod in sys.modules:
         del sys.modules[mod]
 if WORKSPACE not in sys.path:
@@ -192,16 +195,19 @@ from pathlib import Path
 
 class FakeTx:
     """只记录 write_text 调用，不写盘。"""
-    def __init__(self): self.writes = []
+
+    def __init__(self):
+        self.writes = []
+
     def write_text(self, path, text, encoding="utf-8", newline=None):
         self.writes.append((str(path), text, encoding))
 
 
 REPOS = {
-    '495_V196':   r"E:\M_2026\495_V196\software\trunk\SE71M_0495_V196_V1_20260927",
-    '512_S205':   r"E:\M_2026\512_S205\software\trunk\SE71M_0512_S205_V1_20261017",
-    '516_BM2017': r"E:\M_2026\516_BM2017\software\trunk\SE71M_0516_BM2017_V1_20261022",
-    '524_LJ-V08': r"E:\M_2026\524_LJ-V08\software\trunk\SE71M_0524_LJ-V08_V1_20261103",
+    "495_V196": r"E:\M_2026\495_V196\software\trunk\SE71M_0495_V196_V1_20260927",
+    "512_S205": r"E:\M_2026\512_S205\software\trunk\SE71M_0512_S205_V1_20261017",
+    "516_BM2017": r"E:\M_2026\516_BM2017\software\trunk\SE71M_0516_BM2017_V1_20261022",
+    "524_LJ-V08": r"E:\M_2026\524_LJ-V08\software\trunk\SE71M_0524_LJ-V08_V1_20261103",
 }
 
 # A 段：四项目幂等（board 值 = 当前值时，FakeTx.writes 为空）
@@ -314,9 +320,13 @@ S203/S205/S301/PAW3311/FCT3075 的 interface / 引脚组合 / dir / DPI 表 / 2V
 
 ~~~python
 import sys
-for m in ('omcfg.workflow','omcfg.policy'): sys.modules.pop(m, None)
-if WORKSPACE not in sys.path: sys.path.insert(0, WORKSPACE)
+
+for m in ("omcfg.workflow", "omcfg.policy"):
+    sys.modules.pop(m, None)
+if WORKSPACE not in sys.path:
+    sys.path.insert(0, WORKSPACE)
 import omcfg.workflow as wf
+
 r = wf.list_policies(r"E:\M_2026\495_V196\software\trunk\SE71M_0495_V196_V1_20260927")
 for row in r["policies"]:
     print(row["id"], row["kind"], row["available"])

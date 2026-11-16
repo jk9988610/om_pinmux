@@ -261,10 +261,20 @@ git 操作由用户手动执行，不默认自动 commit
 跑一遍回归确认现状：
 ```python
 import subprocess, sys, os
-env = dict(os.environ); env["PYTHONIOENCODING"]="utf-8"; env["PYTHONUTF8"]="1"
-r = subprocess.run([sys.executable,"-X","utf8","-m","pytest","-q","--no-header"],
-                   capture_output=True, text=True, encoding="utf-8",
-                   errors="replace", env=env, timeout=600, cwd=r"E:\tools\om_pinmux")
+
+env = dict(os.environ)
+env["PYTHONIOENCODING"] = "utf-8"
+env["PYTHONUTF8"] = "1"
+r = subprocess.run(
+    [sys.executable, "-X", "utf8", "-m", "pytest", "-q", "--no-header"],
+    capture_output=True,
+    text=True,
+    encoding="utf-8",
+    errors="replace",
+    env=env,
+    timeout=600,
+    cwd=r"E:\tools\om_pinmux",
+)
 print(r.stdout[-1500:])
 ```
 ```
