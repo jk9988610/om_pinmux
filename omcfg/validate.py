@@ -284,11 +284,6 @@ def validate_config(config: dict, chip: dict | None = None) -> Report:
         elif matched["macro"] != wheel:
             report.add_error("board.wheel", f"应为 {matched['macro']}（由 WHEEL_A/B 推导）")
 
-    if "KEY_PAIR_PIN" not in pins:
-        report.add_warning(
-            "pins.KEY_PAIR_PIN",
-            "当前 key_io.h 无条件引用 KEY_PAIR_PIN；编译前需 P2 的 key_io 契约或手工包 #ifdef",
-        )
     if "KEY_C0_PIN" not in pins:
         report.add_warning(
             "pins.KEY_C0_PIN",

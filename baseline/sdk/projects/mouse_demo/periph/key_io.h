@@ -40,7 +40,9 @@
 #define KEY_MODE_R4         (OM_GPIO0->DATA & (1<<KEY_P_PIN))
 #define KEY_MODE_R5         (OM_GPIO0->DATA & (1<<KEY_DPI_SUB_PIN))
 #define KEY_MODE_R7         (OM_GPIO0->DATA & (1<<KEY_DPI_ADD_PIN))
+#ifdef KEY_PAIR_PIN
 #define KEY_MODE_PAIR       (OM_GPIO0->DATA & (1<<KEY_PAIR_PIN))
+#endif
 
 /*******************************************************************************
  宏定义说明
