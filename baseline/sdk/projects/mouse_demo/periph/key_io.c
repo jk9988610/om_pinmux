@@ -80,8 +80,10 @@ void key_io_scan(void)
     if(0 == KEY_MODE_R2 && !(key_status & bkey_m))
         key_status |= bkey_dpi; 
         
+#ifdef KEY_PAIR_PIN
     if(0 == KEY_MODE_PAIR) 
         key_status |= bkey_pair;
+#endif
 }
 
 /**

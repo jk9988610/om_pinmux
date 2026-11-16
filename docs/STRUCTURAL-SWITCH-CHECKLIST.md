@@ -346,3 +346,38 @@ key_io.c（495 改由 DPI 长按对码替代 PAIR）：
 - WHEEL A/B 相序对调：525 P20=WHEEL_B/P21=WHEEL_A；495 P20=WHEEL_A/P21=WHEEL_B。滚轮加减方向可能反向（不在 §1–§4 范围，登记待办）。
 - LED 宏改名：525 led_bt0_on/off、led_bt1_on/off → 495 led_ble_on/off、led_24g_on/off，业务调用点需同步改名。
 - 495 新增 led_low_on / led_chg_on（复用 P04/P05），如业务引用需保留。
+
+---
+
+## 自动化状态（2026-11-16）
+
+§1–§5 结构切换从"人工改代码"转为"配置驱动"，对照表：
+
+| 节 | 原手动操作 | 自动化方式 | 验证 |
+|---|---|---|---|
+| §1 sensor 3w→4w | 手改 `user_config.h` SENSOR 段 + `drv_senscan.c` SDIO/SPI | `.omcfg` 的 `board.sensor.bus: spi_4wire`（NCS/MOSI/MISO 自动生成，`SENSOR_2V_IN_EN` 联动） | `tests/test_sensor_bus.py` 4 用例 |
+| §2 switch 单/双脚 | 手改 `MODE_24G_PIN` / `MODE_BLE_PIN` / `MODE_BLE_24G_PIN` | `.omcfg` 的 `board.mode_pins: single/dual`（自动选宏，sleep 断电逻辑联动） | `tests/test_model.py::test_mode_pins_*` |
+| §3 led 极性 | 手改 `led_*_on()` 宏的 `gpio_set` / `gpio_clear` | `.omcfg` 的 `board.led_polarity: active_high/active_low` | `tests/test_rules.py` polarity 用例 |
+| §4 keys 7键→6键（PAIR） | 手注释 `key_io.h/.c` 的 PAIR 行 + 手改 `user_config.h` 唤醒掩码 | `.omcfg` 的 `pins` 省略 `KEY_PAIR_PIN`；baseline `key_io.h/.c` 用 `#ifdef KEY_PAIR_PIN` 保护；`wake_keys` / `PIN_WAKE_UP_MASK` 自动去掉 PAIR | `tests/test_keys_pair_optional.py` 4 用例 + CH04_6K Keil 0E0W |
+| §5 wheel A/B 相序 | 手交换 `P20` / `P21` | 直接交换 `.omcfg` 的 `pins.WHEEL_A_PIN` / `pins.WHEEL_B_PIN`；`validate.py` 已校验 ENCODER 四对一致性 | `validate.py:L270-285` |
+
+自动化后**不再需要**的手动步骤：
+
+- 手工修改 `projects/mouse_demo/periph/user_config.h` 的任何 SENSOR/MODE/LED/KEY 段
+- 手工修改 `projects/mouse_demo/periph/key_io.h/.c` 的 PAIR 相关行
+- 手工核对 `PIN_WAKE_UP_MASK` / `KEY_PIN_WAKE_UP_EN()` / `KEY_PIN_WAKE_UP_DIS()`
+- 手工改 `drv_senscan.c` 的 SDIO/SPI 宏
+
+新增配置样例：
+
+- `configs/CH04_6k.omcfg`：CH04 派生 6 键版（无 `KEY_PAIR_PIN`），用于验证 §4 自动化。
+  生成命令：`python -m omcfg gen --sdk <工作区> --apply`，Keil 编译应 0 Error 0 Warning。
+
+实现备注：
+
+- baseline `key_io.h:L43-45` / `key_io.c:L83-86` 用 `#ifdef KEY_PAIR_PIN` 包裹 PAIR 代码，
+  避免"无 PAIR 时宏未定义导致编译失败"。`META.json` 的 `tree_sha256` / `file_count` / `size_bytes`
+  已按改动后的 baseline 重算。
+- `rules.py` 的 `key_io.refs` 在配置无 PAIR 时按 `_strip_ifdef_block` 排除条件引用；
+  并新增"配置无 PAIR 但 baseline 缺 `#ifdef` 保护"的 error 检查。
+- `validate.py` 删除了旧的 `pins.KEY_PAIR_PIN` 无条件 warning（baseline 已加保护，硬编码提示过时）。
