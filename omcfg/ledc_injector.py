@@ -6,8 +6,8 @@ lvd.h / led.h / flash_process.h 和 key_io_scan()。这些在 KC536 基线里都
 所以不需要清洗。如果未来 KC536 版本删除了某依赖，注入器会自动注释相关行。
 """
 import os
-import shutil
 import re
+import shutil
 
 # LEDC 需要的 4 个文件（按 16 个工程统计，ledc.c/h 100%，ledc_mode.c/h 15/16）
 LEDC_FILES = [

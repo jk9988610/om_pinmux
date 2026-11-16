@@ -14,7 +14,6 @@ from pathlib import Path
 import yaml
 
 from . import baseline, model, newproject, rules, smoke, validate
-
 from .generate import generator
 from .initproject import init_project, missing_markers
 from .targets import sdk, uvprojx

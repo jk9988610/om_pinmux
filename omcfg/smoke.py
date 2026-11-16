@@ -46,9 +46,10 @@ def _run_cli(argv: list[str]) -> int:
     cli.main 内部会 print 大量进度信息，冒烟汇总不希望被淹没；
     但失败时必须能看到完整 stderr（含 traceback），否则排查无从下手。
     """
-    from . import cli
     import contextlib
     import io
+
+    from . import cli
 
     out, err = io.StringIO(), io.StringIO()
     try:
@@ -186,7 +187,6 @@ def _rmtree_with_retry(
 def run_smoke(out_dir: Path | str, scenarios: list[Scenario] | None = None,
               verbose: bool = True, skip_locked: bool = False) -> list[dict]:
     """重建全部冒烟工程；返回每个场景的结果 dict 列表。"""
-    from . import cli  # 延迟 import 避免循环
 
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)

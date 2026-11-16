@@ -14,7 +14,6 @@ from pathlib import Path
 from . import artifacts, model
 from .targets import sdk
 
-
 ROOT = Path(__file__).resolve().parent.parent / "baseline"
 SDK_DIR = ROOT / "sdk"
 CONFIG_PATH = ROOT / "project.omcfg"

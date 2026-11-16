@@ -320,6 +320,7 @@ class Api:
     def choose_folder(self, initial: str | None = None) -> str | None:
         """弹出原生文件夹选择框，返回选中路径；取消返回 None。"""
         import os
+
         import webview
 
         directory = initial if (initial and os.path.isdir(initial)) else ""
@@ -335,7 +336,9 @@ class Api:
         """返回芯片全量角色能力表（不受当前工程限制）。"""
         import json as _json
         import os as _os
-        from . import pinmap as _pinmap, model as _model
+
+        from . import model as _model
+        from . import pinmap as _pinmap
         chip = _model.load_chip()
         cat_path = _os.path.join(_os.path.dirname(__file__), "data", "role_catalog.json")
         cat = _json.load(open(cat_path, encoding="utf-8"))
@@ -363,9 +366,9 @@ class Api:
 
     def prepare_workspace(self, template_path: str, workspace: str) -> dict:
         """复制模板到工作区（排除编译产物/缓存），并写元数据标记。"""
+        import json as _json
         import os as _os
         import subprocess as _sp
-        import json as _json
         if not _os.path.isdir(template_path):
             return {"ok": False, "error": "模板不存在: " + template_path}
         if _os.path.exists(workspace):
@@ -387,11 +390,11 @@ class Api:
     def generate_project(self, workspace: str, target_path: str, proj_id: str,
                          proj_name: str, consumer_name: str = "", version: int = 1) -> dict:
         """从工作区生成工程：复制模板 + 覆盖改动 + 改 ID/名称 + 写 project.omcfg。"""
-        import os as _os
-        import subprocess as _sp
-        import json as _json
-        import re as _re
         import hashlib as _hl
+        import json as _json
+        import os as _os
+        import re as _re
+        import subprocess as _sp
         meta_path = _os.path.join(workspace, ".omcfg_meta.json")
         if not _os.path.isfile(meta_path):
             return {"ok": False, "error": "工作区缺少 .omcfg_meta.json，请先 prepare_workspace"}
@@ -531,8 +534,8 @@ class Api:
         目录结构: output_root/<id_nozero>_<name>/software/trunk/SE71M_<id4>_<name>_V<n>_<date>/
         并创建 description/ 和 sample/ 空目录。
         """
-        import os as _os
         import datetime as _dt
+        import os as _os
         import re as _re
         if not _os.path.isdir(output_root):
             return {"ok": False, "error": "输出根目录不存在: " + output_root}
@@ -602,8 +605,9 @@ class Api:
 
     def inject_ledc_files(self, workspace: str, source_pool: str, force: bool = False) -> dict:
         """从 source_pool 注入 4 个 LEDC 文件到工作区，自动清洗缺失依赖。"""
-        from . import ledc_injector
         import os as _os
+
+        from . import ledc_injector
         if not _os.path.isdir(workspace):
             return {"ok": False, "error": "工作区不存在: " + workspace}
         if not _os.path.isdir(source_pool):

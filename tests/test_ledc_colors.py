@@ -1,4 +1,5 @@
-import hashlib, re
+import hashlib
+import re
 from pathlib import Path
 
 WS   = Path(__file__).resolve().parents[1]

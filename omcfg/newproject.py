@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 import re
 import shutil
 from dataclasses import dataclass
@@ -10,7 +9,6 @@ from pathlib import Path
 
 from . import artifacts, model
 from .targets import sdk
-
 
 # 产物排除规则见 omcfg/artifacts.py（与 baseline 摘要共用）
 

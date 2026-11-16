@@ -221,7 +221,7 @@ def test_rewrite_identity_uses_tx(fake_baseline):
             self.writes.append(str(path))
 
     tx = FakeTx()
-    records = newproject.rewrite_identity(fake_baseline, config, tx=tx)
+    newproject.rewrite_identity(fake_baseline, config, tx=tx)
 
     assert tx.writes, "rewrite_identity 必须走 tx.write_bytes"
     assert any("ex2_app_mouse.c" in p for p in tx.writes), (
