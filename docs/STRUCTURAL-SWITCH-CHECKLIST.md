@@ -380,4 +380,20 @@ key_io.c（495 改由 DPI 长按对码替代 PAIR）：
   已按改动后的 baseline 重算。
 - `rules.py` 的 `key_io.refs` 在配置无 PAIR 时按 `_strip_ifdef_block` 排除条件引用；
   并新增"配置无 PAIR 但 baseline 缺 `#ifdef` 保护"的 error 检查。
-- `validate.py` 删除了旧的 `pins.KEY_PAIR_PIN` 无条件 warning（baseline 已加保护，硬编码提示过时）。
+- `validate.py` 删除了旧的 `pins.KEY_PAIR_PIN` 无条件 warning（baseline 已加保护，硬编码提示过时）。## chip/om6239.json 说明（2026-11-16）
+
+`chip/om6239.json` 在 commit `9a12711` 里被 `json.dumps(indent=2)` 全量重排，
+git diff 会看到 467 行变化，但**业务变化只有 4 处**：
+
+1. `mux.LEDC_SEL.options[0/1]` 加 `sdk_supported: true`（P01/P05）
+2. `mux.LEDC_SEL.options[2/3]` 加 `sdk_supported: false`，`sdk_hint: null`（P21/P33）
+3. `lessons` 加 `LEDC_SEL_SDK_GAP` 条目
+4. `lessons.sel_pins` 保留 4 个脚，但工具策略只允许 P01/P05
+
+后续若改 chip json：
+- 保持原紧凑格式（`{ "key": val }` 单行），不要用 `json.dumps(indent=2)` 重写
+- 或统一换成 indent=2 后一次性 commit（不要再混）
+- 查真实业务变化：`git diff --ignore-all-space` 或直接看 Python 加载后的 dict
+
+原因：2026-11-16 LEDC A+B 修复时用脚本改了字段，`json.dumps` 把原紧凑格式展开。
+功能不影响，但让 diff 噪音变大。
