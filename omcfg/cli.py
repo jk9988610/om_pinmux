@@ -306,6 +306,17 @@ def cmd_gen(args: argparse.Namespace) -> int:
     code, manifest = _apply_outputs(root, outputs)
     if manifest:
         print(f"回滚: python -m omcfg rollback --manifest {manifest}")
+    if code == EXIT_OK:
+        # 按 LEDC_PIN 校正 ledc.c / drv_ledc.c 的 PMU_LEDC_SEL_IO_xx
+        try:
+            from .api import Api as _Api
+            _fix = _Api().finalize_ledc_sel(str(root))
+            if _fix.get("ok") and _fix.get("changed"):
+                print("LEDC SEL 校正: %s -> %s" % (_fix.get("sel"), ",".join(_fix["changed"])))
+            elif not _fix.get("ok"):
+                print("[WARN] LEDC SEL 校正失败: %s" % _fix.get("error"), file=sys.stderr)
+        except Exception as _exc:
+            print("[WARN] LEDC SEL 校正异常: %s" % _exc, file=sys.stderr)
     return code
 
 

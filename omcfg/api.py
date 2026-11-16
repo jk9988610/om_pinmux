@@ -561,6 +561,8 @@ class Api:
         r = self.generate_project(workspace, target_path, proj_id, proj_name, consumer_name, version)
         if not r.get("ok"):
             return r
+        # 按 LEDC_PIN 校正 ledc.c / drv_ledc.c 的 PMU_LEDC_SEL_IO_xx
+        r["ledc_sel_fix"] = self.finalize_ledc_sel(target_path)
         desc_dir = _os.path.join(project_root, "description")
         sample_dir = _os.path.join(project_root, "sample")
         _os.makedirs(desc_dir, exist_ok=True)
@@ -665,6 +667,63 @@ class Api:
         except Exception as e:
             agg.update(ok=False, error=repr(e))
             return agg
+    def finalize_ledc_sel(self, target_path: str) -> dict:
+        """按 project.omcfg 的 LEDC_PIN 校正 ledc.c / drv_ledc.c 的 PMU_LEDC_SEL_IO_xx。
+
+        在 generate_project_to_root 生成工程后调用：模板注入的 drv_ledc.c 默认用
+        IO_05（注入源），但若用户改 LEDC_PIN 为 P01，需校正为 IO_01。不改
+        generate_project / apply 内部逻辑，只做文本替换。
+
+        返回: {ok, changed: [...], ledc_pin, sel, reason?}
+        """
+        import re as _re
+        root = Path(target_path)
+        config_path = root / "projects" / "mouse_demo" / "project.omcfg"
+        if not config_path.is_file():
+            return {"ok": True, "changed": [], "reason": "无 project.omcfg，跳过"}
+
+        try:
+            config = model.load_config(config_path)
+        except Exception as exc:
+            return {"ok": False, "error": "读 project.omcfg 失败: " + str(exc)}
+
+        pins = model.pin_entries(config) or {}
+        ledc_pin = (pins.get("LEDC_PIN") or {}).get("pin")
+        if not ledc_pin:
+            return {"ok": True, "changed": [], "reason": "无 LEDC_PIN，跳过"}
+
+        chip = model.load_chip()
+        hint = None
+        for opt in chip.get("mux", {}).get("LEDC_SEL", {}).get("options", []):
+            if ledc_pin in opt.get("pins", []) and opt.get("sdk_hint"):
+                hint = opt["sdk_hint"]
+                break
+        if not hint:
+            return {
+                "ok": False,
+                "error": f"LEDC_PIN={ledc_pin} 无对应 SDK 枚举"
+                f"（chip/om6239.json mux.LEDC_SEL.options 的 sdk_hint 为空）",
+            }
+
+        pat = _re.compile(r"drv_pmu_ledc_sel\s*\(\s*PMU_LEDC_SEL_IO_\d+\s*\)")
+        replacement = "drv_pmu_ledc_sel(" + hint + ")"
+
+        changed: list[str] = []
+        for rel in ("projects/mouse_demo/periph/ledc.c", "hal/driver/om6239/drv_ledc.c"):
+            p = root / rel
+            if not p.is_file():
+                continue
+            try:
+                body = p.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                continue
+            new_body, n = pat.subn(replacement, body)
+            if n > 0 and new_body != body:
+                p.write_text(new_body, encoding="utf-8", newline="")
+                changed.append(rel)
+
+        return {"ok": True, "changed": changed, "ledc_pin": ledc_pin, "sel": hint}
+
     def preview(self, sdk_path: str) -> dict:
         try:
             root = sdk.resolve_sdk(sdk_path)
