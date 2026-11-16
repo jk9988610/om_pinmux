@@ -214,7 +214,8 @@ def run_smoke(out_dir: Path | str, scenarios: list[Scenario] | None = None,
                     results.append(result)
                     if verbose:
                         print(f"  [SKIP] {target} 被占用，跳过")
-                        for name in locked[:10]:
+                        for name in locked[:
+                            10]:
                             print(f"         锁定: {name}")
                     continue
                 msg = (
@@ -241,7 +242,8 @@ def run_smoke(out_dir: Path | str, scenarios: list[Scenario] | None = None,
         if rc != 0:
             result["problems"].append(f"new 返回 {rc}")
             results.append(result)
-            if verbose: print(f"  [FAIL] new rc={rc}")
+            if verbose:
+                print(f"  [FAIL] new rc={rc}")
             continue
         result["steps"].append("new")
 
@@ -258,7 +260,8 @@ def run_smoke(out_dir: Path | str, scenarios: list[Scenario] | None = None,
         if rc != 0:
             result["problems"].append(f"gen 返回 {rc}")
             results.append(result)
-            if verbose: print(f"  [FAIL] gen rc={rc}")
+            if verbose:
+                print(f"  [FAIL] gen rc={rc}")
             continue
         result["steps"].append("gen --apply")
         # 冒烟工程是重建产物，不留 gen 事务备份（避免 _test_gen 里堆积 .omcfg_bak_*）
@@ -271,7 +274,8 @@ def run_smoke(out_dir: Path | str, scenarios: list[Scenario] | None = None,
         if rc != 0:
             result["problems"].append(f"check 返回 {rc}")
             results.append(result)
-            if verbose: print(f"  [FAIL] check rc={rc}")
+            if verbose:
+                print(f"  [FAIL] check rc={rc}")
             continue
         result["steps"].append("check --sdk")
 

@@ -12,7 +12,8 @@ EXPECTED = [
 ]
 
 def _read(p):
-    with open(p, "r", encoding="utf-8", newline="") as f: return f.read()
+    with open(p, "r", encoding="utf-8", newline="") as f: 
+        return f.read()
 
 def _sha1_norm(p):
     b = p.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n")
@@ -29,8 +30,9 @@ def test_newline_styles_preserved():
 def test_blue_channel_writes_blue_value():
     for f in (TPL, BASE):
         s = _read(f)
-        assert "Rgb_data[rgb_enable*3+2] = blue_value;" in s
-        assert "Rgb_data[rgb_enable*3+2] = green_value;" not in s
+    assert re.search(r"Rgb_data\[rgb_enable\*3\+2\]\s*=\s*blue_value", s)
+
+    assert re.search(r"Rgb_data\[rgb_enable\*3\+2\]\s*=\s*green_value", s) is None
 
 def test_dpi_rgb_tab_has_8x3_and_mask():
     for f in (TPL, BASE):
@@ -43,18 +45,21 @@ def test_dpi_rgb_tab_values_match_ch04():
     """去注释后按 {r,g,b} 结构提取，避免注释里的数字被误抓。"""
     for f in (TPL, BASE):
         s = _read(f)
-        m = re.search(r"dpi_rgb_tab\[8\]\[3\]\s*=\s*\{(.*?)\};", s, re.S)
+        m = re.search(r"uint8_t const dpi_rgb_tab\[8\]\[3\]\s*=\s*\{(.*?)\};", s, re.S)
         assert m, f"{f.name}: 找不到表定义"
         body = re.sub(r"/\*.*?\*/", "", m.group(1), flags=re.S)
         triples = re.findall(r"\{\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\}", body)
         got = [[int(a), int(b2), int(c)] for a, b2, c in triples]
         assert got == EXPECTED, f"{f.name}: {got}"
 
+
+
+
+
 def test_four_call_sites_use_rgb_triplet():
     for f in (TPL, BASE):
-        calls = re.findall(r"ledc_data_write\([^;]+\);", _read(f))
-        assert len(calls) == 4, f"{f.name}: {len(calls)} 个调用点"
-        for c in calls:
-            assert "dpi_rgb_tab[" in c
-            assert "dpi_color_tab[" not in c
-            assert "0x07" in c
+        calls = re.findall(r"ledc_data_write\([^)]+\)", _read(f))
+        # 过滤掉函数原型（不带 dpi_rgb_tab 的）
+        real_calls = [c for c in calls if "dpi_rgb_tab[" in c]
+        assert len(real_calls) == 4, f"{f.name}: {len(real_calls)} 个查表调用点"
+

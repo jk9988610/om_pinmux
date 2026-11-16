@@ -39,9 +39,12 @@ def sha1(data):
 
 def describe(nl):
     parts = []
-    if nl["crlf"]: parts.append(f"CRLF={nl['crlf']}")
-    if nl["lf"]:   parts.append(f"LF={nl['lf']}")
-    if nl["cr"]:   parts.append(f"CR={nl['cr']}")
+    if nl["crlf"]:
+        parts.append(f"CRLF={nl['crlf']}")
+    if nl["lf"]:
+        parts.append(f"LF={nl['lf']}")
+    if nl["cr"]:
+        parts.append(f"CR={nl['cr']}")
     return ", ".join(parts) if parts else "(无换行符)"
 
 
@@ -66,7 +69,9 @@ def main(argv=None):
             return 2
         infos.append(analyze(p))
 
-    print("=" * 70); print("原始 / 归一化 SHA1"); print("=" * 70)
+    print("=" * 70)
+    print("原始 / 归一化 SHA1")
+    print("=" * 70)
     for i in infos:
         print(f"  {i['path']}")
         print(f"    换行        : {describe(i['newlines'])}")
@@ -75,7 +80,10 @@ def main(argv=None):
 
     if len(infos) == 2:
         a, b = infos
-        print(); print("=" * 70); print("比较结论"); print("=" * 70)
+        print()
+        print("=" * 70)
+        print("比较结论")
+        print("=" * 70)
         raw_eq  = a["sha1_raw"]  == b["sha1_raw"]
         norm_eq = a["sha1_norm"] == b["sha1_norm"]
         byte_eq = a["norm"]      == b["norm"]

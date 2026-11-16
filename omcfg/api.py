@@ -130,7 +130,8 @@ class Api:
     def load(self, sdk_path: str) -> dict:
         try:
             root = sdk.resolve_sdk(sdk_path)
-        except Exception as exc:  # 本地 GUI 边界，统一转为可见错误
+        except Exception as exc:
+            # 本地 GUI 边界，统一转为可见错误
             return _error(
                 _first_line(exc),
                 "确认路径是 SDK 根目录（应包含 projects/mouse_demo/periph/user_config.h）",
@@ -377,8 +378,10 @@ class Api:
         excl_dirs = [".git", "Objects", "Listings", ".cache", "out", "_build", ".vscode"]
         excl_files = ["*.d", "*.axf", "*.hex", "*.map", "*.bin", "*.htm", "*.lnp", "*.dep", "*.log", "*.idx"]
         cmd = ["robocopy", template_path, workspace, "/E"]
-        for d in excl_dirs: cmd += ["/XD", d]
-        for f in excl_files: cmd += ["/XF", f]
+        for d in excl_dirs:
+            cmd += ["/XD", d]
+        for f in excl_files:
+            cmd += ["/XF", f]
         res = _sp.run(cmd, capture_output=True, text=True)
         if res.returncode >= 8:
             return {"ok": False, "error": "robocopy 失败 code=" + str(res.returncode), "stderr": res.stderr[-500:]}
@@ -403,19 +406,25 @@ class Api:
         if _os.path.exists(target_path):
             return {"ok": False, "error": "目标已存在: " + target_path}
         if not _re.match(r'^0x[0-9A-Fa-f]{1,4}$', proj_id):
-            try: proj_id = "0x%04X" % int(proj_id, 16)
-            except Exception: return {"ok": False, "error": "ID 格式错误: " + proj_id}
+            try:
+                proj_id = "0x%04X" % int(proj_id, 16)
+            except Exception:
+                return {"ok": False, "error": "ID 格式错误: " + proj_id}
         excl_dirs = [".git", "Objects", "Listings", ".cache", "out", "_build", ".vscode"]
         excl_files = ["*.d", "*.axf", "*.hex", "*.map", "*.bin", "*.htm", "*.lnp", "*.dep", "*.log", "*.idx"]
         cmd = ["robocopy", template, target_path, "/E"]
-        for d in excl_dirs: cmd += ["/XD", d]
-        for f in excl_files: cmd += ["/XF", f]
+        for d in excl_dirs:
+            cmd += ["/XD", d]
+        for f in excl_files:
+            cmd += ["/XF", f]
         res = _sp.run(cmd, capture_output=True, text=True)
         if res.returncode >= 8:
             return {"ok": False, "error": "复制模板失败 code=" + str(res.returncode)}
         def _hash(p):
-            try: return _hl.sha256(open(p, "rb").read()).hexdigest()
-            except Exception: return None
+            try:
+                return _hl.sha256(open(p, "rb").read()).hexdigest()
+            except Exception:
+                return None
         def _rel(root, p):
             r = _os.path.relpath(p, root).replace("\\", "/")
             parts = r.split("/")
@@ -427,24 +436,32 @@ class Api:
         for dp, dns, fs in _os.walk(template):
             dns[:] = [d for d in dns if d not in excl_dirs]
             for f in fs:
-                if any(f.endswith(x.replace("*", "")) for x in excl_files): continue
+                if any(f.endswith(x.replace("*", "")) for x in excl_files):
+                    continue
                 p = _os.path.join(dp, f)
                 tpl_files[_rel(template, p)] = _hash(p)
         changed, added = [], []
         for dp, dns, fs in _os.walk(workspace):
             dns[:] = [d for d in dns if d not in excl_dirs]
             for f in fs:
-                if f == ".omcfg_meta.json": continue
-                if any(f.endswith(x.replace("*", "")) for x in excl_files): continue
+                if f == ".omcfg_meta.json":
+                    continue
+                if any(f.endswith(x.replace("*", "")) for x in excl_files):
+                    continue
                 p = _os.path.join(dp, f)
                 rel = _rel(workspace, p)
                 h = _hash(p)
                 tgt = _os.path.join(target_path, rel)
                 if rel not in tpl_files:
                     _os.makedirs(_os.path.dirname(tgt), exist_ok=True)
-                    import shutil as _sh; _sh.copy2(p, tgt); added.append(rel); continue
+                    import shutil as _sh
+                    _sh.copy2(p, tgt)
+                    added.append(rel)
+                    continue
                 if tpl_files[rel] != h:
-                    import shutil as _sh; _sh.copy2(p, tgt); changed.append(rel)
+                    import shutil as _sh
+                    _sh.copy2(p, tgt)
+                    changed.append(rel)
         apply_info = {}
         omcfg_dst = _os.path.join(target_path, "projects", "mouse_demo", "project.omcfg")
         if _os.path.isfile(omcfg_dst):
@@ -504,8 +521,11 @@ class Api:
         if _os.path.isfile(cfg_path):
             text = None
             for enc in ("utf-8", "gbk"):
-                try: text = open(cfg_path, encoding=enc).read(); break
-                except Exception: pass
+                try:
+                    text = open(cfg_path, encoding=enc).read() 
+                    break
+                except Exception:
+                    pass
             if text:
                 text = _re.sub(r'(#define\s+iPROJECT_ID_L\s+)0x[0-9A-Fa-f]+', r'\g<1>' + proj_id, text)
                 text = _re.sub(r'(#define\s+iPROJECT_NAME\s+)"[^"]*"', r'\g<1>"' + proj_name + '"', text)
