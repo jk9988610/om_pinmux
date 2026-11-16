@@ -1,5 +1,7 @@
 # GOLDEN-SAMPLE-v1 — 线 B 能力边界样本
 
+> ⚠️ 历史存档（pinmux_7, 2026-11-16）：本文记录的能力边界样本对应的 `omcfg/workflow.py` / `omcfg/policy.py` 已于 pinmux_7 移除；`omcfg/biz_sync.py` 保留待 pinmux_8 收敛为 contracts.py。本文仅作历史知识沉淀，不再对应当前可执行代码。
+
 > 日期：2026-11-14
 > 作者：pinmux_1
 > 起点：525_E606（纯净 KC536 副本，iPROJECT_ID_L=0x0023，iPROJECT_NAME=KC536）

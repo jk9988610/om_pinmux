@@ -500,3 +500,18 @@ python -m pytest                              :: 全绿
 - **核心命令**：`python -m omcfg new|check|init|gen --dry-run|gen --apply|rollback`。
 - **验收三件套**：`check` 0 error、`UV4 -b` 0 error、`git diff` 只动标记块。
 - **首阶段只做**：pins + board + project → 3 个源码文件 + Keil 工程条目 → 真实 SDK 副本编译通过。
+
+## pinmux_7 勘误（2026-11-16）
+
+> 本文档 §0.2 序 3 及 §452/§453/§489 关于 `port_apply` / `board_pack` 的描述，基于更早的工程快照，与当前代码不符。pinmux_7 实测并执行后的真实状态如下：
+
+| 文档原描述 | 实测现状（pinmux_7） |
+|---|---|
+| `port_apply.py`（16.4 KB）、`board_pack.py`（18.5 KB）存在，待归档/删 | **两个文件早已不存在**（`Get-ChildItem` 全仓零命中） |
+| 金机对照 `golden_diff`/`synth_golden`/`synth`/`reports` 待删 | **早已不存在**，仅剩 `__pycache__` 残留（已清）+ `docs/GOLDEN-SAMPLE-v1.md`（已归档 `docs/archive/`） |
+| 问卷 `survey` 待删 | **早已不存在**，仅剩 `__pycache__` 残留（已清） |
+| `board_pack` 13 策略，待归档、抽 3 补丁到 `compat.py` | 实际待删对象是 **`omcfg/workflow.py` + `omcfg/policy.py`**（闭环死链），**已于 pinmux_7 `git rm`**；`omcfg/biz_sync.py` 孤儿保留待 pinmux_8 收敛 `contracts.py` |
+| 3 个 opt-in 文本补丁（senscan_12bit/stack_240/usb_tx_flag）在 `compat.py` | L197 的规划未落地为 `compat.py`（全仓无 `compat.py`）；12BIT/STACK 是 baseline SDK 原生内容（`senscan_reg.h` / `om6239_ac6.sct` / `om6239_gcc.ld`），USB flag 无独立补丁逻辑。**未丢功能** |
+| 基线 `155 passed` | **实测 `154 passed`**（`--collect-only` 亦 154），155 为笔误；删 workflow/policy 后仍 154，无间接依赖 |
+
+**结论**：§0.2 序 1/2/4 均为空操作（文档说有、实际不存在，仅清 pyc）；序 3 实际删除 `workflow.py` + `policy.py`；序 5（三期补全）为唯一实质新增任务。后续以本节为准。
