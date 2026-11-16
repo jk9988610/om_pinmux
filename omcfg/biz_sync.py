@@ -5,6 +5,15 @@
 只改「契约层」（宏是否存在、单/双模式、有无 PAIR、矩阵键、LEDC 文件），
 不改配对协议细节。
 """
+
+# === 状态标注（pinmux_7, 2026-11-16）===
+# 状态：删除 workflow.py / policy.py 后，本模块暂无外部调用者（孤儿保留）。
+# 依据：ROADMAP §0.2 序 3 规划「拆分保留 key_io/sleep 契约」，后续收敛为 contracts.py。
+# 能力：sync_board_contracts 的 6 个 action（key_io.h / key_io.c / user_config.c / RTE / logo_ledc）有实测功能，不可删。
+# 原调用点：workflow.py L1033-1037 apply_policies 的 kind=="biz_sync" 分支（已随 workflow 删除）。
+# 接手方：pinmux_8 收敛为 contracts.py 并接入配置驱动路径。
+# ========================================
+
 from __future__ import annotations
 
 import os

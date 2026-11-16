@@ -12,7 +12,7 @@
 - 工程根：`E:\tools\om_pinmux`（WORKSPACE），git 仓库，origin = `git@github.com:jk9988610/om_pinmux.git`
 - 分支：`fix_old_msg`（工作线）/ `main`（发布线），两线同步，本地=远程
 - 工具：`python -m omcfg {init,check,gen,new,rollback,smoke}` + pywebview GUI（`launch.bat`）
-- 回归：`python -m pytest`（155 passed）+ `python -m omcfg smoke`（三形态全 PASS）
+- 回归：`python -m pytest`（154 passed）+ `python -m omcfg smoke`（三形态全 PASS）  ⚠️ pinmux_7 勘误：原记 155 为笔误，实测 154（原测试数 148→147 记错，非测试被删；test_schema_board_fields.py 7 个不变）
 - 本次交付：见 §2
 - 下一棒任务：§6 ROADMAP §0.2 结构性重构，优先级见 §6.2
 
@@ -168,7 +168,7 @@ diff 显示 467 行变化，实际业务变化 ≤20 行。原因：`json.dumps(
 |---|---|---|---|---|
 | 1 | **删 `index.html` 里的生成/校验逻辑** | 中 | 低 | 91 KB HTML 是"第四份真相"，和 Python/JSON 重复；删完 GUI 只留"视图+表单"。**先做这个，因为最容易验证（GUI 手动走一遍，功能全走 Python）** |
 | 2 | **删金机对照子系统**（`golden_diff` / `synth_golden` / `synth/` / `reports/`） | 中 | 低 | 基线正确性由 git + 编译承担。跑 `python -m pytest` + `smoke` 验证不破坏 |
-| 3 | **删供体移植子系统**（`port_apply` + `board_pack` 的 donor/policy） | 大 | 中 | 只抽 3 个 opt-in 文本补丁，其余归档。需要确认 CH04 / KC536 两块板还能正常生成 |
+| 3 | **删供体移植子系统** | 大 | 中 | ⚠️ **pinmux_7 勘误（2026-11-16 已完成）**：`port_apply`/`board_pack` 早已不存在；实际删除 `omcfg/workflow.py` + `omcfg/policy.py`（闭环死链，cli/api 零 import、无 CLI、无 GUI、无测试），`omcfg/biz_sync.py` 保留（孤儿但保留，待 pinmux_8 收敛为 contracts.py）。已完成验证：154 passed + smoke 三 PASS 逐字一致 + GUI 全流程走通 |
 | 4 | **删问卷子系统**（`survey` + `survey/`） | 中 | 低 | 数据已进 `.omcfg` 模板 |
 | 5 | **三期补全**：实现 `uart_baudrate` / `spi_mode` / `usb_id` / `usb_version` 的 generator + schema + rules | 中 | 中 | 每加一个，Keil 编译 + 硬件验证一次 |
 
@@ -218,7 +218,7 @@ Copy-Item path\to\file "_bak\file.bak-xxx"
 
 - 读 §6（5 分钟）：下一棒任务
 
-- 跑一次回归：python -m pytest -q + python -m omcfg smoke，确认 155 passed + 三 PASS
+- 跑一次回归：python -m pytest -q + python -m omcfg smoke，确认 154 passed + 三 PASS（pinmux_7 勘误：原记 155 为笔误）
 
 - 挑任务：从 §6.2 序 1 开始，先做"删 index.html 生成逻辑"
 
