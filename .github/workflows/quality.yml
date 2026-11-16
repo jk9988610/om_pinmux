@@ -1,4 +1,4 @@
-name: quality
+﻿name: quality
 
 on:
   push:
@@ -9,21 +9,46 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: 'pip'
+          cache-dependency-path: pyproject.toml
+
       - name: Install development dependencies
         run: python -m pip install -e ".[dev]"
+
       - name: Compile Python sources
         run: python -m compileall -q omcfg app.py
-      - name: Lint
+
+      - name: Ruff Lint
         run: python -m ruff check .
+
+      - name: Ruff Format Check
+        run: python -m ruff format --check .
+
       - name: Web must stay a view (no codegen in JS/HTML)
         shell: pwsh
         run: |
-          $hits = Select-String -Path web/*.js, web/*.html -Pattern '#define|OMCFG BEGIN|OMCFG END'
-          if ($hits) { $hits; throw "web/ 不允许出现生成逻辑或标记文本" }
+          $OutputEncoding = [Console]::OutputEncoding = [Text.Encoding]::UTF8
+          if (-not (Test-Path web)) {
+            Write-Host "web/ directory does not exist, skip this check"
+            exit 0
+          }
+          $files = Get-ChildItem -Path web -Include *.js, *.html -Recurse -ErrorAction SilentlyContinue
+          if (-not $files) {
+            Write-Host "No js/html files under web/, skip this check"
+            exit 0
+          }
+          $hits = $files | Select-String -Pattern '#define|OMCFG BEGIN|OMCFG END'
+          if ($hits) {
+            $hits
+            throw "web/ 不允许出现生成逻辑或标记文本"
+          }
+
       - name: Validate configs
         run: python -m omcfg check --all configs
-      - name: Test
-        run: python -m pytest
+
+      - name: Pytest with timeout
+        run: python -m pytest -v --timeout=30
