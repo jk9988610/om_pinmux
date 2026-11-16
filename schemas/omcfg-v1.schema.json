@@ -3,54 +3,169 @@
   "$id": "https://om_pinmux.local/schemas/omcfg-v1.schema.json",
   "title": "OM6239 project.omcfg",
   "type": "object",
-  "required": ["schema", "chip", "project", "board", "pins"],
+  "required": [
+    "schema",
+    "chip",
+    "project",
+    "board",
+    "pins"
+  ],
   "additionalProperties": false,
   "properties": {
-    "schema": { "const": "om6239-project/v1" },
-    "chip": { "const": "OM6239" },
+    "schema": {
+      "const": "om6239-project/v1"
+    },
+    "chip": {
+      "const": "OM6239"
+    },
     "project": {
       "type": "object",
-      "required": ["name", "customer", "id"],
+      "required": [
+        "name",
+        "customer",
+        "id"
+      ],
       "additionalProperties": false,
       "properties": {
-        "name": { "type": "string", "minLength": 1 },
-        "customer": { "type": "string", "minLength": 1 },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "customer": {
+          "type": "string",
+          "minLength": 1
+        },
         "ble_names": {
           "type": "array",
           "minItems": 1,
           "maxItems": 2,
-          "items": { "type": "string", "minLength": 1, "maxLength": 28 }
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 28
+          }
         },
         "id": {
           "type": "object",
-          "required": ["low", "high", "version"],
+          "required": [
+            "low",
+            "high",
+            "version"
+          ],
           "additionalProperties": false,
           "properties": {
-            "low": { "type": ["integer", "string"] },
-            "high": { "type": ["integer", "string"] },
-            "version": { "type": ["integer", "string"] }
+            "low": {
+              "type": [
+                "integer",
+                "string"
+              ]
+            },
+            "high": {
+              "type": [
+                "integer",
+                "string"
+              ]
+            },
+            "version": {
+              "type": [
+                "integer",
+                "string"
+              ]
+            }
           }
         }
       }
     },
     "board": {
       "type": "object",
-      "required": ["mode_pins", "logo", "led_polarity", "sensor", "wheel"],
+      "required": [
+        "led_polarity",
+        "logo",
+        "mode_pins",
+        "sensor",
+        "wheel"
+      ],
       "additionalProperties": false,
       "properties": {
-        "mode_pins": { "enum": ["single", "dual", "wired"] },
-        "logo": { "enum": ["rgb", "ledc", "none"] },
-        "led_polarity": { "enum": ["active_high", "active_low"] },
+        "mode_pins": {
+          "enum": [
+            "single",
+            "dual",
+            "wired"
+          ]
+        },
+        "logo": {
+          "enum": [
+            "rgb",
+            "ledc",
+            "none"
+          ]
+        },
+        "led_polarity": {
+          "enum": [
+            "active_high",
+            "active_low"
+          ]
+        },
         "sensor": {
           "type": "object",
-          "required": ["bus", "dir_clock"],
+          "required": [
+            "bus",
+            "dir_clock"
+          ],
           "additionalProperties": false,
           "properties": {
-            "bus": { "enum": ["sdio_3wire", "spi_4wire"] },
-            "dir_clock": { "enum": [0, 3, 6, 9] }
+            "bus": {
+              "enum": [
+                "sdio_3wire",
+                "spi_4wire"
+              ]
+            },
+            "dir_clock": {
+              "enum": [
+                0,
+                3,
+                6,
+                9
+              ]
+            },
+            "dpi_levels": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 100,
+                "maximum": 30000
+              },
+              "minItems": 1,
+              "maxItems": 8
+            },
+            "dpi_default": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 7
+            },
+            "v2_en": {
+              "type": "boolean"
+            }
           }
         },
-        "wheel": { "type": "string", "minLength": 1 }
+        "wheel": {
+          "type": "string",
+          "minLength": 1
+        },
+        "uart_pin": {
+          "enum": [
+            "KEY_R0_PIN",
+            "KEY_R1_PIN",
+            "KEY_R2_PIN",
+            "KEY_PAIR_PIN"
+          ]
+        },
+        "ledc_rgb_number": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        }
       }
     },
     "pins": {
@@ -59,20 +174,47 @@
       "patternProperties": {
         "^(KEY|WHEEL|MODE|SENSOR|LED|USB|BAT|LVD|FLASH|UART)[A-Z0-9_]*$": {
           "oneOf": [
-            { "type": "string", "pattern": "^P[0-9]{2}$" },
+            {
+              "type": "string",
+              "pattern": "^P[0-9]{2}$"
+            },
             {
               "type": "object",
-              "required": ["pin"],
+              "required": [
+                "pin"
+              ],
               "additionalProperties": false,
               "properties": {
-                "pin": { "type": "string", "pattern": "^P[0-9]{2}$" },
+                "pin": {
+                  "type": "string",
+                  "pattern": "^P[0-9]{2}$"
+                },
                 "gpio": {
                   "type": "object",
                   "additionalProperties": false,
                   "properties": {
-                    "mode": { "enum": ["input_floating", "input_pullup", "input_pulldown", "output_pp"] },
-                    "pull": { "enum": ["pu_none", "pu_30k", "pu_150k", "pd_150k"] },
-                    "init": { "enum": ["high", "low"] }
+                    "mode": {
+                      "enum": [
+                        "input_floating",
+                        "input_pullup",
+                        "input_pulldown",
+                        "output_pp"
+                      ]
+                    },
+                    "pull": {
+                      "enum": [
+                        "pu_none",
+                        "pu_30k",
+                        "pu_150k",
+                        "pd_150k"
+                      ]
+                    },
+                    "init": {
+                      "enum": [
+                        "high",
+                        "low"
+                      ]
+                    }
                   }
                 }
               }
@@ -86,9 +228,18 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "output": { "type": "string" },
-        "keil_project": { "type": "string" },
-        "compat": { "type": "array", "items": { "type": "string" } }
+        "output": {
+          "type": "string"
+        },
+        "keil_project": {
+          "type": "string"
+        },
+        "compat": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
       }
     }
   }

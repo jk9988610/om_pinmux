@@ -50,3 +50,5 @@ omcfg/templates/_bak/
 *.bak
 *.bak-*
 docs/oneshot/
+
+_bak/

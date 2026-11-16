@@ -37,7 +37,6 @@ extern bool     bbat_low_power;
 extern bool     bpower_down;
 
 bool            bledc_data_send;
-uint8_t const dpi_color_tab[] = {LEDC_RED, LEDC_GREEN, LEDC_BULE, LEDC_RED|LEDC_BULE, LEDC_RED|LEDC_GREEN, LEDC_GREEN|LEDC_BULE};
 
 /* 未来参数化入口：接 board.ledc_colors 时，这里改为
  *   #ifdef LEDC_COLOR_TAB_INIT
