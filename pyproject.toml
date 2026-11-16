@@ -14,7 +14,7 @@ dependencies = ["pywebview>=5.0", "pyyaml>=6.0"]
 om-pinmux = "omcfg.cli:main"
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "ruff>=0.6"]
+dev = ["pytest>=8.0", "ruff>=0.6", "pytest-timeout"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
