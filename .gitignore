@@ -53,3 +53,5 @@ docs/oneshot/
 node_modules/
 
 _bak/
+
+om6239_pinmux.egg-info/
