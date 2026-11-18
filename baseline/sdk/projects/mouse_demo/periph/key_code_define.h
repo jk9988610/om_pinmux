@@ -12,11 +12,11 @@
 #define _KEY_CODE_DEFINE_H_
 
 //=============================================================================//
-//常量定义                                                                     //
+//甯搁噺瀹氫箟                                                                     //
 //=============================================================================//
 
 //-----------------------------------------------------------------------------;
-// 按键类型
+// 鎸夐敭绫诲瀷
 
 #define iKEY_INVALID            0xFF
 
@@ -63,20 +63,20 @@
         #define iDEF_REPORT_SUB   0x06
         #define iDEF_REPORT_ADD   0x07
         #define iDEF_REPORT_CYC_ADD 0x08
-        #define iDEF_LOCK_KEY     0x09          // 锁键
-        #define iDEF_SNIPER_ADD   0x0A          // 狙击键
-        #define iDEF_SNIPER_SUM   0x0B          // 狙击键
-        #define iDEF_RUNNING_FIRE 0x0C          // 组合连发键
+        #define iDEF_LOCK_KEY     0x09          // 閿侀敭
+        #define iDEF_SNIPER_ADD   0x0A          // 鐙欏嚮閿?
+        #define iDEF_SNIPER_SUM   0x0B          // 鐙欏嚮閿?
+        #define iDEF_RUNNING_FIRE 0x0C          // 缁勫悎杩炲彂閿?
       //}
       #define iLED_CTRL           0x10
       //{
         #define iLED_BRIGHT_SUB   0x10          //-------------------
         #define iLED_BRIGHT_ADD   0x11          //
         #define iLED_BRIGHT_CYC_ADD 0x12        //
-        #define iLED_MODE_SUB     0x13          //   背
-        #define iLED_MODE_ADD     0x14          //   光
-        #define iLED_MODE_CYC_ADD 0x15          //   控
-        #define iLED_SPEED_SUB    0x16          //   制
+        #define iLED_MODE_SUB     0x13          //   鑳?
+        #define iLED_MODE_ADD     0x14          //   鍏?
+        #define iLED_MODE_CYC_ADD 0x15          //   鎺?
+        #define iLED_SPEED_SUB    0x16          //   鍒?
         #define iLED_SPEED_ADD    0x17          //
         #define iLED_SPEED_CYC_ADD 0x18         //
         #define iLED_DIR_L_R      0x19          //
@@ -90,10 +90,10 @@
       //{
         #define iFLANK_LIGHT_SUB  0x20          //-------------------
         #define iFLANK_LIGHT_ADD  0x21          //
-        #define iFLANK_LIGHT_CYC_ADD 0x22       //  侧
-        #define iFLANK_MODE_SUB   0x23          //  灯
-        #define iFLANK_MODE_ADD   0x24          //  控
-        #define iFLANK_MODE_CYC_ADD 0x25        //  制
+        #define iFLANK_LIGHT_CYC_ADD 0x22       //  渚?
+        #define iFLANK_MODE_SUB   0x23          //  鐏?
+        #define iFLANK_MODE_ADD   0x24          //  鎺?
+        #define iFLANK_MODE_CYC_ADD 0x25        //  鍒?
         #define iFLANK_SPEED_SUB  0x26         //
         #define iFLANK_SPEED_ADD  0x27         //
         #define iFLANK_SPEED_CYC_ADD 0x28       //-------------------
@@ -134,25 +134,25 @@
 //{
     #define iDEF_COM_MASK       0xC0
 
-    #define iREALSE_NO_DID      0               // 松开不处理
-    #define iREALSE_DID         1               // 松开处理
+    #define iREALSE_NO_DID      0               // 鏉惧紑涓嶅?勭悊
+    #define iREALSE_DID         1               // 鏉惧紑澶勭悊
 
-    #define iDIS_KEY_BREAK      0               // 按键不可打断
-    #define iEN_KEY_BREAK       1               // 按键可打断
+    #define iDIS_KEY_BREAK      0               // 鎸夐敭涓嶅彲鎵撴柇
+    #define iEN_KEY_BREAK       1               // 鎸夐敭鍙?鎵撴柇
 //}
 #define iKEY_TYPE_INVALID       0xFF
 //{
     #define iINVALID_KEY 0xFF
 //}
 //-----------------------------------------------------------------------------;
-// 系统键键值
+// 绯荤粺閿?閿?鍊?
 //
 #define iSYS_POWER              0x01
 #define iSYS_SLEEP              0x02
 #define iSYS_WAKEUP             0x04
 
 //-----------------------------------------------------------------------------;
-// 标准键键值
+// 鏍囧噯閿?閿?鍊?
 //
 #define iSTD_NULL               0x00
 #define iSTD_KEY                0x00
@@ -328,19 +328,19 @@
 #define iSTD_KEYBOARD_EXSEL                      0xA4
 
 //-----------------------------------------------------------------------------;
-// 多功能键值
+// 澶氬姛鑳介敭鍊?
 //
 #define iLEFT_CTRL                      0x11
 #define iLEFT_SHIFT                     0x12
 #define iLEFT_ALT                       0x14
-#define iLEFT_GUI                       0x18    //左windows
+#define iLEFT_GUI                       0x18    //宸?windows
 #define iRIGHT_CTRL                     0x01
 #define iRIGHT_SHIFT                    0x02
 #define iRIGHT_ALT                      0x04
-#define iRIGHT_GUI                      0x08    //右windows
+#define iRIGHT_GUI                      0x08    //鍙硍indows
 
 //-----------------------------------------------------------------------------;
-// 多媒体键键值
+// 澶氬獟浣撻敭閿?鍊?
 //
 #define iMMK_IOS_SIRI_H         0x00
 #define iMMK_IOS_SIRI_L         0xCF

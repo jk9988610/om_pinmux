@@ -43,8 +43,8 @@ __Vectors:
                 .long    Reset_Handler         /*     Reset Handler */
                 .long    NMI_Handler           /* -14 NMI Handler */
                 .long    HardFault_Handler     /* -13 Hard Fault Handler */
-                .long    0x00710457
-                .long    0x04000204
+                .long    0x00710023
+                .long    0x04000205
                 .long    0x434B5942
                 .long    0x3031562D
                 .long    0                     /*     Reserved for ble device name */

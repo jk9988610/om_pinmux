@@ -1,0 +1,78 @@
+# >>> Keil Bar managed (do not edit between markers)
+# Clangd / Cursor / VS Code local index
+compile_commands.json
+.clangd
+.cache/
+.vscode/
+**/.vscode/
+
+# Keil build output directories
+**/out/
+**/_build/
+**/Objects/
+**/Listings/
+**/DebugConfig/
+**/lib_build/
+**/keil5/out/
+**/keil5/_build/
+**/keil5/lib_build/
+
+# Object / dependency / listing leftovers
+*.o
+*.d
+*.crf
+*.dep
+*.lst
+*.lnp
+*.map
+*.htm
+*.build_log.htm
+*.i
+*.__i
+*._ac
+
+# Link / flash products (local build; do not commit)
+*.axf
+*.elf
+*.hex
+*.bin
+*.dis
+*.sct.bak
+
+# Keil UI / debugger local state
+*.uvguix.*
+*.uvguix
+*.Bak
+*.bak
+JLinkLog.txt
+JLinkSettings.ini
+*.jlink
+
+# Logs / BootLoader tool cache
+*.log
+*.log.lock
+**/cursor_keil_*.log
+**/build_*.log
+._cache_BootLoader_Tools*.exe
+**/._cache_BootLoader_Tools*.exe
+
+# Keil-generated BAT often has machine-absolute paths
+**/keil5/*.BAT
+**/keil5/*.bat
+!**/keil5/outputbin.bat
+
+# OS / editor junk
+Thumbs.db
+Desktop.ini
+.DS_Store
+*~
+*.swp
+*.tmp
+*.temp
+
+# Python local
+__pycache__/
+*.pyc
+.venv/
+venv/
+# <<< Keil Bar managed

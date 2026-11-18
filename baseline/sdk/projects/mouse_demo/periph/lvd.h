@@ -65,7 +65,7 @@
 #define	POF_THRESHOLD_3_00V		0x1A0
 
 //----------------------------------------------
-// A3鐗堟湰
+// A3版本
 //
 #define	POF_THRESHOLD_0_900V    0x000
 #define	POF_THRESHOLD_0_925V    0x010
@@ -112,7 +112,7 @@
 #define	iOM6239_A3_1	        0x0B18
 //----------------------------------------------
 //
-//              A2鐗堟湰          1M涓嬫媺 2M涓婃媺
+//              A2版本          1M下拉 2M上拉
 // VALUE < 7                    0%
 // VALUE < 8                    5%
 // VALUE < 9                    10%
@@ -124,7 +124,7 @@
 
 //---------------------------------------------
 //
-//              A3鐗堟湰          1M涓嬫媺 2M涓婃媺
+//              A3版本          1M下拉 2M上拉
 // VALUE < 7                    0%
 // VALUE < 8                    5%
 // VALUE < 9                    10%
@@ -191,7 +191,6 @@ extern void bat_init(void);
 extern void bat_check(void);
 extern uint8_t bat_voltage_check(void);
 extern void bat_ind_process(void);
-void charg_led_sleep_process();
 
 //-----------------------------------------------------------------------------;
 #endif

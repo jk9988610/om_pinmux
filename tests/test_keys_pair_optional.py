@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from omcfg import baseline, model
+from omcfg import model
 
 CONFIGS = Path(__file__).resolve().parent.parent / "configs"
 
@@ -28,15 +28,15 @@ def test_ch04_6k_no_pair_in_pins():
     assert model.wake_keys(config, pins) == ["KEY_R0_PIN", "KEY_R1_PIN", "KEY_R2_PIN"]
 
 
-def test_baseline_key_io_has_ifdef_guard():
-    base = baseline.SDK_DIR / "projects" / "mouse_demo" / "periph"
+def test_baseline_key_io_has_ifdef_guard(ch04_baseline):
+    base = ch04_baseline / "projects" / "mouse_demo" / "periph"
     for name in ("key_io.h", "key_io.c"):
         text = (base / name).read_text(encoding="utf-8")
         assert "#ifdef KEY_PAIR_PIN" in text, f"{name} 缺少 #ifdef KEY_PAIR_PIN"
 
 
-def test_baseline_key_io_ifdef_balanced():
-    base = baseline.SDK_DIR / "projects" / "mouse_demo" / "periph"
+def test_baseline_key_io_ifdef_balanced(ch04_baseline):
+    base = ch04_baseline / "projects" / "mouse_demo" / "periph"
     for name in ("key_io.h", "key_io.c"):
         text = (base / name).read_text(encoding="utf-8")
         count_ifdef = text.count("#ifdef KEY_PAIR_PIN")

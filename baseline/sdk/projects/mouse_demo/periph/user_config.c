@@ -36,8 +36,10 @@ const user_gpio_config_t gpio_config_table[] = {
     {KEY_R0_PIN,         USER_GPIO_MODE_INPUT_PULLUP,    PU_30K,       PIN_HIGH_LEV},      /* 按键配置 */
     {KEY_R1_PIN,         USER_GPIO_MODE_INPUT_PULLUP,    PU_30K,       PIN_HIGH_LEV},    
     {KEY_R2_PIN,         USER_GPIO_MODE_INPUT_PULLUP,    PU_30K,       PIN_HIGH_LEV}, 
+    {KEY_B_PIN,          USER_GPIO_MODE_INPUT_PULLUP,    PU_30K,       PIN_HIGH_LEV}, 
+    {KEY_P_PIN,          USER_GPIO_MODE_INPUT_PULLUP,    PU_30K,       PIN_HIGH_LEV}, 
+    {KEY_DPI_PIN,        USER_GPIO_MODE_INPUT_PULLUP,    PU_30K,       PIN_HIGH_LEV}, 
     {KEY_PAIR_PIN,       USER_GPIO_MODE_INPUT_PULLUP,    PU_30K,       PIN_HIGH_LEV}, 
-    {KEY_C0_PIN,         USER_GPIO_MODE_OUTPUT_PP,       PU_30K,       PIN_HIGH_LEV},
 
     {WHEEL_A_PIN,        USER_GPIO_MODE_INPUT_PULLUP,    PU_30K,       PIN_HIGH_LEV},      /* 滚轮配置 */
     {WHEEL_B_PIN,        USER_GPIO_MODE_INPUT_PULLUP,    PU_30K,       PIN_HIGH_LEV}, 
@@ -46,15 +48,14 @@ const user_gpio_config_t gpio_config_table[] = {
     {SENSOR_SCLK_PIN,    USER_GPIO_MODE_OUTPUT_PP,       PU_30K,       PIN_HIGH_LEV}, 
     {SENSOR_SDIO_PIN,    USER_GPIO_MODE_INPUT_PULLUP,    PU_30K,       PIN_HIGH_LEV}, 
 
-    {MODE_24G_PIN,       USER_GPIO_MODE_INPUT_PULLDOWN,  PD_150K,      PIN_HIGH_LEV},
-    {MODE_BLE_PIN,       USER_GPIO_MODE_INPUT_PULLDOWN,  PD_150K,      PIN_HIGH_LEV},
+    {MODE_BLE_24G_PIN,   USER_GPIO_MODE_INPUT_PULLUP,    PU_30K,       PIN_HIGH_LEV},
 
-    {LED_MODE_R_PIN,     USER_GPIO_MODE_OUTPUT_PP,       PU_30K,       PIN_LOW_LEV}, 
-    {LED_MODE_G_PIN,     USER_GPIO_MODE_OUTPUT_PP,       PU_30K,       PIN_LOW_LEV}, 
-    {LED_MODE_B_PIN,     USER_GPIO_MODE_OUTPUT_PP,       PU_30K,       PIN_LOW_LEV}, 
-    {LED_LOW_PIN,        USER_GPIO_MODE_OUTPUT_PP,       PU_30K,       PIN_LOW_LEV}, 
-    {LEDC_CTRL_PIN,      USER_GPIO_MODE_OUTPUT_PP,       PU_30K,       PIN_HIGH_LEV},
-    {LEDC_PIN,           USER_GPIO_MODE_OUTPUT_PP,       PU_30K,       PIN_HIGH_LEV},
+    {LED_MODE_R_PIN,     USER_GPIO_MODE_OUTPUT_PP,       PU_30K,       PIN_HIGH_LEV}, 
+    {LED_MODE_G_PIN,     USER_GPIO_MODE_OUTPUT_PP,       PU_30K,       PIN_HIGH_LEV}, 
+    {LED_MODE_B_PIN,     USER_GPIO_MODE_OUTPUT_PP,       PU_30K,       PIN_HIGH_LEV}, 
+    {LED_R_PIN,          USER_GPIO_MODE_OUTPUT_PP,       PU_30K,       PIN_HIGH_LEV}, 
+    {LED_G_PIN,          USER_GPIO_MODE_OUTPUT_PP,       PU_30K,       PIN_HIGH_LEV}, 
+    {LED_B_PIN,          USER_GPIO_MODE_OUTPUT_PP,       PU_30K,       PIN_HIGH_LEV}, 
 
     {USB_5V,             USER_GPIO_MODE_INPUT_PULLDOWN,  PD_150K,      PIN_HIGH_LEV}, 
     {BAT_CHG_PIN,        USER_GPIO_MODE_INPUT_PULLUP,    PU_30K,       PIN_HIGH_LEV}, 
@@ -228,20 +229,10 @@ void periph_gpio_sleep_set()
     gpio_set_pd(WHEEL_A_PIN);
     gpio_set_pd(WHEEL_B_PIN);
 
-    gpio_dir_in(LEDC_PIN);
-    gpio_set_pd(LEDC_PIN);
-    led_low_off();
-
-    if (gpio_read(MODE_24G_PIN))
-        gpio_set_pu(MODE_24G_PIN,PU_30K);
+    if(MODE_BLE_CHECK == gpio_read(MODE_BLE_24G_PIN))
+        gpio_set_pd(MODE_BLE_24G_PIN);
     else
-        gpio_set_pd(MODE_24G_PIN);
-    if (gpio_read(MODE_BLE_PIN))
-        gpio_set_pu(MODE_BLE_PIN,PU_30K);
-    else
-        gpio_set_pd(MODE_BLE_PIN);
-    
-    
+        gpio_set_pu(MODE_BLE_24G_PIN,PU_30K);
     OM_RCC->CLKGATE = 0x0742;
 }
 /* OMCFG END sleep */
@@ -307,6 +298,7 @@ OM_CRITICAL_BEGIN();
     OM_GPIO0->DATAOUTSET = (1<<UART_PIN);
 OM_CRITICAL_END();
 
+    gpio_dir_in(UART_PIN);
 	#endif
 }
 

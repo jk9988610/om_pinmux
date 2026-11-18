@@ -76,10 +76,10 @@ unsigned char const default_cfg_tbl[] =
     0xE2,0x08,0x22,0x00,0x00,0xFF,0x00,0xFF,    // DPI1 LED 绿色闪4次
     0xE2,0x08,0x22,0x00,0x00,0x00,0xFF,0xFF,    // DPI2 LED 蓝色闪4次
     0xE2,0x08,0x22,0x00,0xFF,0x00,0xFF,0xFF,    // DPI3 LED 紫色闪4次
-    0xE2,0x08,0x22,0x00,0xFF,0xFF,0x00,0xFF,    // DPI4 LED 黄色闪4次
+    0xE2,0x08,0x22,0x00,0xFF,0xFF,0x00,0xFF,    // DPI4 LED 橙色闪4次
     0xE2,0x08,0x22,0x00,0x00,0xFF,0xFF,0xFF,    // DPI5 LED 青色闪4次
     0xE2,0x08,0x22,0x00,0xFF,0xFF,0xFF,0xFF,    // DPI6 LED 白色闪4次
-    0xE2,0x08,0x22,0x00,0xFF,0x3F,0x7F,0xFF,    // DPI7 LED 粉橙闪4次
+    0xE2,0x08,0x22,0x00,0xFF,0x3F,0x7F,0xFF,    // DPI7 LED 黄色闪4次
 //----------------------------------------------
 // 0x50
     0xF2,0x00,0x22,0x00,0xFF,0xFF,0xFF,0xFF,    // 闪烁
@@ -175,7 +175,7 @@ void laod_mouse_status(void)
 
             key_mode = (flash_fifo[i+6]&0x03);
             bt_index = ((flash_fifo[i+6]>>2)&0x03);
-            device_type = ((flash_fifo[i+6]>>4)&0x07);  // 按键切换模式情况下才能打开 ！！！！！！！！
+            //device_type = ((flash_fifo[i+6]>>4)&0x07);  // 按键切换模式情况下才能打开 ！！！！！！！！
             bat_status &= 0xE0;
             bat_status |= (flash_fifo[i+7]&0x1F);
             pre_bat_charge = false;
@@ -215,7 +215,7 @@ void laod_mouse_status(void)
                 report_24g = iREPORT_1000;
                 report_usb = iREPORT_1000;
 
-                led_mode = LEDC_DEFAULT_MODE;
+                led_mode = iLOGO_BREATHE;
                 bled_bright_en = true;
             }
             break;
@@ -386,7 +386,7 @@ extern bool bkey_mode_change;
  * @brief 用户存储状态配置
  * 
  */
-__attribute__ ((noinline)) void flash_save_status(void)
+void flash_save_status(void)
 {
     uint8_t i, dat_temp[8];
 
@@ -400,7 +400,7 @@ __attribute__ ((noinline)) void flash_save_status(void)
         dat_temp[5] |= (1<<7);
     dat_temp[6] = (key_mode&0x03);
     dat_temp[6] |= ((bt_index<<2)&0x0C);
-    dat_temp[6] |= ((device_type<<4)&0x70);
+    //dat_temp[6] |= ((device_type<<4)&0x70);
     dat_temp[7] = (bat_status&0x1F);
     if(true == pre_bat_charge)
         dat_temp[7] |= (1<<5);

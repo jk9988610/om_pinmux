@@ -42,13 +42,13 @@
 #include "om_driver.h"
 #include "evt.h"
 //#include "pm.h"
-#include "main.h"
+
 #include "mouse.h"
 #include "ex2_app_mouse.h"
 #include "main_usb.h"
 #include "main_24g.h"
 #include "ex2_hal.h"
-#include "led.h"
+
 //-----------------------------------------------------------------------------;
 //常量定义区
 //
@@ -125,15 +125,11 @@ void mouse_periph_wakeup_enable(uint8_t mask)
 {
     OM_CRITICAL_BEGIN();
     drv_gpio_set_trig(OM_GPIO0, PIN_WAKE_UP_MASK, GPIO_TRIG_NONE);
-    drv_gpio_set_trig(OM_GPIO0, ((1<<WHEEL_A_PIN)|(1<<WHEEL_B_PIN)), GPIO_TRIG_NONE);
     NVIC_ClearPendingIRQ(WAKEUP_GPIO0_IRQn);
     drv_pmu_clear_wakeup();
 
     if(mask & WAKEUP_BTN_MASK) { /* button only faling edge wakeup*/
-        gpio_dir_out(KEY_C0_PIN);
-        gpio_clear(KEY_C0_PIN);
         drv_gpio_set_trig(OM_GPIO0, PIN_WAKE_UP_MASK, GPIO_TRIG_FALLING_EDGE);
-        // drv_gpio_set_trig(OM_GPIO0, ((1<<WHEEL_A_PIN)|(1<<WHEEL_B_PIN)), GPIO_TRIG_BOTH_EDGE);
         KEY_PIN_WAKE_UP_EN();
         NVIC_SetPriority(WAKEUP_GPIO0_IRQn, RTE_GPIO0_IRQ_PRIORITY);
         NVIC_EnableIRQ(WAKEUP_GPIO0_IRQn);
@@ -215,7 +211,7 @@ int main(void)
         sys_ctrl = 0;
         OM_PMU->SW_RSVD7 = 0;
         OM_RCC->CLKGATE &= ~RCC_DEV_CLK_GATE_SWD_CLK_GATE_MASK;     /* 关掉SWD接口之后无法通过KEIL烧录，需注意调试时候打开上面的WHILE(1) */
-        // rf_fcc_key_ctrl();
+        rf_fcc_key_ctrl();
         sensor_type_check();
         OM_PMU->SW_RSVD1 = (device_type&PMU_SW_RSVD1_RF_MDOE_MASK);
         OM_PMU->SW_RSVD1 |= (sensor_type<<8);
@@ -267,7 +263,6 @@ soft_reset_process:
     drv_senscan_control(OM_SENSCAN, SENSCAN_CONTROL_SCAN_MODE_SEL, (void*)SENSCAN_SCAN_MODE_CONTINUOUS);
     register_set1(&(OM_SENSCAN->CSR), SENSACN_CSR_SCAN_STOP_MASK);
     while(OM_SENSCAN->CSR & SENSACN_CSR_SCAN_EN_MASK);
-    delayms(100);
     extern void power_check();              
 	power_check();                                                  /* 开机检测低压关机 */
     while(1)
@@ -278,8 +273,7 @@ soft_reset_process:
 		b24g_nromal = false;
         logo_cfg(iLED_CFG_POWER_ON);
         ind_sleep();
-        ledc_cmd(Cmd_Init,NULL);
-        if (device_type == iDEVICE_TYPE_USB)
+        if(iDEVICE_TYPE_USB == device_type)                         /* USB模式 */
         {
             DRV_RCC_CLOCK_ENABLE(RCC_CLK_RF, 1U);
             mouse_usb_init();
@@ -291,7 +285,7 @@ soft_reset_process:
             mMCU_MODE_NORMAL;
             main_24g();
         }
-        else if(iDEVICE_TYPE_BT1 >= device_type)                  /* BLE模式 */
+        else //if(iDEVICE_TYPE_BT2 >= device_type)                  /* BLE模式 */
         {
             device_type &= 0x03;
             evt_init();

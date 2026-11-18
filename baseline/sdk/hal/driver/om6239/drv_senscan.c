@@ -124,7 +124,7 @@ void drv_senscan_init(void)
 // CSR
     // Config mode銆乻can_step銆乨ata format and deltaxy_rev
     register_set(&(OM_SENSCAN->CSR), MASK_6REG(SENSACN_CSR_SCAN_MODE,       SENSCAN_SCAN_MODE_CONTINUOUS,
-                                               SENSACN_CSR_DATA_FORMAT,     SENSCAN_DATA_FORMAT_12BIT,
+                                               SENSACN_CSR_DATA_FORMAT,     SENSCAN_DATA_FORMAT_8BIT,
                                                SENSACN_CSR_DELTAXY_REV,     SENSCAN_DELTAXY_REV_4_7BIT,
                                                SENSACN_CSR_SPI_MODE,        SENSCAN_SPI_MODE_2_WIRE,
                                                SENSACN_CSR_SPI_CLK_SEL,     1U,

@@ -38,11 +38,9 @@
 #define KEY_MODE_R2         (OM_GPIO0->DATA & (1<<KEY_R2_PIN))
 #define KEY_MODE_R3         (OM_GPIO0->DATA & (1<<KEY_B_PIN))
 #define KEY_MODE_R4         (OM_GPIO0->DATA & (1<<KEY_P_PIN))
-#define KEY_MODE_R5         (OM_GPIO0->DATA & (1<<KEY_DPI_SUB_PIN))
-#define KEY_MODE_R7         (OM_GPIO0->DATA & (1<<KEY_DPI_ADD_PIN))
-#ifdef KEY_PAIR_PIN
+#define KEY_MODE_R5         (OM_GPIO0->DATA & (1<<KEY_B_PIN))
+#define KEY_MODE_R7         (OM_GPIO0->DATA & (1<<KEY_DPI_PIN))
 #define KEY_MODE_PAIR       (OM_GPIO0->DATA & (1<<KEY_PAIR_PIN))
-#endif
 
 /*******************************************************************************
  宏定义说明
@@ -81,13 +79,13 @@ extern bool                 bmode_swtich_valid;
 
 extern uint16_t             key_status;
 //{
-  #define bkey_dpi    (1<<7)
-  #define bkey_pair   (1<<5)
-  #define bkey_5      (1<<4)
-  #define bkey_4      (1<<3)
-  #define bkey_m      (1<<2)
-  #define bkey_r      (1<<1)
-  #define bkey_l      (1<<0)
+  #define bkey_dpi                (1<<7)
+  #define bkey_pair               (1<<6)
+  #define bkey_5                  (1<<4)
+  #define bkey_4                  (1<<3)
+  #define bkey_m                  (1<<2)
+  #define bkey_r                  (1<<1)
+  #define bkey_l                  (1<<0)
   
 //}
 extern uint16_t             key_status_bak;
@@ -102,7 +100,6 @@ extern void key_process(void);
 extern void scan_mode_swtich(uint8_t type);
 extern void encoder_scan_val(uint8_t* define_key_fifo,uint32_t* define_key);
 extern void wheel_fill_data(uint8_t* data_l);
-void ledc_mode_switch(void);
 //
 //-----------------------------------------------------------------------------;
 

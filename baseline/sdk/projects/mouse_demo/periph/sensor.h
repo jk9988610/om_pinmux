@@ -87,7 +87,6 @@ extern void senscan_init(void);
 
 extern void sensor_power_up_init(void);
 extern void sensor_clear_xy(void);
-void sensor_deepsleep_wakeup(void);
 extern void sensor_read_xy_data(void);
 extern void sensor_dat_init(void);
 
@@ -96,8 +95,6 @@ extern void sensor_xy_scan(void);
 
 extern void sensor_sleep(void);
 extern void sensor_wakeup(void);
-
-extern void sensor_enter_sleep();
 
 extern void sensor_comm_resume(void);
 extern void sensor_check_id(void);

@@ -307,8 +307,7 @@ __STATIC_FORCEINLINE void drv_pmu_uart_select(pmu_uart_sel_t uart_sel)
  */
 __STATIC_FORCEINLINE void drv_pmu_ledc_sel(pmu_ledc_sel_t ledc_sel)
 {
-    // register_set(&(OM_PMU->PINMUX_SEL), PMU_PINMUX_SEL_LEDC_SEL_MASK, ledc_sel << PMU_PINMUX_SEL_LEDC_SEL_POS);
-    OM_PMU->PINMUX_SEL |= (0x5A5A0000 + (ledc_sel << PMU_PINMUX_SEL_LEDC_SEL_POS));
+    register_set(&(OM_PMU->PINMUX_SEL), PMU_PINMUX_SEL_LEDC_SEL_MASK, ledc_sel << PMU_PINMUX_SEL_LEDC_SEL_POS);
 }
 
 /**

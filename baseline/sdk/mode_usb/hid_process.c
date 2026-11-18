@@ -530,13 +530,12 @@ void hid_process(void)
 //----------------------------------------------
 // 灯光配置
                 if(out_report_data[8]&(1<<7))
-                {				                // 设置模式（范围用 ledc_mode：LEDC_MODE_MAX）
-					if((LEDC_MODE_MAX >= (out_report_data[8]&0x1F))
+                {				                // 设置模式
+					if((iLOGO_MAX >= (out_report_data[8]&0x1F))
 					    &&(led_mode != (out_report_data[8]&0x1F)))
                     {
 					    led_mode = (out_report_data[8]&0x1F);
                         bsave_status = true;
-                        ledc_cmd(Cmd_Idle_Cfg, NULL);
 					}
 
                     if(out_report_data[8]&(1<<6))
@@ -545,7 +544,6 @@ void hid_process(void)
                         {
                             bled_bright_en = true;
                             bsave_status = true;
-                            ledc_cmd(Cmd_Idle_Cfg, NULL);
                         }
                     }
                     else
@@ -554,7 +552,6 @@ void hid_process(void)
                         {
                             bled_bright_en = false;
                             bsave_status = true;
-                            ledc_cmd(Cmd_Idle_Cfg, NULL);
                         }
                     }
 				}
@@ -565,7 +562,6 @@ void hid_process(void)
                         led_light_lev = (out_report_data[0x0A]&0x07);
                         pwm_init();
                         bsave_driver_status = true;
-                        ledc_cmd(Cmd_Idle_Cfg, NULL);
                     }
 				}
                 if(out_report_data[0x0A]&(1<<7))

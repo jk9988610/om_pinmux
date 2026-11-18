@@ -61,8 +61,8 @@
  * CONST & VARIABLES
  */
  ms_sleep_level_t ms_sleep_level = MS_SLEEP_LEVEL0;
-static bool is_timer_started = 0;
- char mouse_name[MOUSE_NAME_MAX_LEN] =  "CH-04 Bt1";             /* 蓝牙名称 配置 */
+
+const char mouse_name[MOUSE_NAME_MAX_LEN] =  "BT5.1Mouse";             /* 蓝牙名 配置 */
 
 uint8_t                     ble_interval;
 bool                        bradio_receive;
@@ -72,6 +72,10 @@ extern uint32_t             adv_interval_ms;
 extern uint8_t              reset_connect;
 
 
+static bool connect_para_check_res = false;  
+uint32_t gap_update_connect_para_timestamp = 0;
+uint32_t gap_update_para_times = 0;
+
 /**
  * @brief 蓝牙电源管理检测回调函数，在进入休眠之前会回调该函数，判断接下来的电源管理。
  * 
@@ -80,16 +84,12 @@ extern uint8_t              reset_connect;
  */
 pmu_lpm_t pm_checker_callback(void)
 {
-    if((ms_sleep_level == MS_SLEEP_LEVEL0) && is_timer_started)
+    if(ms_sleep_level < MS_SLEEP_LEVEL2)                /* SLEEP LEV 1*/
     {
-        return PMU_LPM_IDLE;
-    }
-    else if(ms_sleep_level < MS_SLEEP_LEVEL2)                /* SLEEP LEV 1*/
-    {
-        if ((ex2_stk_sleep_duration_get() > 10))        /* 距下次唤醒时间充足时尝试进入STOP1，否则不走该深睡分支 */
+        if ((ex2_stk_sleep_duration_get() > 10))        /* 距离下次唤醒时间剩余300us， 不进入休眠, 否则进入休眠 */
         {
             if(0x00000000 == OM_PWM->PWMCON)
-                return PMU_LPM_STOP1;                   /* PWM开启的情况下 不能进入STOP1，只能IDLE */
+                return PMU_LPM_STOP1;                   /* PWM开启的情况下 不能进入IDLE模式 */
             else
                 return PMU_LPM_IDLE;
         }
@@ -97,25 +97,13 @@ pmu_lpm_t pm_checker_callback(void)
     else                                                /* SLEEP LEV 2 */
     { 
         ex2_stk_uninit();
+        mode_led_all_off();
         pwm_off();
-        sensor_wakeup();
-        sensor_deepsleep_wakeup();
         drv_encoder_control(OM_ENCODER, ENCODER_CONTROL_STOP, NULL);
         drv_senscan_stop();
         sensor_sleep();
         DRV_RCC_CLOCK_ENABLE(RCC_CLK_SENSCAN, 0U);
         DRV_RCC_CLOCK_ENABLE(RCC_CLK_ENCODER, 0U);
-
-        // sys_deepsleep_process();   
-        for (size_t i = 0; i < 3; i++)
-        {
-            ledc_write0();
-            delayms(8);
-        }
-        delayms(100);
-        ledc_polling();
-        delayms(500);
-        charg_led_sleep_process();
         mouse_periph_wakeup_enable(WAKEUP_SLEEP_LEVEL2);
         drv_pmu_set_low_power_mode(PMU_LPM_DEEP_SLEEP);
         while(1);
@@ -129,28 +117,62 @@ extern bool ex2_hid_tx_notification_keyboard(uint8_t *buf);
 extern bool ex2_hid_tx_notification_consumer_control(uint8_t *buf);
 extern bool profile_bas_tx_notification(uint8_t level);
 
-void ex2_app_mouse_stop_led_scan_time(void)
+static uint8_t rp_interval = 0;
+static uint8_t cur_latency = 0;
+
+typedef struct ll_conn_param {
+    /* 接收ind后，参数更新时，接收窗口的大小，第1包由连接参数确定，以后动态调整。*/
+    uint32_t tick_winsize;
+    /* 接收ind后，参数更新时，第1包的接收窗口的偏移量。*/
+    uint32_t tick_winoff;
+    /* 连接间隔，单位tick. */
+    uint32_t tick_interval;
+    /* 连接超时参数，单位tick. */
+    uint32_t tick_timeout;
+    /* 连接延迟参数，保持连接可跳过的包数。 */
+    uint16_t latency;
+    /* 连接事件计数，接收ind后初值为0；参数更新时，达到指定值后才正式更新参数。*/
+    uint16_t instance;
+    /* 可用频道索引列表：1=Used 0=Unused。*/
+    uint8_t chn_map[5];
+} ll_conn_param_t;
+
+void reset_connect_para_check_res(void)
 {
-    if(is_timer_started)
-    {
-        is_timer_started = 0;
-        OM_CRITICAL_BEGIN();
-        OM_RTC->CR &= ~RTC_CR_TICK_WAKEUP_EN_MASK;
-        drv_rtc_set_tick_hz(OM_RTC, 0);
-        drv_rtc_control(OM_RTC, RTC_CONTROL_TICK_INT_DISABLE, NULL);
-        OM_CRITICAL_END();
-    }
+    connect_para_check_res = 0;
+    gap_update_para_times = 10;
+    gap_update_connect_para_timestamp = drv_rtc_read(OM_RTC);
 }
 
-void ex2_app_mouse_start_led_scan_time(void)
+void ex2_ll_hci_connect_param_update_complete(uint8_t *buf)
 {
-    if(!is_timer_started)
-    {
-        is_timer_started = 1;
-        OM_CRITICAL_BEGIN();
-        drv_rtc_set_tick_hz(OM_RTC, 500);
-        drv_rtc_control(OM_RTC, RTC_CONTROL_TICK_INT_EN, NULL);
-        OM_CRITICAL_END();
+    const ll_conn_param_t *p = (const ll_conn_param_t *)buf;
+
+    cur_latency = p->latency;
+}
+
+void check_gap_update_para_result(void)
+{
+    if(!connect_para_check_res) {
+        if(gap_update_connect_para_timestamp) {
+            uint32_t cur_time = drv_rtc_read(OM_RTC);
+            if(cur_time - gap_update_connect_para_timestamp > mMS_TO_TICK(2000)) {
+                gap_update_para_times--;
+                if(gap_update_para_times == 0)
+                    gap_update_connect_para_timestamp = 0;
+                else
+                    gap_update_connect_para_timestamp = cur_time;
+
+                if(cur_latency < 30) {
+                    extern ex2_gap_ppcp_t       ex2_gap_ppcp_value;
+                    ex2_l2cap_update_conn_para(&ex2_gap_ppcp_value);
+                }
+                else {
+                    gap_update_para_times = 0;
+                    gap_update_connect_para_timestamp = 0;
+                }
+            }
+        }
     }
 }
 
@@ -160,11 +182,12 @@ void ex2_app_mouse_start_led_scan_time(void)
  * 
  * @return __RAM_CODE 
  */
- uint8_t ex2_app_mouse_scan(void)
+__RAM_CODE uint8_t ex2_app_mouse_scan(void)
 {
     uint8_t temp_buff[8];
-        static bool has_enter_sleep_1 = false;
+
     if (!hid_notification_is_enabled()) {
+        rp_interval = 0;
         return 0;
     }
 	ble_24g_ctrl |= bom6239_sync_ok;            /* 正常连接工作标志位 */
@@ -181,23 +204,12 @@ void ex2_app_mouse_start_led_scan_time(void)
         logo_process();
         define_key_process();
         mode_led_hint();
-        if(has_enter_sleep_1)
-        {   
-            has_enter_sleep_1 = 0;
-            ledc_cmd(Cmd_Init,0);
-        }
-        else
-        {
-            ledc_polling();
-        }
     }
     else
     {
-        has_enter_sleep_1 = 1;
-        ledc_cmd(Cmd_Power_Set,(void*)POWER_OFF);
         ind_sleep();
     }
-
+    check_gap_update_para_result();
     scan_mode_swtich(iMODE_CHECK_DELAY);
 
     if(0!=key_tx_count)                     /* 键盘数据发送 */
@@ -281,13 +293,12 @@ extern void stk_notify_event_app(uint32_t evt);
 void app_ble_evt_dispatch(uint32_t events)
 {
     static uint32_t connect_start_time = 0; /* work around intel bluetooth bug */
-    if (events & EX2_EVENT_APP_CONNECT_IND) {                                               /* 从机接收到主机的连接请求事件 */
+    if (events & EX2_EVENT_APP_CONNECT_IND) {                                               /* 从设备接收到主设备的连接请求事件 */
         mouse_periph_wakeup_enable(WAKEUP_ALL_DISABLE);
         drv_rf_set_tx_power(DRV_RF_PA_PWR_0dBm);
         /* stop polling the peripheral*/
         ex2_ll_polling_time_stop();
         connect_start_time = 0;
-        ledc_cmd(Cmd_Idle_Cfg,NULL);
     }
     if (events & (EX2_EVENT_APP_SLAVE_TERMINATED)) {
         uint8_t bda[6];
@@ -309,7 +320,7 @@ void app_ble_evt_dispatch(uint32_t events)
     if(events & EX2_EVENT_APP_MASTER_TERMINATED) {
         ms_sleep_level = MS_SLEEP_LEVEL2;
     }
-    if (events & (EX2_EVENT_APP_PAIR_COMPLETED | EX2_EVENT_APP_RECONNECT)) {                 /* SMP密钥分发完成事件/从机回连事件 */
+    if (events & (EX2_EVENT_APP_PAIR_COMPLETED | EX2_EVENT_APP_RECONNECT)) {                 /* SMP密钥分发完成事件/从设备回连事件 */
         if (events & EX2_EVENT_APP_RECONNECT) {
             hid_notification_enable(1);
         }
@@ -323,7 +334,7 @@ void app_ble_evt_dispatch(uint32_t events)
         else if(vresion_info == 0x01BF)
             bradio_receive = true;
     }
-    if (events & EX2_EVENT_APP_CONN_SLAVE) {                                                  /* 从机成功建立连接事件，初始化设备服务 */
+    if (events & EX2_EVENT_APP_CONN_SLAVE) {                                                  /* 从设备成功建立连接事件，初始化设备服务 */
         if (!(OM_RTC->INTMASK & RTC_INTMASK_ALARM0_INTRAW_STATUS_MASK)) {
             if (hid_notification_is_enabled())
             {
@@ -375,17 +386,16 @@ void app_ble_evt_dispatch(uint32_t events)
         }
     }
 
-    if(events & EX2_EVENT_APP_ADV_EVENT_DONE) {                            /* 一次广播事件结束事件 */
+    if(events & EX2_EVENT_APP_ADV_EVENT_DONE) {                            /* 一个广播事件结束事件 */
         sys_tick_count += adv_interval_ms;
         ble_24g_ctrl |= bom6239_sync_ing;
 
-        key_process();                          // 广播完成需要扫描一次按键，判断模式切换，进入配对，低电等操作
+        key_process();                          // 广播完成需要扫描一次外设，判断模式切换，进入配对，低电等操作
         sensor_clear_xy();
         bat_ind_process();
         logo_process();
         scan_mode_swtich(iMODE_CHECK_NO_DELAY);
         mode_led_hint();
-        ledc_polling();
     }
 }
 
@@ -418,7 +428,7 @@ __RAM_CODE void drv_rtc_isr_callback(void)
         switch (ms_sleep_level)
         {
             case MS_SLEEP_LEVEL0:
-                if( ble_sleep_1_time_tbl[sleep_time_ble&0x07] > (rtc_count-rtc_init_value) || (bat_status & bcharging))          /* 正常工作模式,Interval = 7.5MS */
+                if( ble_sleep_1_time_tbl[sleep_time_ble&0x07] > (rtc_count-rtc_init_value))          /* 正常工作模式,Interval = 7.5MS */
                 {
                     ex2_ll_set_next_polling_time(0);
                     sensor_xy_scan();
@@ -430,9 +440,6 @@ __RAM_CODE void drv_rtc_isr_callback(void)
                     mouse_periph_wakeup_enable(WAKEUP_SLEEP_LEVEL1);
                     ex2_ll_set_next_polling_time(1);
                     logo_cfg(iLED_CFG_OFF);
-                    led_low_off();
-                    // ledc_cmd(Cmd_Power_Set,(void*)POWER_OFF);
-                    ledc_write0();
                 }
                 sys_tick_count += 8;
  
@@ -442,7 +449,7 @@ __RAM_CODE void drv_rtc_isr_callback(void)
 				{
                     ex2_ll_set_next_polling_time(1);
                 }   
-                else                                                                /* 从SLEEP 1 切换到 SLEEP 2 */
+                else                                                                /* 从SLEEP 1 切换至 SLEEP 2 */
                 {   
                     rtc_init_value = rtc_count;
                     ex2_ll_set_next_polling_time(0);
@@ -474,7 +481,3 @@ __RAM_CODE void drv_rtc_isr_callback(void)
 }
 
 
-void drv_tick_isr_callback()
-{  
-    // bat_polling();
-}

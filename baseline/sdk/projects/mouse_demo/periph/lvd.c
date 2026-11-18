@@ -15,7 +15,7 @@
 #include "lvd.h"
 #include "time_delay.h"
 #include "RF_PROTOCOL.H"
-#include "key_io.h"
+
 //-----------------------------------------------------------------------------;
 // macro define 
 //
@@ -34,9 +34,9 @@
 #define	iLVD_100_VALUE          (0x09)
 
 /* A3 */
-#define	iLVD_0_VALUE_A3         (0x02)
-#define	iLVD_90_VALUE_A3        (0x0F)
-#define	iLVD_100_VALUE_A3       (0x10)
+#define	iLVD_0_VALUE_A3         (0x05)
+#define	iLVD_90_VALUE_A3        (0x12)
+#define	iLVD_100_VALUE_A3       (0x13)
 
 //-----------------------------------------------------------------------------;
 // variable define 
@@ -54,12 +54,11 @@ uint32_t bat_power_delay;
 uint32_t bat_delay_count;
 uint32_t charge_time_count;
 uint16_t threshold;
-bool     bpower_down_hint;
-bool     bbat_low_power;
-bool     bpower_down;
+
 //-----------------------------------------------------------------------------;
 // extern variable declaration 
 //
+extern uint8_t key_data;
 extern bool bsave_status;
 
 //-----------------------------------------------------------------------------;
@@ -72,8 +71,8 @@ uint8_t const bat_li_value_tbl[] = {       /* battery level for OM6239 V_A2 (def
     25,                 
     50,                 
     75,                 
-    85,                
-    95,
+    100,                
+    100,
     100,
 };
 
@@ -81,6 +80,7 @@ uint8_t const bat_li_value_a3_tbl[] = {     /* battery level for OM6239 V A3 (co
     0  ,
     0  ,
     5  ,
+    10 ,
     15 ,
     20 ,
     30 ,
@@ -91,7 +91,6 @@ uint8_t const bat_li_value_a3_tbl[] = {     /* battery level for OM6239 V A3 (co
     80 ,
     80 ,
     90 ,
-    100 ,
     100,
 };
 
@@ -116,7 +115,7 @@ uint8_t const bat_li_value_a3_tbl[] = {     /* battery level for OM6239 V A3 (co
  * @note   
  * @retval None
  */
-void lvd_check(void)
+__RAM_CODE void lvd_check(void)
 {
     for(uint8_t i=0; i<7; i++)
     {
@@ -136,7 +135,7 @@ void lvd_check(void)
  * @note   see the BAT TEST TABLE
  * @retval 
  */
-uint8_t bat_voltage_check(void)
+__RAM_CODE uint8_t bat_voltage_check(void)
 {
     uint8_t i;
 
@@ -203,7 +202,7 @@ void bat_init(void)
  * @param  bat_level: 
  * @retval 
  */
- uint8_t bat_level_cal(uint8_t bat_level)
+__RAM_CODE uint8_t bat_level_cal(uint8_t bat_level)
 {
     if((iOM6239_A3_0 == OM_RF->LINE)||(iOM6239_A3_1 == OM_RF->LINE))
     {
@@ -228,16 +227,12 @@ void bat_init(void)
 }
 
 /**
- * @brief 低电压检测与电池电量处理
+ * @brief ????
  * 
  */
 void low_bat_pd()
 {   
-    if (USB_5V_PIN)
-    {
-        return;
-    }
-    
+    mode_led_all_off();
     pwm_off();
     extern void ex2_stk_uninit();
     ex2_stk_uninit();
@@ -248,13 +243,8 @@ void low_bat_pd()
     sensor_sleep();
     DRV_RCC_CLOCK_ENABLE(RCC_CLK_SENSCAN, 0U);
     DRV_RCC_CLOCK_ENABLE(RCC_CLK_ENCODER, 0U);
-    for (size_t i = 0; i < 3; i++)
-    {
-        ledc_write0();
-        delayms(8);
-    }
-    delayms(100);
-    delayms(500);
+    
+    //?????? ????????
     mouse_periph_wakeup_enable(WAKEUP_SLEEP_LEVEL2);
     drv_pmu_set_low_power_mode(PMU_LPM_DEEP_SLEEP);
     while(1);
@@ -326,58 +316,37 @@ void power_check()
  * @note   
  * @retval None
  */
-void bat_check(void)
+__RAM_CODE void bat_check(void)
 {
     uint8_t bat_dat, bat_temp;
     uint32_t rtc_temp = drv_rtc_read(OM_RTC);
-    static uint32_t lvd_hint_time = 0,lvd_filter_time = 0;
+
     bat_dat = bat_voltage_check();              /* get table index. */
 
     uint8_t pd_val = ((iOM6239_A3_0 == OM_RF->LINE)||(iOM6239_A3_1 == OM_RF->LINE)) ? iLVD_0_VALUE_A3 : iLVD_0_VALUE;
     if(bat_dat <= pd_val)                 /* SHUTDOWN */
     {
         if(!is_5v_in())
-        {
             low_bat_pd();
-        }
     }
     else if(bat_dat <= (pd_val + 2))      /* LOW POWER INDICATION */
     {   
-        lvd_filter_time = rtc_temp;
-        bbat_low_power = true;
-        bpower_down_hint = false;
-        if (bat_status & bcharging)
+        if((!is_5v_in()) && (bom6239_sync_ok & ble_24g_ctrl))
         {
-            blvd_hint_flag = false;
-        }
-        else
-        {
-            if((!is_5v_in()) && (bom6239_sync_ok & ble_24g_ctrl))
+            if(false == blvd_hint_flag)
             {
-                if(false == blvd_hint_flag && !busb_dpi_flag)
-                {
-                    if ((rtc_temp - lvd_hint_time)  > mMS_TO_TICK(3500))
-                    {
-                        lvd_hint_time = rtc_temp;
-                        blvd_hint_flag = true;
-                    }
-                    
-                }
+                logo_cfg(iLED_CFG_LVD);
             }
         }
     }
     else
     {
-        bbat_low_power = false;
-        bpower_down_hint = false;
-        if(true == blvd_hint_flag)
+        if(false == bidle_chg_flag)
         {
-            if ((rtc_temp - lvd_filter_time) > mMS_TO_TICK(3000))
-            {
-                /* code */
-                blvd_hint_flag = false;
+            if(!is_5v_in())
+            {   
+                logo_cfg(iLED_CFG_IDLE);
             }
-            
         }
     }
 
@@ -444,34 +413,90 @@ void bat_check(void)
         bkey_bat_update = false;
     }
 
+    if(0 != (bat_status&bcharging))              /* The battery is charging. */
+    {                                          
+        if(bat_dat > lvd_value)                  /* while charging, battery level can only increase and not decrease. */
+        {
+            if(0 != (bat_status&bcharge_ok))     /* The battery is fully charged. */
+            {                                   
+                if((iOM6239_A3_0 == OM_RF->LINE)||(iOM6239_A3_1 == OM_RF->LINE))
+                    lvd_value = iLVD_100_VALUE_A3;
+                else
+                    lvd_value = iLVD_100_VALUE;
 
+                if(100 != bat_value)
+                {
+                    bat_status &= 0xE0;
+                    bat_status |= lvd_value;
+                    bat_value = 100;
+                    bsave_status = true;
+                    bbat_update = true;
+                }
+            }
+            else if(BATTERY_LEVEL_CHANGE_DELAY < rtc_temp - bat_power_delay)       /* set a delay for level debounce */
+            {
+                bat_power_delay = rtc_temp;
 
-    if(bat_dat != lvd_value)
-    {
-        if(BATTERY_LEVEL_CHANGE_DELAY < rtc_temp - bat_power_delay)
+                uint8_t lvd_value_temp;
+                if((iOM6239_A3_0 == OM_RF->LINE)||(iOM6239_A3_1 == OM_RF->LINE))
+                    lvd_value_temp = iLVD_90_VALUE_A3;
+                else
+                    lvd_value_temp = iLVD_90_VALUE;
+
+                if(lvd_value_temp>lvd_value)
+                {
+                    lvd_value++;
+
+                    bat_status &= 0xE0;
+                    bat_status |= lvd_value;
+                    bat_value = bat_level_cal(lvd_value);
+                    bsave_status = true;
+                    bbat_update = true;
+                }
+            }
+        }
+        else
         {
             bat_power_delay = rtc_temp;
-
-            uint8_t lvd_value_temp;
-            if((iOM6239_A3_0 == OM_RF->LINE)||(iOM6239_A3_1 == OM_RF->LINE))
-                lvd_value_temp = iLVD_0_VALUE_A3;
-            else
-                lvd_value_temp = iLVD_0_VALUE;
-            lvd_value = bat_dat;
-
-            bat_status &= 0xE0;
-            bat_status |= lvd_value;
-            bat_value = bat_level_cal(lvd_value);
-            bsave_status = true;
-            bbat_update = true;
-
         }
     }
-    else
+    else                        /* The battery is not charging */
     {
-        bat_power_delay = rtc_temp;
+        if(true == pre_bat_charge)
+        {                                   // 放电状态，清除之前充电标志
+            pre_bat_charge = false;
+            bsave_status = true;
+        }
+
+        if(bat_dat < lvd_value)
+        {
+            if(BATTERY_LEVEL_CHANGE_DELAY < rtc_temp - bat_power_delay)
+            {
+                bat_power_delay = rtc_temp;
+
+                uint8_t lvd_value_temp;
+                if((iOM6239_A3_0 == OM_RF->LINE)||(iOM6239_A3_1 == OM_RF->LINE))
+                    lvd_value_temp = iLVD_0_VALUE_A3;
+                else
+                    lvd_value_temp = iLVD_0_VALUE;
+
+                if(lvd_value_temp < lvd_value)
+                {
+                    lvd_value--;
+
+                    bat_status &= 0xE0;
+                    bat_status |= lvd_value;
+                    bat_value = bat_level_cal(lvd_value);
+                    bsave_status = true;
+                    bbat_update = true;
+                }
+            }
+        }
+        else
+        {
+            bat_power_delay = rtc_temp;
+        }
     }
-    
 }
 
 
@@ -481,95 +506,21 @@ void bat_check(void)
  */
 void bat_ind_process(void)
 {
-    static uint32_t charge_hint_index = 0, charg_ok_count = 0;
-    static bool     blvd_hint_dir = 0;
+    static uint8_t charge_hint_index;
 
-    rtc_cur_value = drv_rtc_read(OM_RTC);
     bat_status &= 0x9F;
-
     if(0 != is_5v_in())
-    {
         bat_status |= bcharging;
-        if (0 != is_chg_ok())
-        {
-            if ((rtc_cur_value - charg_ok_count) > mMS_TO_TICK(60000))
-            {
-                bat_status |= bcharge_ok;
-            }
-        }
-        else
-        {
-            charg_ok_count = rtc_cur_value;
-        }
-    }
-    else
-    {
-        charg_ok_count = rtc_cur_value;
-    }
-
-    
+    if(0 != is_chg_ok())
+        bat_status |= bcharge_ok;
  
+    rtc_cur_value = drv_rtc_read(OM_RTC);
     if(mMS_TO_TICK(256) < (rtc_cur_value-bat_delay_count))
     {
         bat_delay_count = rtc_cur_value;
         bat_check();
     }
-
-    if (bat_status & bcharging)
-    {
-        if (bat_status & bcharge_ok)
-            led_low_off();
-        else
-            led_low_on();
-        
-    }
-    else
-    {
-        if (blvd_hint_flag)
-        {
-            if ((rtc_cur_value - charge_hint_index) > mMS_TO_TICK(1000))
-            {
-                charge_hint_index = rtc_cur_value;
-
-                if (blvd_hint_dir)
-                    led_low_off();
-                else
-                    led_low_on();
-
-                blvd_hint_dir = !blvd_hint_dir;
-            }
-            
-        }
-        else
-        {
-            led_low_off();
-        }
-        
-    }
-    
 }
 
 
-void charg_led_sleep_process()
-{
-    if (USB_5V_PIN)
-    {
-        while (1)
-        {
-            if (BAT_CHG_OK)
-                break;
-            else
-                led_low_on();
-            delayms(1);
-            drv_wdt_keep_alive(OM_WDT);
 
-            key_io_scan();
-            if (key_status)
-                NVIC_SystemReset();
-            if (!USB_5V_PIN)
-                break;;
-        }
-        
-    }
-    
-}

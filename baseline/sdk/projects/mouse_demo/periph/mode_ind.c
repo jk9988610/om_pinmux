@@ -12,8 +12,6 @@
 #include "lvd.h"
 #include "rf_protocol.h"
 
-#define MODE_IND_ON 1
-
 static bool ind_state = 0;
 static bool ind_mode = IND_MODE_OFF;
 static uint32_t cur_rtc_time;
@@ -23,7 +21,6 @@ static uint8_t bat_status_bak;
 
 void ind_on()
 {
-    #if (MODE_IND_ON)
     switch(cur_val.ind_color & 0x07)
     {
         case IND_RED:
@@ -54,34 +51,26 @@ void ind_on()
             led_b_on();
             break;
     }
-    #endif
 }
 
 void ind_off()
 {
-    #if (MODE_IND_ON)
     mode_led_all_off();
-    #endif
 }
 
 void ind_sleep()
 {
-    #if (MODE_IND_ON)
     mode_led_all_off();
     ind_mode = IND_MODE_OFF;
-    #endif
 }
 
 void clear_ind_flag()
 {
-    #if (MODE_IND_ON)
     ind_mode = IND_MODE_OFF;
-    #endif
 }
 
 void ind_config(const ind_val_t* set_val)
 {
-    #if (MODE_IND_ON)
     if (set_val != NULL)
         cur_val = *set_val;
     cur_rtc_time = drv_rtc_read(OM_RTC);
@@ -89,12 +78,10 @@ void ind_config(const ind_val_t* set_val)
     ind_on();
     ind_state = 1;
     ind_mode = IND_MODE_FLASH;
-    #endif
 }
 
 void dpi_config(uint8_t dpi_grade)
 {
-    #if (MODE_IND_ON)
     ind_val_t dpi_val = {
         .ind_color = IND_BLUE,
         .ind_times = IND_DPI_THREE,
@@ -129,7 +116,6 @@ void dpi_config(uint8_t dpi_grade)
             break;
     }
     ind_config(&dpi_val);
-    #endif
 }
 
 /**
@@ -138,7 +124,6 @@ void dpi_config(uint8_t dpi_grade)
  */
 void mode_led_hint()
 {   
-    #if (MODE_IND_ON)
     static bool lvd_flag = 0;
     uint32_t rtc_time = drv_rtc_read(OM_RTC);
 
@@ -180,7 +165,6 @@ void mode_led_hint()
     {   
         
     }
-    #endif
     
 }
 

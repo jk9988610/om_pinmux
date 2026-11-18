@@ -11,8 +11,10 @@
 - Windows + Python 3.10+（PowerShell 或 cmd 均可）。
 - `pip install -r requirements.txt`（`pyyaml`；GUI 另需 `pywebview`）。
 - 编译验证需要 Keil `UV4.exe`（默认 `C:\Keil_v5\UV4\UV4.exe`）。
-- 新建工程不需要外部 SDK；工具仓库内置 `baseline/sdk`（清理并已生成的 CH04 SDK，
-  207 个文件、5.43 MB）。接入已有工程时才需要准备那份 SDK 的**副本**。
+- 新建工程不需要外部 SDK；工具仓库内置 `baseline/sdk`（清理并已生成的 KC536 SDK，
+  203 个文件，single/RGB/滚轮 20-21）。接入已有工程时才需要准备那份 SDK 的**副本**。
+- 想从空白工程用选项逐步构建（CubeMX 式），用 `python -m omcfg blank`；见下方
+  「空白起步」一节。它复用同一份 KC536 骨架与生成/回滚链路。
 
 ## 新工程一键生成（推荐）
 
@@ -37,7 +39,7 @@ python -m omcfg new --name KC536X --id 0x0457
 工程名: KC536X
 项目号: 0x???? / 0x071 / v1（按名称派生）
 BLE 广播名: KC536X Bt1 / KC536X Bt2
-新工程: D:\work\KC536X（复制 207 个文件）
+新工程: D:\work\KC536X（复制 203 个文件）
 标识改写（源 -> 新）:
   projects/mouse_demo/periph/user_config.h  iPROJECT_NAME  '"CH04"' -> '"KC536X"'
   ...
@@ -70,6 +72,53 @@ BLE 广播名: KC536X Bt1 / KC536X Bt2
 python -m omcfg check D:\work\KC536X\projects\mouse_demo\project.omcfg
 UV4 -r D:\work\KC536X\projects\mouse_demo\keil5\SE71M.uvprojx -o build.log
 ```
+
+## 空白起步：从选项构建工程（CubeMX 式）
+
+### 图形界面（推荐）：双击 `launch.bat`
+
+窗口顶部点 **「空白起步（向导）」**，按编号五步走完，全程不用命令行：
+
+| 步骤 | 操作 | 说明 |
+|---|---|---|
+| ① | 填项目名 / 项目号 / 客户 / 版本 / 输出根目录，点 **创建空白工程** | 从内置 KC536 骨架复制 203 个文件，装一份引脚为空的草稿配置；目标目录必须不存在 |
+| ② | （可选）改模式 / 灯效 / 滚轮，点 **保存板型选项** | 默认与 KC536 一致（single / rgb / 20-21）；改后缺脚清单自动更新 |
+| ② | 点 **一键按推荐配置** | 按 KC536 整套协调方案配好全部必需脚（28 个），保证可生成；已手工配的会被覆盖 |
+| ③ | 点 **按角色配脚**（可选微调） | 左侧按约束分组列出功能（含"推荐 Pxx"/"必需"标记），右侧 32 脚矩阵点选；绿=可配、深绿=已占、黄=冲突、灰=不合法。草稿态可直接保存中间结果 |
+| ④ | 点 **预览 diff** | 看 `user_config.h/.c` 等待写入的变化 |
+| ⑤ | 点 **应用** | 按标记块写回，生成可回滚的 manifest |
+
+向导顶部实时显示进度：`已配 X/60 脚 · 缺必需 N · 冲突 N · 可生成 是/否`。
+"一键按推荐配置"是整组覆盖（保证编码器成对、脚位不冲突）；想自定义某几脚，
+先点它打底，再进第③步逐个改。GUI 产出的工程实测 Keil **0 Error / 0 Warning**。
+
+### 命令行：等价的 `blank` 子命令族
+
+`new` 从 KC536 现状快照出发（引脚已满）。如果想要**空白工程、逐项勾选功能**，
+用 `blank` 子命令族。它用同一份 KC536 SDK 骨架，装一份引脚为空的草稿配置，
+你按选项把角色一个个放到脚上，补齐后走同一条 `gen`/事务链路。
+
+```powershell
+python -m omcfg blank new --name MyMouse          # 建空白工程（引脚 0 个）
+python -m omcfg blank options                      # 列出 v1 功能角色 + 推荐脚/备选/合法脚
+python -m omcfg blank options --all                # 列出全部角色
+python -m omcfg blank assign --sdk <DIR> --role KEY_R0_PIN --pin P10
+python -m omcfg blank remove --sdk <DIR> --role KEY_R0_PIN
+python -m omcfg blank status --sdk <DIR>           # 还缺哪些必需脚、能否生成
+python -m omcfg blank build --sdk <DIR>            # dry-run 预览
+python -m omcfg blank build --sdk <DIR> --apply    # 生成源码并写回（可 rollback）
+```
+
+- **选项数据**在 `omcfg/data/options.json`：每个角色带 `suggested_pin`（取 KC536
+  基线现状）、`alternate_pins`（其他模板出现过的脚）、`allowed_pins`（芯片 mux
+  约束）、`required` / `build_required`（必需与 key_io 硬依赖）。GUI 的
+  `role_capabilities()` 与 CLI 共用这份数据。
+- **可生成条件**：`validate.required_roles` 按板型推导的必需脚 + `key_io.h`
+  无条件展开的 `KEY_B/KEY_P/KEY_DPI/KEY_PAIR` 全部落位，且无冲突。
+  `blank status` 会列出缺项；缺项时用 `build` 会被拒绝（退 1）。
+- 空白起步交付的工程，按推荐脚补齐后与 KC536 现状等价，Keil 实测
+  **0 Error / 0 Warning**。手动改板型选项（`blank` 的 board 配置或 GUI）
+  只影响必需角色集合，不碰生成/回滚链路。
 
 ## 从零到编译：5 步
 
@@ -370,12 +419,14 @@ python -m omcfg new --help
 python -m omcfg init --help
 python -m omcfg check --help
 python -m omcfg gen --help
+python -m omcfg blank --help
 python -m omcfg rollback --help
 ```
 
 | 命令 | 关键参数 | 行为 |
 |---|---|---|
 | `new` | `--name NAME [--target DIR] [--id 0xXXXX] [--scan DIR]` | 从内置基线复制骨架并剔除产物 → 改工程标识 → `init` → `gen --apply`；目标必须不存在；项目号默认按名称派生，可用 `--id` 手工指定，重复一律拒绝 |
+| `blank` | `new/options/assign/remove/status/build` | 空白起步：建引脚为空的草稿工程，按选项逐项分配脚位，补齐后生成；见「空白起步」一节 |
 | `init` | `--config FILE --sdk DIR [--force]` | 安装 `project.omcfg`，插入 `OMCFG`/`USER CODE` 标记；一次性 |
 | `check` | `FILE...`、`--all DIR`、`--sdk DIR`、`--rules` | 只校验，不写盘；`--sdk` 追加跨文件同步审计（严格）；`--rules` 打印连带规则清单；有 error 返回 1 |
 | `gen` | `--sdk DIR [--config FILE] [--dry-run\|--apply]` | 默认 dry-run；`--apply` 走事务并产出 manifest |

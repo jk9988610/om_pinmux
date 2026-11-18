@@ -29,6 +29,7 @@ unsigned char               dat_24g_1[32];
 
 extern void rtc_init(void);
 extern void ex2_hal_uninit(void);
+
 //=============================================================================;
 // 代码区                                                                      ;
 //=============================================================================;
@@ -61,7 +62,7 @@ void mouse_24g_init(void)
  * 
  * @return none
  */
-__RAM_CODE int main_24g(void)
+int main_24g(void)
 {
     while(1)
     {
@@ -73,7 +74,6 @@ __RAM_CODE int main_24g(void)
             if(iRF_MODE_NORMAL == rf_mode_type)
             {
                 sensor_xy_scan();       
-                ledc_polling();
 				define_key_process();    
             }
             else
@@ -81,6 +81,7 @@ __RAM_CODE int main_24g(void)
                 bat_ind_process();
                 logo_process();
             }
+
             sys_ctrl &= ~bscan_flag;
             if(iRF_MODE_NORMAL == rf_mode_type)
             {

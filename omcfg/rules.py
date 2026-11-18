@@ -46,6 +46,32 @@ WAKE_MASK_RE = re.compile(r"#define\s+PIN_WAKE_UP_MASK\s+(.*)")
 WAKE_CALL_RE = re.compile(r"drv_pmu_wakeup_pin_set\s*\(\s*([A-Z0-9_]+)\s*,")
 ROLE_REF_RE = re.compile(r"\b(KEY_[A-Z0-9_]+)\b")
 KEY_MODE_USE_RE = re.compile(r"\bKEY_MODE_\w+\b")
+# 从 key_io.h 的 "#define KEY_MODE_R7 (OM_GPIO0->DATA & (1<<KEY_DPI_PIN))" 解析映射
+KEY_MODE_DEF_RE = re.compile(
+    r"#define\s+(KEY_MODE_\w+)\s+[^\n]*?\(\s*1\s*<<\s*(KEY_[A-Z0-9_]+)\s*\)"
+)
+
+# 回退映射：key_io.h 不可解析时沿用（历史 CH04 口径）。
+FALLBACK_KEY_MODE_TO_PIN = {
+    "KEY_MODE_PAIR": "KEY_PAIR_PIN",
+    "KEY_MODE_R0": "KEY_R0_PIN",
+    "KEY_MODE_R1": "KEY_R1_PIN",
+    "KEY_MODE_R2": "KEY_R2_PIN",
+    "KEY_MODE_R3": "KEY_B_PIN",
+    "KEY_MODE_R4": "KEY_P_PIN",
+    "KEY_MODE_R5": "KEY_DPI_SUB_PIN",
+    "KEY_MODE_R7": "KEY_DPI_ADD_PIN",
+}
+
+
+def _key_mode_map(key_io_h: str) -> dict[str, str]:
+    """从 key_io.h 的宏定义推导 KEY_MODE_* → KEY_*_PIN。
+
+    解析到任何一条就以解析结果为准（映射是工程事实，不能掺入别板的硬编码）；
+    一条都解析不到时才回退到历史表，兼容没有 key_io.h 的最小测试桩。
+    """
+    mapping = {m.group(1): m.group(2) for m in KEY_MODE_DEF_RE.finditer(key_io_h)}
+    return mapping if mapping else dict(FALLBACK_KEY_MODE_TO_PIN)
 LED_ON_RE = re.compile(r"#define\s+led_r_on\(\)\s+\((gpio_set|gpio_clear)\(LED_MODE_R_PIN\)\)")
 LEDC_SEL_RE = re.compile(r"drv_pmu_ledc_sel\s*\(\s*PMU_LEDC_SEL_IO_(\d{2})\s*\)")
 DPI_INI_RE = re.compile(r"sensor_dpi_ini\s*\[\s*\]\s*=\s*\{([^}]*)\}", re.S)
@@ -227,16 +253,7 @@ def audit(config: dict, root: Path | str, strict: bool = False) -> validate.Repo
     key_io_h = _read(root, sdk.PERIPH / "key_io.h")
     key_io_c = _read(root, sdk.PERIPH / "key_io.c")
     if key_io_h or key_io_c:
-        KEY_MODE_TO_PIN = {
-            "KEY_MODE_PAIR": "KEY_PAIR_PIN",
-            "KEY_MODE_R0": "KEY_R0_PIN",
-            "KEY_MODE_R1": "KEY_R1_PIN",
-            "KEY_MODE_R2": "KEY_R2_PIN",
-            "KEY_MODE_R3": "KEY_B_PIN",
-            "KEY_MODE_R4": "KEY_P_PIN",
-            "KEY_MODE_R5": "KEY_DPI_SUB_PIN",
-            "KEY_MODE_R7": "KEY_DPI_ADD_PIN",
-        }
+        KEY_MODE_TO_PIN = _key_mode_map(key_io_h)
         key_io_c_effective = key_io_c
         if "KEY_PAIR_PIN" not in pins:
             key_io_c_effective = _strip_ifdef_block(key_io_c, "KEY_PAIR_PIN")

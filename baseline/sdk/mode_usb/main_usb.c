@@ -96,7 +96,6 @@ int main_usb(void)
     {
         if(0 != (sys_ctrl&bscan_flag))
         {
-            ledc_polling();
             key_process();
             sensor_xy_scan();
             drv_wdt_keep_alive(OM_WDT);
@@ -167,7 +166,7 @@ void usb_sleep(void)
 
     logo_cfg(iLED_CFG_OFF);
     drv_senscan_stop();
-    led_low_off();
+
     if(0 == (usb_ctrl_flag & bwakeup_usb_enable))
     {                                       // 不可唤醒
         sensor_sleep();

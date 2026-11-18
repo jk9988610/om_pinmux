@@ -134,7 +134,7 @@ __disable_irq();
     {
         if(m_data_flag&bmouse_data_send)
         {
-            m_data_flag &= ~bmouse_data_send;
+            // m_data_flag &= ~bmouse_data_send;
             if(0 == (usb_ctrl_flag & bsleep_eable))
             {
                 fifo_epn = (volatile uint8_t *)&OM_USB->EPnFIFO[2];
@@ -175,6 +175,7 @@ __disable_irq();
                 mouse_y = 0;
                 mouse_data_z = 0;
             }
+            m_data_flag &= ~bmouse_data_send;
         }
     }
 ep2_tx_end:

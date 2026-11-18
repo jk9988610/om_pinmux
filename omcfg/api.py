@@ -6,7 +6,17 @@ import os
 import tempfile
 from pathlib import Path
 
-from . import derive, initproject, model, pinmap, rules, validate
+from . import (
+    baseline,
+    blank,
+    derive,
+    initproject,
+    model,
+    newproject,
+    pinmap,
+    rules,
+    validate,
+)
 from .generate import generator
 from .targets import sdk
 from .transaction import FileTransaction
@@ -321,7 +331,11 @@ class Api:
         return result[0]
 
     def role_capabilities(self) -> dict:
-        """返回芯片全量角色能力表（不受当前工程限制）。"""
+        """返回芯片全量角色能力表（不受当前工程限制）。
+
+        选项元数据来自 omcfg/data/options.json（吸收 role_catalog + 芯片 mux +
+        KC536 基线与各模板的脚位经验），供 GUI 选项面板与 CLI 向导共用。
+        """
         import json as _json
         import os as _os
 
@@ -329,11 +343,36 @@ class Api:
         from . import pinmap as _pinmap
 
         chip = _model.load_chip()
-        cat_path = _os.path.join(_os.path.dirname(__file__), "data", "role_catalog.json")
+        data_dir = _os.path.join(_os.path.dirname(__file__), "data")
+        cat_path = _os.path.join(data_dir, "role_catalog.json")
+        opt_path = _os.path.join(data_dir, "options.json")
         cat = _json.load(open(cat_path, encoding="utf-8"))
+
+        # 优先用收敛后的 options.json；缺文件时回退到旧的即时拼装，保证兼容。
+        if _os.path.isfile(opt_path):
+            options = _json.load(open(opt_path, encoding="utf-8"))
+            roles = {}
+            for mac, opt in options.get("options", {}).items():
+                roles[mac] = {
+                    "role_id": opt.get("role_id", ""),
+                    "aliases": [mac] + list(opt.get("aliases", [])),
+                    "allowed_pins": opt.get("allowed_pins", []),
+                    "v1": bool(opt.get("v1", False)),
+                    "display_name": opt.get("display_name", mac),
+                    "tier": opt.get("tier", ""),
+                    "trend": opt.get("trend", ""),
+                    "suggested_pin": opt.get("suggested_pin"),
+                    "alternate_pins": opt.get("alternate_pins", []),
+                    "fixed": bool(opt.get("fixed", False)),
+                    "required": bool(opt.get("required", False)),
+                    "default_gpio": opt.get("default_gpio"),
+                    "pair_with": opt.get("pair_with"),
+                    "exclusive_with": opt.get("exclusive_with", []),
+                }
+            return {"roles": roles, "demand_groups": cat.get("demand_groups", [])}
+
         roles = {}
         for r in cat.get("roles", []):
-            rid = r.get("id")
             aliases = list(r.get("aliases", {}).values())
             if not aliases:
                 continue
@@ -343,7 +382,7 @@ class Api:
             except Exception:
                 allowed = set()
             roles[primary] = {
-                "role_id": rid,
+                "role_id": r.get("id"),
                 "aliases": aliases,
                 "allowed_pins": sorted(allowed),
                 "v1": bool(r.get("v1", False)),
@@ -808,3 +847,295 @@ class Api:
             return result
         except Exception as exc:
             return _error(str(exc), "确认工程已初始化、文件未被占用")
+
+    # ------------------------------------------------------------------
+    # 空白起步（CubeMX 式向导）：仅薄转调 blank + baseline + generator，
+    # 不复制任何生成/校验逻辑；草稿态写入 project.omcfg 不要求必需脚齐全。
+    # ------------------------------------------------------------------
+
+    def blank_options(self) -> dict:
+        """向导选项数据：角色能力 + 板型枚举 + 默认值。与 CLI 共用 options.json。"""
+        try:
+            caps = self.role_capabilities()
+            board = blank.default_board()
+            return {
+                "ok": True,
+                "roles": caps.get("roles", {}),
+                "demand_groups": caps.get("demand_groups", []),
+                "board_enums": {
+                    "mode_pins": sorted(model.MODE_ENUM),
+                    "logo": sorted(model.LOGO_ENUM),
+                    "sensor.bus": sorted(model.BUS_ENUM),
+                    "polarity": sorted(model.GPIO_INITS),
+                },
+                "board_defaults": board,
+            }
+        except Exception as exc:
+            return _error(str(exc), "确认 omcfg/data/options.json 存在")
+
+    def blank_new(
+        self,
+        name: str,
+        target: str,
+        customer: str = "BYC",
+        version: int = 1,
+        id_low: int | None = None,
+    ) -> dict:
+        """从内置 KC536 骨架建一个引脚为空的草稿工程，目标目录必须不存在。"""
+        try:
+            name = (name or "").strip()
+            problem = baseline.name_problem(name)
+            if problem:
+                return _error(problem, "例如 MyMouse")
+            dest = Path(target).expanduser().resolve()
+            if dest.exists():
+                return _error(f"目标路径已存在: {dest}", "请换一个不存在的目录")
+            low = int(id_low) if id_low else 1
+            if not 1 <= low <= 0xFFFF:
+                return _error(f"项目号超出范围: 0x{low:X}", "范围 0x0001..0xFFFF")
+
+            source, _ = baseline.ensure_ready()
+            config = blank.empty_config(name, customer=customer or "BYC", version=int(version or 1))
+            config["project"]["id"]["low"] = f"0x{low:04X}"
+            payload = (model.dump_config(config) + "\n").encode("utf-8")
+
+            transaction = FileTransaction.create(dest, "omcfg_blank_new")
+            copied = newproject.copy_skeleton(source, dest)
+            config_target = model.default_config_path(dest)
+            config_target.parent.mkdir(parents=True, exist_ok=True)
+            transaction.write_bytes(config_target, payload, "写入空白项目配置")
+            initproject.init_project(
+                dest, config_target, force=False, verbose=False, announce_next=False, tx=transaction
+            )
+            transaction.commit()
+
+            status = blank.summary(config)
+            return {
+                "ok": True,
+                "sdk": str(dest),
+                "name": name,
+                "config": str(config_target),
+                "copied": copied,
+                "ble_names": model.ble_names(config),
+                "status": status,
+                "message": (
+                    f"空白工程已建（骨架 {copied} 文件）；已配 0/{status['total_roles']} 脚，"
+                    f"缺必需脚 {len(status['missing'])} 个 —— 这是空白起步的正常状态"
+                ),
+            }
+        except Exception as exc:
+            return _error(str(exc), "确认目标可写、内置基线完整")
+
+    def blank_status(self, sdk_path: str) -> dict:
+        """草稿构建进度：已分配/缺失/冲突/是否可生成。"""
+        try:
+            root = sdk.resolve_sdk(sdk_path)
+            path = model.default_config_path(root)
+            if not path.is_file():
+                return _error(f"工程尚无 project.omcfg: {path}", "先用空白新建或初始化")
+            config = model.load_config(path)
+            status = blank.summary(config)
+            board = model.board(config)
+            report = validate.validate_config(config)
+            status.update(
+                {
+                    "ok": True,
+                    "sdk": str(root),
+                    "board": board,
+                    "missing_detail": [
+                        {
+                            "role": role,
+                            "suggested": blank.load_options().get(role, {}).get("suggested_pin"),
+                        }
+                        for role in status["missing"]
+                    ],
+                    "validate_errors": len(report.errors),
+                    "validate_warnings": len(report.warnings),
+                }
+            )
+            return status
+        except Exception as exc:
+            return _error(str(exc), "确认 sdk 指向工程根目录")
+
+    def blank_save(self, sdk_path: str, assignments: dict[str, str] | None = None) -> dict:
+        """草稿态写引脚：只做芯片 mux/占用校验，不卡必需脚（允许逐步构建）。
+
+        语义与 save_pinmap 一致（全量角色→脚映射，空值解除），但跳过完整性校验，
+        这样空白工程可以一步步保存中间状态。真正写入前的完整性把关在 blank_apply。
+        """
+        try:
+            root = sdk.resolve_sdk(sdk_path)
+            missing_markers = initproject.missing_markers(root)
+            if missing_markers:
+                return _needs_init(root, missing_markers)
+            config_path = model.default_config_path(root)
+            source = sdk.read_source(config_path)
+            text = source.text
+            opts = blank.load_options()
+
+            assignments = assignments or {}
+            unknown = sorted(set(assignments) - set(opts))
+            if unknown:
+                return _error(f"未知功能角色: {', '.join(unknown)}", "角色须来自 options.json")
+
+            # 预检：每个非空分配在芯片上合法；同脚不冲突（LED 别名对除外）。
+            target: dict[str, str] = {}
+            aliases = {
+                frozenset(("LED_MODE_R_PIN", "LED_R_PIN")),
+                frozenset(("LED_MODE_G_PIN", "LED_G_PIN")),
+                frozenset(("LED_MODE_B_PIN", "LED_B_PIN")),
+            }
+            chip = model.load_chip()
+            for role, pin in assignments.items():
+                value = str(pin or "").strip().upper()
+                if not value:
+                    continue
+                allowed = opts.get(role, {}).get("allowed_pins", [])
+                if allowed and value not in allowed:
+                    return _error(
+                        f"{role} -> {value}: 不是该功能的合法脚",
+                        "合法脚: " + ", ".join(allowed[:8]) + (" ..." if len(allowed) > 8 else ""),
+                    )
+                problem = pinmap.role_pin_problem(chip, role, value)
+                if problem:
+                    return _error(f"{role} -> {value}: {problem}", "用选项数据里的合法脚")
+                if value in target and frozenset((target[value], role)) not in aliases:
+                    return _error(f"{value} 同时分配给 {target[value]} 和 {role}", "一个脚只能一个功能")
+                target[role] = value
+
+            for role, pin in target.items():
+                text = model.add_pin_text(text, role, pin)
+            for role in set(assignments) - set(target):
+                text = model.remove_pin_text(text, role)
+            text = _sync_wheel(text)
+
+            new_config = model.load_config_text(text)
+            result = _payload(root, new_config, validate.validate_config(new_config))
+            status = blank.summary(new_config)
+            result["status"] = status
+            # 草稿态：ok 表示“写入成功”，完整性看 status.complete。
+            result["ok"] = True
+            if text == source.text:
+                result["changed"] = 0
+                result["message"] = "引脚没有变化"
+                return result
+            sdk.ensure_encodable(text, source.encoding)
+            transaction = FileTransaction.create(root, "omcfg_blank_save")
+            transaction.write_bytes(
+                config_path,
+                sdk.SourceFile(config_path, text, source.encoding, source.newline, source.bom).render(),
+                "GUI 草稿态保存引脚",
+            )
+            transaction.commit()
+            result["changed"] = 1
+            result["message"] = "草稿引脚已保存；可继续配置，补齐后点「预览 diff」"
+            return result
+        except Exception as exc:
+            return _error(str(exc), "确认工程已初始化、文件未被占用")
+
+    def blank_fill_recommended(self, sdk_path: str) -> dict:
+        """一键按 KC536 基线整套方案配置全部必需脚。
+
+        推荐源是内置 KC536 基线的**整套协调方案**——脚位互不冲突、编码器成对、
+        board 选项自洽，因此一键填充后保证可生成。采用整体方案而非逐角色贪心，
+        避免"前面角色占了后面角色推荐脚"的连锁冲突。会覆盖必需角色现有的脚位；
+        用户微调请放在填充之后。
+        """
+        try:
+            root = sdk.resolve_sdk(sdk_path)
+            config_path = model.default_config_path(root)
+            config = model.load_config(config_path)
+            opts = blank.load_options()
+
+            _, base_config_path = baseline.ensure_ready()
+            base_cfg = model.load_config(base_config_path)
+            base_pins = {
+                role: (value.get("pin") if isinstance(value, dict) else value)
+                for role, value in base_cfg.get("pins", {}).items()
+            }
+
+            required = set(blank.missing_roles(config))
+            # 当前已分配的角色也纳入：整体的基线方案要保证同脚唯一，需要一起重写。
+            already = set(model.pin_entries(config))
+            rewrite = {role for role in (required | already) if role in base_pins}
+
+            assignments: dict[str, str] = {}
+            problems: list[str] = []
+            for role in sorted(rewrite):
+                assignments[role] = base_pins[role]
+
+            # 基线没覆盖却仍缺的角色（如外部板型选项引入的），用 options 兜底。
+            for role in sorted(required - set(assignments)):
+                sug = opts.get(role, {}).get("suggested_pin")
+                if sug and not blank.assign_problem(config, role, sug):
+                    assignments[role] = sug
+                else:
+                    problems.append(f"{role}: 基线无推荐脚，请手动选")
+
+            saved = self.blank_save(sdk_path, assignments) if assignments else {"ok": True, "changed": 0}
+            if not saved.get("ok"):
+                return saved
+            status = self.blank_status(sdk_path)
+            return {
+                "ok": True,
+                "filled": assignments,
+                "problems": problems,
+                "changed": saved.get("changed", 0),
+                "status": status,
+                "message": (
+                    f"已按推荐方案配置 {len(assignments)} 个角色；"
+                    + ("全部必需脚已齐，可点「预览 diff」" if status["complete"] else
+                       f"仍缺 {len(status['missing'])} 个，请手动选脚")
+                ),
+            }
+        except Exception as exc:
+            return _error(str(exc), "确认工程已初始化")
+
+    def blank_set_board(self, sdk_path: str, updates: dict | None = None) -> dict:
+        """设置空白草稿的板型选项（mode_pins/logo/wheel 等），保留行尾注释。"""
+        try:
+            root = sdk.resolve_sdk(sdk_path)
+            config_path = model.default_config_path(root)
+            source = sdk.read_source(config_path)
+            text = source.text
+            allowed = {"mode_pins", "logo", "wheel", "led_polarity"}
+            for key, value in (updates or {}).items():
+                if key not in allowed:
+                    return _error(f"不支持的板型选项: {key}", f"允许 {sorted(allowed)}")
+                text = model.set_board_value_text(text, key, str(value))
+            config = model.load_config_text(text)
+            if text != source.text:
+                sdk.ensure_encodable(text, source.encoding)
+                transaction = FileTransaction.create(root, "omcfg_blank_board")
+                transaction.write_bytes(
+                    config_path,
+                    sdk.SourceFile(config_path, text, source.encoding, source.newline, source.bom).render(),
+                    "GUI 设置板型选项",
+                )
+                transaction.commit()
+            status = blank.summary(config)
+            return {
+                "ok": True,
+                "board": model.board(config),
+                "status": status,
+                "message": "板型选项已保存；缺脚清单已按新选项更新",
+            }
+        except Exception as exc:
+            return _error(str(exc), "确认工程已初始化")
+
+    def blank_apply(self, sdk_path: str) -> dict:
+        """补齐后生成：先检查草稿完整性，再复用现有 preview/apply 链路。"""
+        try:
+            root = sdk.resolve_sdk(sdk_path)
+            config = model.load_config(model.default_config_path(root))
+            status = blank.summary(config)
+            if not status["complete"]:
+                return _error(
+                    "草稿尚未补齐，不能生成：缺必需脚 "
+                    + ", ".join(status["missing"])
+                    + ("；冲突 " + "; ".join(status["conflicts"]) if status["conflicts"] else ""),
+                    "先按推荐脚填充或手动选脚，确认「可生成: 是」后再应用",
+                )
+            return self.apply(sdk_path)
+        except Exception as exc:
+            return _error(str(exc), "确认 sdk 指向工程根目录")

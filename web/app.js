@@ -597,9 +597,12 @@ document.addEventListener("DOMContentLoaded", init);
     } else {
       status = allowed.size + " 脚 · " + (free > 0 ? "空闲 " + free : "0 空闲（需覆盖）");
     }
+    var sug = meta.suggested_pin || "";
     var warnColor = (free === 0 && !assignedPin) ? "#c62828" : "#666";
-    btn.innerHTML = '<div style="font-weight:bold">' + name + '</div>' +
-      '<small style="color:" + warnColor + "">' + status + '</small>';
+    var sugHtml = sug ? '<small style="color:#1565c0;margin-left:6px">推荐 ' + sug + '</small>' : '';
+    var reqHtml = meta.required ? '<small style="color:#c62828;margin-left:6px">必需</small>' : '';
+    btn.innerHTML = '<div style="font-weight:bold">' + name + reqHtml + '</div>' +
+      '<small style="color:' + warnColor + '">' + status + '</small>' + sugHtml;
     btn.onclick = (function(r) { return function() { currentSelectedRole = r; renderAll(); }; })(role);
     return btn;
   }
@@ -720,10 +723,18 @@ document.addEventListener("DOMContentLoaded", init);
       }
     }
     try {
-      var res = await window.pywebview.api.save_pinmap(lastPinmap.sdk, assignments);
-      if (res && !res.error) {
+      var api = window.pywebview.api;
+      // 空白起步草稿态允许保存中间结果（不卡必需脚）；完整工程仍走严格校验。
+      var draft = !!window.__omBlankMode && typeof api.blank_save === "function";
+      var res = draft
+        ? await api.blank_save(lastPinmap.sdk, assignments)
+        : await api.save_pinmap(lastPinmap.sdk, assignments);
+      if (res && res.ok && !res.error) {
+        var st = res.status || {};
         document.getElementById("roles-save-hint").textContent =
-          "已保存 (" + (res.changed || 0) + " 改动) · 请去表格视图点「预览 diff」";
+          "已保存 (" + (res.changed || 0) + " 改动)" +
+          (draft ? " · 已配 " + (st.assigned || 0) + " 脚，可生成: " + (st.complete ? "是" : "否") : "") +
+          " · 请点「预览 diff」";
         if (typeof run === "function") {
           try { run("load", "打开"); } catch (e) {}
         }
@@ -742,276 +753,296 @@ document.addEventListener("DOMContentLoaded", init);
     initRolesUI();
   }
 })();
-// ==================== 新建工程向导 ====================
+// ==================== 空白起步向导（blank 干净链路） ====================
 (function() {
   "use strict";
 
-  var state = {
-    workspace: null,
-    templatePath: null,
-    prepared: false,
-    ledcPrepared: false,
-    generated: null
-  };
-  window.__omWizardState = state;
+  function $$(id) { return document.getElementById(id); }
 
-  function $(id) { return document.getElementById(id); }
+  var state = { sdk: null, createdName: null };
+  var FORM_KEY = "om_pinmux.blankwiz";
 
-  var FORM_KEY = "om_pinmux.newproj";
+  function msg(text, isErr) {
+    var el = $$("bw-msg");
+    if (!el) return;
+    el.style.color = isErr ? "#c62828" : "#555";
+    el.textContent = text || "";
+  }
 
-  function loadFormState() {
+  function loadForm() {
     try {
       var s = JSON.parse(localStorage.getItem(FORM_KEY) || "{}");
-      var setIf = function(id, v) { var el = $(id); if (el && !el.value && v) el.value = v; };
-      setIf("np-tpl", s.tpl);
-      setIf("np-id", s.id);
-      setIf("np-name", s.name);
-      setIf("np-out", s.out);
-      setIf("np-consumer", s.consumer);
-      setIf("np-version", s.version);
-    } catch (e) { console.warn("loadFormState:", e); }
+      [["bw-name", s.name], ["bw-id", s.id], ["bw-customer", s.customer],
+       ["bw-version", s.version], ["bw-out", s.out]].forEach(function(pair) {
+        var el = $$(pair[0]);
+        if (el && !el.value && pair[1]) el.value = pair[1];
+      });
+    } catch (e) { console.warn("loadForm:", e); }
   }
 
-  function saveFormState() {
+  function saveForm() {
     try {
-      var s = {
-        tpl: ($("np-tpl") || {}).value || "",
-        id: ($("np-id") || {}).value || "",
-        name: ($("np-name") || {}).value || "",
-        out: ($("np-out") || {}).value || "",
-        consumer: ($("np-consumer") || {}).value || "",
-        version: ($("np-version") || {}).value || ""
-      };
-      localStorage.setItem(FORM_KEY, JSON.stringify(s));
-    } catch (e) { console.warn("saveFormState:", e); }
+      localStorage.setItem(FORM_KEY, JSON.stringify({
+        name: ($$("bw-name") || {}).value || "",
+        id: ($$("bw-id") || {}).value || "",
+        customer: ($$("bw-customer") || {}).value || "",
+        version: ($$("bw-version") || {}).value || "",
+        out: ($$("bw-out") || {}).value || ""
+      }));
+    } catch (e) { console.warn("saveForm:", e); }
   }
 
-  function bindFormPersistence() {
-    ["np-tpl", "np-id", "np-name", "np-out", "np-consumer", "np-version"].forEach(function(id) {
-      var el = $(id);
-      if (!el || el.dataset.persistBound) return;
-      el.dataset.persistBound = "1";
-      el.addEventListener("change", saveFormState);
-      el.addEventListener("blur", saveFormState);
-    });
-  }
+  function ensureUI() {
+    if ($$("bw-panel")) return;
 
-  function ensureWizard() {
-    if ($("newproj-panel")) return;
-
-    // 1. 顶部按钮
-    var bar = $("roles-bar");
+    var bar = $$("roles-bar");
     if (!bar) {
       bar = document.createElement("div");
       bar.id = "roles-bar";
       bar.style.cssText = "padding:8px 16px;background:#f5f5f5;border-bottom:1px solid #ddd;color:#222";
       document.body.insertBefore(bar, document.body.firstChild);
     }
-    if (!$("toggle-newproj")) {
-      var btn = document.createElement("button");
-      btn.id = "toggle-newproj";
-      btn.textContent = "新建工程";
-      btn.style.cssText = "padding:6px 12px;color:#222;margin-right:8px";
-      btn.onclick = toggleWizard;
-      bar.insertBefore(btn, bar.firstChild);
+    if (!$$("toggle-bw")) {
+      var toggle = document.createElement("button");
+      toggle.id = "toggle-bw";
+      toggle.textContent = "空白起步（向导）";
+      toggle.style.cssText = "padding:6px 12px;color:#222;margin-right:8px;background:#1976d2;color:white;border:none;border-radius:4px;cursor:pointer";
+      toggle.onclick = function() {
+        var panel = $$("bw-panel");
+        panel.style.display = panel.style.display === "none" ? "block" : "none";
+        if (panel.style.display === "block" && !state.sdk) initOptions();
+      };
+      bar.insertBefore(toggle, bar.firstChild);
     }
 
-    // 2. 面板
     var panel = document.createElement("div");
-    panel.id = "newproj-panel";
-    panel.style.cssText = "display:none;margin:12px;padding:12px;border:1px solid #ccc;border-radius:6px;background:#fafafa;color:#222;max-width:820px";
+    panel.id = "bw-panel";
+    panel.style.cssText = "display:none;margin:12px;padding:14px;border:1px solid #ccc;border-radius:6px;background:#fafafa;color:#222;max-width:880px";
     panel.innerHTML =
-      '<h3 style="margin:0 0 10px">新建工程</h3>' +
+      '<h3 style="margin:0 0 4px">空白起步向导</h3>' +
+      '<p style="margin:0 0 12px;font-size:12px;color:#666">从 KC536 骨架建一个引脚为空的工程，再用选项逐步构建 —— 类似 STM32CubeMX。</p>' +
       '<table style="border-collapse:collapse;font-size:13px">' +
-      '<tr><td style="padding:4px 8px 4px 0">模板路径</td>' +
-      '<td><input id="np-tpl" style="width:520px;color:#222" placeholder="E:\\M_2026\\0_T\\software\\trunk\\SE71M_0023_KC536_V1_20260909"></td>' +
-      '<td><button id="np-tpl-browse" style="color:#222">浏览</button></td></tr>' +
-      '<tr><td style="padding:4px 8px 4px 0">项目 ID</td>' +
-      '<td><input id="np-id" style="width:120px;color:#222" placeholder="0x0525"></td></tr>' +
       '<tr><td style="padding:4px 8px 4px 0">项目名</td>' +
-      '<td><input id="np-name" style="width:180px;color:#222" placeholder="E606"></td></tr>' +
+      '<td><input id="bw-name" style="width:180px;color:#222" placeholder="MyMouse"></td>' +
+      '<td style="padding:4px 8px">项目号</td>' +
+      '<td><input id="bw-id" style="width:100px;color:#222" placeholder="0x0457（留空=1）"></td></tr>' +
       '<tr><td style="padding:4px 8px 4px 0">客户名</td>' +
-      '<td><input id="np-consumer" style="width:120px;color:#222" placeholder="BYC" value="BYC"></td></tr>' +
-      '<tr><td style="padding:4px 8px 4px 0">版本号</td>' +
-      '<td><input id="np-version" type="number" min="1" style="width:80px;color:#222" value="1"></td></tr>' +
+      '<td><input id="bw-customer" style="width:180px;color:#222" value="BYC"></td>' +
+      '<td style="padding:4px 8px">版本</td>' +
+      '<td><input id="bw-version" type="number" min="1" style="width:100px;color:#222" value="1"></td></tr>' +
       '<tr><td style="padding:4px 8px 4px 0">输出根目录</td>' +
-      '<td><input id="np-out" style="width:520px;color:#222" placeholder="E:\\M_2026"></td>' +
-      '<td><button id="np-out-browse" style="color:#222">浏览</button></td></tr>' +
+      '<td><input id="bw-out" style="width:440px;color:#222" placeholder="E://work"></td>' +
+      '<td><button id="bw-out-browse" style="color:#222">浏览</button></td></tr>' +
       '</table>' +
-      '<div style="margin-top:6px"><label style="color:#222"><input type="checkbox" id="module-ledc"> 灯带（LEDC）</label></div>' +
-      '<div style="margin-top:10px">' +
-      '<button id="np-prepare" style="padding:6px 14px;background:#1976d2;color:white;border:none;border-radius:4px;cursor:pointer">准备工作区</button>' +
-      '<button id="np-generate" style="padding:6px 14px;margin-left:8px;background:#388e3c;color:white;border:none;border-radius:4px;cursor:pointer" disabled>生成工程</button>' +
-      '<button id="np-open" style="padding:6px 14px;margin-left:8px;color:#222" disabled>打开输出目录</button>' +
+      '<div style="margin-top:12px;padding-top:10px;border-top:1px solid #eee;display:none" id="bw-board">' +
+      '<div style="font-weight:bold;margin-bottom:6px">第二步 · 板型选项（可选，默认与 KC536 一致）</div>' +
+      '<table style="border-collapse:collapse;font-size:13px">' +
+      '<tr><td style="padding:4px 8px 4px 0">模式</td><td><select id="bw-mode" style="color:#222"></select></td>' +
+      '<td style="padding:4px 8px">灯效</td><td><select id="bw-logo" style="color:#222"></select></td></tr>' +
+      '<tr><td style="padding:4px 8px 4px 0">滚轮</td><td><select id="bw-wheel" style="color:#222"></select></td></tr>' +
+      '</table>' +
+      '<div style="margin-top:6px"><button id="bw-saveboard" style="padding:4px 10px;color:#222">保存板型选项</button></div>' +
       '</div>' +
-      '<div id="np-status" style="margin-top:8px;font-size:12px;color:#555"></div>' +
-      '<div id="np-workspace" style="margin-top:4px;font-size:12px;color:#333"></div>' +
-      '<div id="np-result" style="margin-top:8px;font-size:12px;color:#333;white-space:pre-wrap"></div>';
+      '<div style="margin-top:12px">' +
+      '<button id="bw-create" style="padding:6px 14px;background:#1976d2;color:white;border:none;border-radius:4px;cursor:pointer">① 创建空白工程</button>' +
+      '<button id="bw-fill" style="padding:6px 14px;margin-left:8px;background:#388e3c;color:white;border:none;border-radius:4px;cursor:pointer" disabled>② 一键按推荐配置</button>' +
+      '<button id="bw-roles" style="padding:6px 14px;margin-left:8px;color:#222" disabled>③ 按角色配脚</button>' +
+      '<button id="bw-preview" style="padding:6px 14px;margin-left:8px;color:#222" disabled>④ 预览 diff</button>' +
+      '<button id="bw-apply" style="padding:6px 14px;margin-left:8px;color:#222" disabled>⑤ 应用</button>' +
+      '<button id="bw-open" style="padding:6px 14px;margin-left:8px;color:#222" disabled>打开目录</button>' +
+      '</div>' +
+      '<div id="bw-progress" style="margin-top:10px;font-size:12px;color:#333"></div>' +
+      '<div id="bw-msg" style="margin-top:6px;font-size:12px;color:#555"></div>';
 
-    var statusDiv = $("status");
+    var statusDiv = $$("status");
     if (statusDiv && statusDiv.parentElement) {
       statusDiv.parentElement.insertBefore(panel, statusDiv.nextSibling);
     } else {
       document.body.appendChild(panel);
     }
 
-    $("np-tpl-browse").onclick = browseTemplate;
-    $("np-out-browse").onclick = browseOutput;
-    $("np-prepare").onclick = prepare;
-    $("np-generate").onclick = generate;
-    $("np-open").onclick = openTarget;
-    loadFormState();
-    bindFormPersistence();
+    ["bw-name", "bw-id", "bw-customer", "bw-version", "bw-out"].forEach(function(id) {
+      var el = $$(id);
+      if (!el) return;
+      el.addEventListener("change", saveForm);
+      el.addEventListener("blur", saveForm);
+    });
+    $$("bw-out-browse").onclick = browseOut;
+    $$("bw-create").onclick = createBlank;
+    $$("bw-fill").onclick = fillRecommended;
+    $$("bw-roles").onclick = openRoles;
+    $$("bw-preview").onclick = previewDiff;
+    $$("bw-apply").onclick = applyBuild;
+    $$("bw-open").onclick = openDir;
+    $$("bw-saveboard").onclick = saveBoard;
+    loadForm();
+    initOptions();
   }
 
-  function toggleWizard() {
-    var panel = $("newproj-panel");
-    if (!panel) return;
-    panel.style.display = panel.style.display === "none" ? "block" : "none";
-  }
-
-  async function browseTemplate() {
-    if (!window.pywebview || !window.pywebview.api) { setNPStatus("pywebview 未就绪", true); return; }
+  async function initOptions() {
+    if (!window.pywebview || !window.pywebview.api) return;
     try {
-      var cur = $("np-tpl").value.trim();
-      var folder = await window.pywebview.api.choose_folder(cur);
-      if (folder) $("np-tpl").value = folder;
-    } catch (e) { setNPStatus("选择失败: " + e, true); }
+      var o = await window.pywebview.api.blank_options();
+      if (!o.ok) return;
+      var enums = o.board_enums || {};
+      fillSelect("bw-mode", enums.mode_pins || [], o.board_defaults.mode_pins);
+      fillSelect("bw-logo", enums.logo || [], o.board_defaults.logo);
+      fillSelect("bw-wheel", ["ENCODER_PINMUX_SEL_IO_00_01", "ENCODER_PINMUX_SEL_IO_20_21", "SOFT_GPIO"], o.board_defaults.wheel);
+    } catch (e) { console.warn("initOptions:", e); }
   }
 
-  async function browseOutput() {
-    if (!window.pywebview || !window.pywebview.api) { setNPStatus("pywebview 未就绪", true); return; }
+  function fillSelect(id, values, current) {
+    var sel = $$(id);
+    if (!sel) return;
+    sel.innerHTML = "";
+    values.forEach(function(v) {
+      var op = document.createElement("option");
+      op.value = v; op.textContent = v;
+      if (v === current) op.selected = true;
+      sel.appendChild(op);
+    });
+  }
+
+  async function browseOut() {
+    if (!window.pywebview || !window.pywebview.api) { msg("pywebview 未就绪", true); return; }
     try {
-      var cur = $("np-out").value.trim();
-      var folder = await window.pywebview.api.choose_folder(cur);
-      if (folder) $("np-out").value = folder;
-    } catch (e) { setNPStatus("选择失败: " + e, true); }
+      var folder = await window.pywebview.api.choose_folder($$("bw-out").value.trim());
+      if (folder) $$("bw-out").value = folder;
+    } catch (e) { msg("选择失败: " + e, true); }
   }
 
-  function setNPStatus(msg, isErr) {
-    var el = $("np-status");
-    if (!el) return;
-    el.style.color = isErr ? "#c62828" : "#555";
-    el.textContent = msg;
+  function parseId(raw) {
+    var s = (raw || "").trim();
+    if (!s) return 1;
+    var n = /^0x/i.test(s) ? parseInt(s, 16) : parseInt(s, 10);
+    return isNaN(n) ? null : n;
   }
 
-  async function prepare() {
-    saveFormState();
-    var tpl = $("np-tpl").value.trim();
-    var id = $("np-id").value.trim();
-    var name = $("np-name").value.trim();
-    if (!tpl) { setNPStatus("请填模板路径", true); return; }
-    if (!id) { setNPStatus("请填项目 ID", true); return; }
-    if (!name) { setNPStatus("请填项目名", true); return; }
-    if (!window.pywebview || !window.pywebview.api) { setNPStatus("pywebview 未就绪", true); return; }
+  async function createBlank() {
+    saveForm();
+    var name = $$("bw-name").value.trim();
+    var out = $$("bw-out").value.trim();
+    var id = parseId($$("bw-id").value);
+    var version = parseInt($$("bw-version").value, 10) || 1;
+    var customer = $$("bw-customer").value.trim() || "BYC";
+    if (!name) { msg("请填项目名", true); return; }
+    if (!out) { msg("请填输出根目录", true); return; }
+    if (id === null) { msg("项目号格式不对（0x0457 或十进制）", true); return; }
+    if (!window.pywebview || !window.pywebview.api) { msg("pywebview 未就绪", true); return; }
 
-    // 工作区路径
-    var ws = "E:\\tmp\\newproj\\" + id.replace(/^0x/i, "") + "_" + name + "_ws";
-    if (state.prepared && state.workspace === ws) {
-      if (!confirm("工作区已准备，重新准备会丢失当前修改。继续？")) return;
-      var cr = await window.pywebview.api.cleanup_workspace(ws);
-      if (!cr.ok) { setNPStatus("清理旧工作区失败: " + (cr.error || ""), true); return; }
-    } else if (state.prepared && state.workspace && state.workspace !== ws) {
-      if (!confirm("切换工程将丢弃当前工作区 " + state.workspace + "，继续？")) return;
-      await window.pywebview.api.cleanup_workspace(state.workspace);
-    }
-
-    setNPStatus("复制模板中...");
+    var target = out.replace(/[\\/]+$/, "") + "\\" + name;
+    msg("创建中...");
     try {
-      var ledcChk = $("module-ledc");
-      var mods = [];
-      if (ledcChk && ledcChk.checked) mods.push("ledc");
-
-      if (mods.length > 0) {
-        var rm = await window.pywebview.api.prepare_workspace_with_modules(tpl, ws, mods);
-        if (!rm.ok) { setNPStatus("准备失败: " + (rm.error || JSON.stringify(rm)), true); return; }
-        state.ledcPrepared = !!(rm.modules && rm.modules.ledc && rm.modules.ledc.ok);
-      } else {
-        var r1 = await window.pywebview.api.prepare_workspace(tpl, ws);
-        if (!r1.ok) { setNPStatus("复制失败: " + (r1.error || ""), true); return; }
-        setNPStatus("初始化配置中...");
-        var r2 = await window.pywebview.api.initialize_derived(ws);
-        if (!r2.ok) { setNPStatus("初始化失败: " + (r2.error || JSON.stringify(r2)), true); return; }
-        state.ledcPrepared = false;
+      var r = await window.pywebview.api.blank_new(name, target, customer, version, id);
+      if (!r.ok) { msg("创建失败: " + r.error + (r.hint ? "；" + r.hint : ""), true); return; }
+      state.sdk = r.sdk;
+      state.createdName = name;
+      window.__omBlankMode = true;
+      // 联动顶部主界面：填 SDK 并刷新表格
+      var sdkInput = $$("sdk");
+      if (sdkInput) sdkInput.value = r.sdk;
+      try { localStorage.setItem("omcfg.sdk", r.sdk); } catch (e) {}
+      if (typeof window.pywebview.api.load === "function") {
+        var d = await window.pywebview.api.load(r.sdk);
+        if (typeof render === "function") render(d, "打开");
       }
+      $$("bw-board").style.display = "block";
+      ["bw-fill", "bw-roles", "bw-preview", "bw-apply", "bw-open"].forEach(function(b) {
+        $$(b).disabled = false;
+      });
+      msg(r.message);
+      refreshProgress();
+    } catch (e) { msg("异常: " + e, true); }
+  }
 
-      state.workspace = ws;
-      state.templatePath = tpl;
-      state.prepared = true;
-      state.generated = null;
+  async function refreshProgress() {
+    if (!state.sdk) return;
+    try {
+      var s = await window.pywebview.api.blank_status(state.sdk);
+      if (!s.ok) { msg("状态读取失败: " + s.error, true); return; }
+      var b = s.board || {};
+      var text = "已配 " + s.assigned + "/" + s.total_roles + " 脚 · " +
+        "缺必需 " + s.missing.length + " · 冲突 " + s.conflicts.length + " · " +
+        "可生成: " + (s.complete ? "是" : "否") +
+        " （模式 " + (b.mode_pins || "-") + " / 灯效 " + (b.logo || "-") + "）";
+      $$("bw-progress").textContent = text;
+      $$("bw-progress").style.color = s.complete ? "#2e7d32" : "#c62828";
+    } catch (e) { console.warn("refreshProgress:", e); }
+  }
 
-      $("np-workspace").textContent = "工作区: " + ws;
-      $("np-generate").disabled = false;
-      $("np-open").disabled = true;
-      $("np-result").textContent = "";
-      setNPStatus("准备完成 · 已切到「按角色配引脚」模式，配完回来点「生成工程」");
+  async function fillRecommended() {
+    if (!state.sdk) { msg("请先创建空白工程", true); return; }
+    msg("按推荐方案配置中...");
+    try {
+      var r = await window.pywebview.api.blank_fill_recommended(state.sdk);
+      if (!r.ok) { msg("填充失败: " + r.error, true); return; }
+      msg(r.message + (r.problems && r.problems.length ? "；" + r.problems.join("；") : ""));
+      refreshProgress();
+      // 填充改了引脚，刷新主表
+      if (typeof run === "function") { try { run("load", "打开"); } catch (e) {} }
+    } catch (e) { msg("异常: " + e, true); }
+  }
 
-      // 联动：填 sdk 输入框 + 打开配引脚面板
-      var sdkInput = $("sdk");
-      if (sdkInput) sdkInput.value = ws;
-      var roleBtn = $("toggle-roles");
-      if (roleBtn) {
-        var rolesPanel = $("roles-panel");
-        if (!rolesPanel || rolesPanel.style.display === "none") {
-          roleBtn.click();
-        } else {
-          // 已打开，重新触发一次加载
-          roleBtn.click();
-          setTimeout(function() { roleBtn.click(); }, 100);
-        }
+  async function saveBoard() {
+    if (!state.sdk) { msg("请先创建空白工程", true); return; }
+    var updates = {
+      mode_pins: $$("bw-mode").value,
+      logo: $$("bw-logo").value,
+      wheel: $$("bw-wheel").value
+    };
+    try {
+      var r = await window.pywebview.api.blank_set_board(state.sdk, updates);
+      if (!r.ok) { msg("板型保存失败: " + r.error, true); return; }
+      msg(r.message + "；可点「一键按推荐配置」重排脚位");
+      refreshProgress();
+    } catch (e) { msg("异常: " + e, true); }
+  }
+
+  function openRoles() {
+    var btn = $$("toggle-roles");
+    if (btn) btn.click();
+    msg("已打开「按角色配引脚」：左侧选功能、右侧点绿脚分配；保存走草稿态");
+  }
+
+  async function previewDiff() {
+    if (!state.sdk) { msg("请先创建空白工程", true); return; }
+    msg("生成预览中...");
+    try {
+      var r = await window.pywebview.api.preview(state.sdk);
+      if (r.diffs === undefined && !r.ok) {
+        msg("预览失败: " + (r.error || "草稿未补齐") + (r.hint ? "；" + r.hint : ""), true);
+        return;
       }
-    } catch (e) {
-      setNPStatus("异常: " + e, true);
-    }
+      if (typeof render === "function") render(r, "预览");
+      msg("预览完成：" + (r.changed || 0) + " 个文件待写入（详见下方 diff 区）");
+    } catch (e) { msg("异常: " + e, true); }
   }
 
-  async function generate() {
-    saveFormState();
-    if (!state.prepared || !state.workspace) { setNPStatus("请先准备工作区", true); return; }
-    var out = $("np-out").value.trim();
-    var id = $("np-id").value.trim();
-    var name = $("np-name").value.trim();
-    var consumer = $("np-consumer").value.trim();
-    var version = parseInt($("np-version").value, 10) || 1;
-    if (!out) { setNPStatus("请填输出根目录", true); return; }
-    if (!window.pywebview || !window.pywebview.api) { setNPStatus("pywebview 未就绪", true); return; }
-
-    setNPStatus("生成中...");
+  async function applyBuild() {
+    if (!state.sdk) { msg("请先创建空白工程", true); return; }
+    if (!confirm("确认按当前配置写入 user_config.h/.c 等文件？")) return;
+    msg("应用中...");
     try {
-      var r = await window.pywebview.api.generate_project_to_root(state.workspace, out, id, name, consumer, version);
-      if (!r.ok) { setNPStatus("生成失败: " + (r.error || JSON.stringify(r)), true); return; }
-      state.generated = r;
-      var apply = r.apply || {};
-      var lines = [
-        "✓ 生成成功",
-        "项目根: " + (r.project_root || ""),
-        "目标: " + (r.target || ""),
-        "changed: " + (r.changed_count || 0) + "  added: " + (r.added_count || 0),
-        "apply: ok=" + apply.ok + " changed=" + (apply.changed || 0),
-        "清理备份: " + (r.cleaned_backups || []).length + " 个"
-      ];
-      $("np-result").textContent = lines.join("\n");
-      $("np-open").disabled = false;
-      setNPStatus("生成完成");
-    } catch (e) {
-      setNPStatus("异常: " + e, true);
-    }
+      var r = await window.pywebview.api.blank_apply(state.sdk);
+      if (!r.ok) { msg("应用失败: " + (r.error || "草稿未补齐") + (r.hint ? "；" + r.hint : ""), true); return; }
+      if (typeof render === "function") render(r, "应用");
+      msg("应用成功：已写入 " + (r.changed || 0) + " 个文件" + (r.manifest ? "（可回滚）" : ""));
+    } catch (e) { msg("异常: " + e, true); }
   }
 
-  async function openTarget() {
-    if (!state.generated || !state.generated.project_root) return;
-    try {
-      await window.pywebview.api.open_folder(state.generated.project_root);
-    } catch (e) {
-      // 降级：显示路径让用户手抄
-      alert("请手动打开: " + state.generated.project_root);
-    }
+  async function openDir() {
+    if (!state.sdk) return;
+    try { await window.pywebview.api.open_folder(state.sdk); }
+    catch (e) { alert("请手动打开: " + state.sdk); }
   }
 
-  function initUI() { ensureWizard(); }
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", initUI);
-  } else {
-    initUI();
+  function initUI() {
+    ensureUI();
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", initOptions);
+    } else {
+      initOptions();
+    }
   }
+  initUI();
 })();

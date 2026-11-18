@@ -91,12 +91,6 @@ __RAM_CODE void RTC_IRQHandler(void)
         {
             drv_rtc_isr_callback();
         }
-
-        if (DRV_EVENT_RTC_TICK & int_status) 
-        {
-            extern void drv_tick_isr_callback();
-            drv_tick_isr_callback();
-        }
     }
 }
 
@@ -128,7 +122,7 @@ void WAKEUP_GPIO0_IRQHandler(void)
     /* Clear pin wakeup interrupt in PMU module, otherwise reach here again. */
     drv_pmu_clear_wakeup();
     bperiph_int =1;
-    ledc_cmd(Cmd_Init,NULL);
+
     if(iDEVICE_TYPE_BT2 >= device_type)
     {
     /* Clear pin wakeup interrupt in PMU module, otherwise reach here again. */
@@ -199,7 +193,7 @@ void SENSCAN_IRQHandler(void)
 
             bperiph_int =1;
         }
-        ledc_cmd(Cmd_Init,NULL);
+
         if(iDEVICE_TYPE_BT2 >= device_type)
         {
             if(ms_sleep_level == MS_SLEEP_LEVEL1) {
@@ -229,7 +223,7 @@ void ENCODER_IRQHandler(void)
         } else {
             wheel_data = OM_ENCODER->CNT&0x0f;
         }
-        ledc_cmd(Cmd_Init,NULL);
+
         bperiph_int =1;
         if(iDEVICE_TYPE_BT2 >= device_type)
         {

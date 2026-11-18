@@ -78,18 +78,19 @@
 #define gpio_clear(pin)     (OM_GPIO0->DATAOUTCLR = (1<<(pin)))
 #define gpio_toggle(pin)    (OM_GPIO0->DATAOUT ^= (1u << (pin)))
 #define gpio_read(pin)      ((OM_GPIO0->DATA>>pin) & 0x1)
-#define GPIO_SET(pin)       (OM_GPIO0->DATAOUTSET = (1<<(pin)))
-#define GPIO_CLEAR(pin)     (OM_GPIO0->DATAOUTCLR = (1<<(pin)))
+
 //----------------------------------------------------------------------------;
 // IO口外设 配置宏定义区
 //
 /* OMCFG BEGIN pins */
 //* 按键配置 */
-#define KEY_R0_PIN              (P32)
-#define KEY_R1_PIN              (P36)
-#define KEY_R2_PIN              (P20)
-#define KEY_PAIR_PIN            (P24)
-#define KEY_C0_PIN              (P31)
+#define KEY_R0_PIN              (P34)
+#define KEY_R1_PIN              (P07)
+#define KEY_R2_PIN              (P10)
+#define KEY_B_PIN               (P22)
+#define KEY_P_PIN               (P25)
+#define KEY_DPI_PIN             (P31)
+#define KEY_PAIR_PIN            (P27)
 
 //* IO口唤醒配置 */
 #define PIN_WAKE_UP_MASK        ((1<<KEY_R0_PIN) |(1<<KEY_R1_PIN)|(1<<KEY_R2_PIN)|(1<<KEY_PAIR_PIN)|(1<<SENSOR_MOTION_PIN))
@@ -106,12 +107,12 @@
                                 drv_pmu_wakeup_pin_set(SENSOR_MOTION_PIN, PMU_PIN_WAKEUP_TYPE_DISABLE); 
 
 //* 滚轮IO口配置 */
-#define WHEEL_A_PIN             (P00)
-#define WHEEL_B_PIN             (P01)
-#define WHEEL_IO_SELECT         ENCODER_PINMUX_SEL_IO_00_01
+#define WHEEL_A_PIN             (P21)
+#define WHEEL_B_PIN             (P20)
+#define WHEEL_IO_SELECT         ENCODER_PINMUX_SEL_IO_20_21
 
 //* SENSOR IO口配置 */
-#define SENSOR_MOTION_PIN       (P07)
+#define SENSOR_MOTION_PIN       (P13)
 #define SENSOR_SCLK_PIN         (P11)
 #define SENSOR_SDIO_PIN         (P12)
 
@@ -121,55 +122,55 @@
 #define SENSOR_DIR_CLOCK_6      3
 #define SENSOR_DIR_CLOCK_9      4
                   
-#define MODE_24G_PIN            (P27)
-#define MODE_BLE_PIN            (P26)
+//* 模式检测脚配置 */
+#define MODE_BLE_24G_PIN        (P26)
+//{
+    #define MODE_BLE_CHECK      0   
+    #define MODE_24G_CHECK      1
+//}
 
 //* LED指示灯配置 */
-#define LED_MODE_R_PIN        (P23)
-#define LED_MODE_G_PIN        (P22)
-#define LED_MODE_B_PIN        (P21)
-#define LED_LOW_PIN           (P04)
+#define LED_MODE_R_PIN        (P32)
+#define LED_MODE_G_PIN        (P00)
+#define LED_MODE_B_PIN        (P01)
 //{
-    #define led_r_on()            (gpio_set(LED_MODE_R_PIN))
-    #define led_r_off()           (gpio_clear(LED_MODE_R_PIN))
-    #define led_g_on()            (gpio_set(LED_MODE_G_PIN))
-    #define led_g_off()           (gpio_clear(LED_MODE_G_PIN))
-    #define led_b_on()            (gpio_set(LED_MODE_B_PIN))
-    #define led_b_off()           (gpio_clear(LED_MODE_B_PIN))
-    #define led_low_off()         (gpio_clear(LED_LOW_PIN))
-    #define led_low_on()          (gpio_set(LED_LOW_PIN))
-    #define mode_led_all_off()    (OM_GPIO0->DATAOUTCLR = (1<<LED_MODE_R_PIN)|(1<<LED_MODE_G_PIN)|(1<<LED_MODE_B_PIN))
-    #define mode_led_all_on()     (OM_GPIO0->DATAOUTSET = (1<<LED_MODE_R_PIN)|(1<<LED_MODE_G_PIN)|(1<<LED_MODE_B_PIN))
+    #define led_r_on()            (gpio_clear(LED_MODE_R_PIN))
+    #define led_r_off()           (gpio_set(LED_MODE_R_PIN))
+    #define led_g_on()            (gpio_clear(LED_MODE_G_PIN))
+    #define led_g_off()           (gpio_set(LED_MODE_G_PIN))
+    #define led_b_on()            (gpio_clear(LED_MODE_B_PIN))
+    #define led_b_off()           (gpio_set(LED_MODE_B_PIN))
+    #define mode_led_all_off()    (OM_GPIO0->DATAOUTSET = (1<<LED_MODE_R_PIN)|(1<<LED_MODE_G_PIN)|(1<<LED_MODE_B_PIN))
+    #define mode_led_all_on()     (OM_GPIO0->DATAOUTCLR = (1<<LED_MODE_R_PIN)|(1<<LED_MODE_G_PIN)|(1<<LED_MODE_B_PIN))
 //}
 
 #define LED_MODE_24G_PIN        LED_MODE_R_PIN
 #define LED_MODE_BT1_PIN        LED_MODE_G_PIN
 #define LED_MODE_BT0_PIN        LED_MODE_B_PIN
 //{
-    #define led_bt0_on()            (gpio_set(LED_MODE_BT0_PIN))
-    #define led_bt0_off()           (gpio_clear(LED_MODE_BT0_PIN))
-    #define led_24g_on()            (gpio_set(LED_MODE_24G_PIN))
-    #define led_24g_off()           (gpio_clear(LED_MODE_24G_PIN))
-    #define led_bt1_on()            (gpio_set(LED_MODE_BT1_PIN))
-    #define led_bt1_off()           (gpio_clear(LED_MODE_BT1_PIN))
+    #define led_bt0_on()            (gpio_clear(LED_MODE_BT0_PIN))
+    #define led_bt0_off()           (gpio_set(LED_MODE_BT0_PIN))
+    #define led_24g_on()            (gpio_clear(LED_MODE_24G_PIN))
+    #define led_24g_off()           (gpio_set(LED_MODE_24G_PIN))
+    #define led_bt1_on()            (gpio_clear(LED_MODE_BT1_PIN))
+    #define led_bt1_off()           (gpio_set(LED_MODE_BT1_PIN))
 //}
 
 //* LOGO灯配置 */
-#define LEDC_CTRL_PIN           (P34)
-#define LEDC_PIN                (P05)
-#define LEDC_RGB_NUMBER         6
-#define LEDC_RGB_DATA_SIZE      LEDC_RGB_NUMBER*3
+#define LED_R_PIN               (P04)
+#define LED_G_PIN               (P05)
+#define LED_B_PIN               (P06)
 
 //* USB 5V以及充电检测配置 */
-#define USB_5V                  (P25)
+#define USB_5V                  (P24)
 #define BAT_CHG_PIN             (P30)
 
 #define USB_5V_PIN              (gpio_read(USB_5V))
 #define BAT_CHG_OK              (gpio_read(BAT_CHG_PIN))
 
 //* LVD检测引脚 */
-#define LVD_PIN                 (P33)
-#define LVD_CHECK_INDEX         (POF_LVD_PIN_P33)
+#define LVD_PIN                 (P23)
+#define LVD_CHECK_INDEX         (POF_LVD_PIN_P23)
 
 //* USB */
 #define USB_DN_PIN              (P02)
@@ -181,7 +182,7 @@
 #define FLASH_MISO_PIN          (P14)
 
 //* 当前UART仅调试用 */
-#define UART_PIN                (KEY_R2_PIN)
+#define UART_PIN                (KEY_R0_PIN)
 /* OMCFG END pins */
 
 //----------------------------------------------------------------------------;
@@ -212,7 +213,7 @@
 //
 /* OMCFG BEGIN project_ids */
 #define iPROJECT_ID_H  0x071               /* 项目平台编号:OM6239 */
-#define iPROJECT_ID_L  0x0457              /* 项目编号 */
+#define iPROJECT_ID_L  0x0023              /* 项目编号 */
 /* OMCFG END project_ids */
 
 #define iPROJECT_ID_0  (iPROJECT_ID_L&0xFF)
@@ -224,14 +225,14 @@
 // 程序版本定义区 程序版本升级编号
 //
 /* OMCFG BEGIN project_version */
-#define iREAL_VERSION_ID        4            /* 版本编号（0x80不能动），每次版本更新，后面的版本号要累加，第一个版本则为1 */
+#define iREAL_VERSION_ID        5            /* 版本编号（0x80不能动），每次版本更新，后面的版本号要累加，第一个版本则为1 */
 /* OMCFG END project_version */
 #define iVERSION_ID_L     (0x80|RF_RATE|RF_PROTOCOL|iREAL_VERSION_ID)   
 #define iVERSION_ID_H  iPROJECT_ID_0
 
 /* OMCFG BEGIN project_names */
-#define iCONSUMER_NAME "App"        /* 客户名字 */
-#define iPROJECT_NAME  "CH04"      /* 项目名字 */
+#define iCONSUMER_NAME "BYC"        /* 客户名字 */
+#define iPROJECT_NAME  "KC536"      /* 项目名字 */
 /* OMCFG END project_names */
 
 //----------------------------------------------------------------------------;

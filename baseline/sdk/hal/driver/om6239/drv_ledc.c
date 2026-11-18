@@ -77,7 +77,7 @@ om_error_t drv_ledc_init(OM_LEDC_Type *om_ledc, ledc_config_t *config)
         return OM_ERROR_PARAMETER;
     }
 
-    drv_pmu_ledc_sel(PMU_LEDC_SEL_IO_05);
+    drv_pmu_ledc_sel(PMU_LEDC_SEL_IO_01);
 
     DRV_RCC_CLOCK_ENABLE(RCC_CLK_LEDC, 1U);
     NVIC_ClearPendingIRQ(LEDC_IRQn);
@@ -90,7 +90,7 @@ om_error_t drv_ledc_init(OM_LEDC_Type *om_ledc, ledc_config_t *config)
     return OM_ERROR_OK;
 }
 
-om_error_t                          drv_ledc_write(OM_LEDC_Type    *om_ledc,
+om_error_t drv_ledc_write(OM_LEDC_Type    *om_ledc,
                               uint8_t     *data,
                               uint16_t     data_len)
 {

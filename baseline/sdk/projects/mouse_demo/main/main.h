@@ -14,7 +14,6 @@
 #include <stdbool.h>
 #include "user_config.h"
 #include "mode_ind.h"
-#include "ledc.h"
 //=============================================================================;
 // 配置引用区                                                                  ;
 //=============================================================================;
@@ -68,11 +67,11 @@
  * @brief  Wireless Mouse RF Modes.
  */
 typedef enum {
-    iDEVICE_TYPE_BLE  = 1U,   /*!< EX2_BLE mode */
-    iDEVICE_TYPE_BT0  = 0U,   /*!< EX2_BLE mode */
-    iDEVICE_TYPE_BT1  = 1U,   /*!< EX2_BLE mode */
-    iDEVICE_TYPE_BT2  = 2U,   /*!< EX2_BLE mode */
-    iDEVICE_TYPE_24G  = 3U,   /*!< OnMicro 2.4G proprietary protocol */
+    iDEVICE_TYPE_BLE  = 1U,   /*<<< EX2_BLE mode */
+    iDEVICE_TYPE_BT0  = 0U,   /*<<< EX2_BLE mode */
+    iDEVICE_TYPE_BT1  = 1U,   /*<<< EX2_BLE mode */
+    iDEVICE_TYPE_BT2  = 2U,   /*<<< EX2_BLE mode */
+    iDEVICE_TYPE_24G  = 3U,   /*<<< OnMicro 2.4G proprietary protocol */
     iDEVICE_TYPE_USB  = 4U,
 } device_type_t;
 
@@ -82,7 +81,7 @@ typedef enum {
 extern volatile uint8_t         ble_24g_ctrl;
 //{
     #define bom6239_sync_ok (1<<3)              // 连接标志 0:没有连接;1：连接上
-    #define bom6239_sync_ing (1<<2)             // 同步状态 0:没有回连，1：同步中
+    #define bom6239_sync_ing (1<<2)             // 同步状态 0:没有回连；1：同步中
     #define bom6239_conn_ok (1<<1)              // 对码状态
     #define bom6239_conning (1<<0)              // 对码状态
 //}

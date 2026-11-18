@@ -268,12 +268,9 @@ def validate_config(config: dict, chip: dict | None = None) -> Report:
         elif matched["macro"] != wheel:
             report.add_error("board.wheel", f"应为 {matched['macro']}（由 WHEEL_A/B 推导）")
 
-    if "KEY_C0_PIN" not in pins:
-        report.add_warning(
-            "pins.KEY_C0_PIN",
-            "key_io.c 无条件使用 KEY_C0_PIN；解除后生成的头文件缺该宏，编译会失败",
-            "保留 KEY_C0_PIN，或手工给 key_io.c 的矩阵列扫描加 #ifdef",
-        )
+    # KEY_C0_PIN 是否必需取决于 key_io.c 是否真的引用它（矩阵列扫描）。
+    # 这里不做无条件假设：KC536 等单键板的 key_io.c 根本不用 KEY_C0_PIN。
+    # 真正的检查在 rules.audit 的 key_io.refs（基于源码引用，check --sdk 时执行）。
 
     report.derived = {
         "features": model.features(config, pins),

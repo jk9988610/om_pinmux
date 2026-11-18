@@ -19,7 +19,7 @@
 //
 #define iDEFAULT_WORK_TIME          600
 #define iDEFAULT_SLEEP_MODE_TIME    10
-#define iDEFAULT_NO_DONGLE_MODE_TIME 60
+#define iDEFAULT_NO_DONGLE_MODE_TIME 30
 
 #define iSLEEP_WAKEUP           (32768L*6*2)
 #define iNO_DONGLE_WAKEUP       (32768L/2)

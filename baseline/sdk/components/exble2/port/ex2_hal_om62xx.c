@@ -17,7 +17,7 @@
 #include "mouse.h"
 #include "main.h"
 
-/* 中断优先级不能高于RF_IRQn */
+/* 涓柇浼樺厛绾т笉鑳介珮浜嶳F_IRQn */
 #define OM_GPIO_GPIO0_IRQ_PRIORITY 3
 #define OM_RTC_IRQ_PRIORITY 3
 #if !defined(OM_RF_BLE_IRQ_PRIORITY)

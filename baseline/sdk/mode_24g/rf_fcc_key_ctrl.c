@@ -202,89 +202,89 @@ static bool is_enter_rf_test_mode()
  */
 static void led_indication_for_enter()
 {
-    // mode_led_all_on();
+    mode_led_all_on();
 }
 
 static void led_indication_for_1M_init()
 {
-    // mode_led_all_off();
-    // led_r_on();
+    mode_led_all_off();
+    led_r_on();
 }
 
 static void led_indication_for_2M_init()
 {
-    // mode_led_all_off();
-    // led_g_on();
+    mode_led_all_off();
+    led_g_on();
 }
 
 static void led_indication_for_switch_power()
 {
-    // mode_led_all_off();
-    // delayms(100);
-    // mode_led_all_on();
+    mode_led_all_off();
+    delayms(100);
+    mode_led_all_on();
 }
 
 static void led_indication_for_start_test()
 {
-    // mode_led_all_off();
+    mode_led_all_off();
 }
 
 static void led_indication_for_carrier_2402()
 {
-    // led_r_on();
+    led_r_on();
 }
 
 static void led_indication_for_carrier_2440()
 {
-    // led_g_on();
+    led_g_on();
 }
 
 static void led_indication_for_carrier_2480()
 {
-    // led_b_on();
+    led_b_on();
 }
 
 static void led_indication_for_modulation_2402()
 {
-    // led_r_on();
-    // led_g_on();
+    led_r_on();
+    led_g_on();
 }
 
 static void led_indication_for_modulation_2440()
 {
-    // led_g_on();
-    // led_b_on();
+    led_g_on();
+    led_b_on();
 }
 
 static void led_indication_for_modulation_2480()
 {
-    // led_r_on();
-    // led_b_on();
+    led_r_on();
+    led_b_on();
 }
 
 static void led_indication_for_receive_2402()
 {
-    // led_r_on();
+    led_r_on();
 }
 
 static void led_indication_for_receive_2440()
 {
-    // led_g_on();
+    led_g_on();
 }
 
 static void led_indication_for_receive_2480()
 {
-    // led_b_on();
+    led_b_on();
 }
 
 static void led_indication_for_hop_16_freq()
 {
-    // mode_led_all_on();
+    mode_led_all_on();
 }
 
 static void led_indication_for_hop_40_freq()
 {
-    // mode_led_all_off();
+    mode_led_all_off();
 }
 
 

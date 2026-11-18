@@ -1,14 +1,14 @@
 {
-  "source_sdk": "E:\\M_2026\\M_2026_T\\SE71M_0457_CH04_V4_20260829",
-  "source_commit": "212aa96",
-  "source_date": "2026-11-06",
-  "baseline_board": "CH04",
-  "created": "2026-11-06",
-  "state": "已初始化并生成（OMCFG 标记块 + board_features.h）",
-  "file_count": 207,
-  "size_bytes": 5695052,
-  "tree_sha256": "4c5e3cf5d90e1ec573cf650ffe7fceacef83277530f6d3a152d1eb76749caf47",
-  "config_sha256": "eedfa00e45a4d1050cb6967aeb8d9d0dc4af1eec3c0568dc1bcef025c912507c",
+  "source_sdk": "E:\\M_2026\\0_T\\software\\trunk\\SE71M_0023_KC536_V1_20260909",
+  "source_commit": null,
+  "source_date": "2026-09-09",
+  "baseline_board": "KC536",
+  "created": "2026-11-18",
+  "state": "已初始化并生成（OMCFG 标记块 + board_features.h）；由 omcfg 依据工程现状推导配置并复核",
+  "file_count": 203,
+  "size_bytes": 9160925,
+  "tree_sha256": "bbe2f4a3f6086010dd4ac4d9333f36e1bd301a70892c79b583d2df90e3c88c6b",
+  "config_sha256": "45072112cfec22bbe0705ce160fc662e08c1411b8dc57d570bd1f8319014df0b",
   "license": "sdk/LICENSE.md (OM-SLA01)",
-  "notes": "清理后的 CH04 SDK 基线：无 out/_build/.git/uvguix/日志；保留 uvprojx 引用的两个预编译 .o（rf_protocol_20260704.o、userdefined_key_20260724.o）；已初始化并生成（OMCFG 标记块 + board_features.h）。更新方式见 docs/PLAN-INTERNAL-SDK.md 3.1。"
+  "notes": "清理后的 KC536 SDK 基线：无 out/_build/.git/uvguix/日志/.omcfg_bak；引脚忠于源码现状（single 模式、RGB、滚轮 ENCODER_20_21、28 脚）；已初始化并生成。原 CH04 基线备份于仓库外 om_pinmux_baseline_backup_ch04_20261118_100842。来源工程无 git 提交。更新方式见 docs/PLAN-INTERNAL-SDK.md 3.1。"
 }

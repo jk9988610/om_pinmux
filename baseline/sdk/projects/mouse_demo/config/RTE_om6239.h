@@ -172,7 +172,7 @@
 #define RTE_ENCODER_IRQ_PRIORITY                       2
 
 // <o.0> RTE_LEDC
-#define RTE_LEDC                                       1
+#define RTE_LEDC                                       0
 // <o.0> RTE_LEDC_REGISTER_CALLBACK
 #define RTE_LEDC_REGISTER_CALLBACK                     1
 //   <o.0..1> RTE_LEDC_IRQ_PRIORITY

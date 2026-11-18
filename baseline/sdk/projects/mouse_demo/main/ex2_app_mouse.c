@@ -73,17 +73,6 @@ static bool ex2_app_mouse_broadcast_enable(uint32_t adv_interval_ms, uint32_t ad
         (0 + 1), 0x09,
     };
 
-    if (device_type == iDEVICE_TYPE_BT0)
-    {
-        memcpy(mouse_name, "CH-04 Bt1", sizeof("CH-04 Bt1"));
-    }
-    else
-    {
-        memcpy(mouse_name, "CH-04 Bt2", sizeof("CH-04 Bt2"));
-
-    }
-    
-
     /// Complete Local Name.
     if(strlen(mouse_name) <= 11) {  //如果名字小于等于11，直接放在adv_ind， 否则放在scan response中
         adv_ind[11] = strlen(mouse_name) + 1U;
@@ -238,7 +227,8 @@ void ex2_app_mouse_ble_init(void)
             ind_val.ind_color = IND_BLUE;
         ind_config(&ind_val);
     }
-
+    extern void reset_connect_para_check_res(void);
+    reset_connect_para_check_res();
     ex2_app_mouse_broadcast_fsm();                  /* 配置广播状态机 */
 }
 

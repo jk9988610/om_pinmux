@@ -33,8 +33,8 @@
 #define iPWM_B                  0x04
 #define iPWM_RGB                0x07
 
-#define iPWM_MAX                0xFF
-#define iPWM_NH_MAX             0xFF
+#define iPWM_MAX                63
+#define iPWM_NH_MAX             32
 
 #define mHOLE_TIME(iON_MS, iOFF_MS)  (((((iON_MS)/125L)<<4)&0xF0)|(((iOFF_MS)/125L)&0x0F))
 
@@ -77,6 +77,7 @@ typedef enum {
 //=============================================================================;
 // 外部定义内部引用区                                                          ;
 //=============================================================================;
+
 //-----------------------------------------------------------------------------;
 // 外部寄存器引用
 //
@@ -142,7 +143,6 @@ extern uint8_t              rgb_enable;
 extern void pwm_init(void);
 extern void pwm_off();
 extern void logo_cfg(unsigned char const led_cfg_index);
-void rgb_process(void);
 extern void logo_process(void);
 //
 //-----------------------------------------------------------------------------;

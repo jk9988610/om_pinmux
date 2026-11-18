@@ -153,32 +153,6 @@ uint8_t         const       s205_game_ini[] =
     0x09,0x00,  
 };
 
-uint8_t const SG8925_ini[] = 
-{
-    18*2+1,
-    0x09,0xC3,
-    0x7f,0xa7,
-    0x09,0x5a,
-    0x19,0x0C,
-    0x20,0xf0,
-    0x21,0x10,
-
-    0x2d,0x64,
-    0x2b,0x08,
-    0x57,0x08,
-    0x1b,0x5d,
-    0x1c,0x34,
-
-    0x1f,0x33,
-    0x35,0xc1,
-    0x34,0x4e,
-    0x24,0xff,
-    0x49,0x96,
-
-    0x7f,0x00,
-    0x09,0x00,
-};
-
 /* SENSOR寄存器配置初始化表 */
 uint8_t const  user_sensor_init_tbl[] =
 {
@@ -325,14 +299,6 @@ void sensor_type_check(void)
                     sensor_type = iSENSOR_TYPE_3212;
                     prt = pan3212_ini;
                 }
-
-                j = sensor_read(0x7A);
-                if (j == iPID_VALUE_SG8925)
-                {
-                    sensor_status_reg |= bsensor_12bit;
-                    prt = SG8925_ini;
-                    sensor_type = iSENSOR_TYPE_SG8925;
-                }
                 pan_poweron_wakeup();
 
                 break;
@@ -349,14 +315,6 @@ void sensor_type_check(void)
             sensor_write(addr, dat);
         }
     }
-
-    if (sensor_type == iSENSOR_TYPE_SG8925)
-    {
-        sensor_write(0x09, 0x5A);
-        sensor_write(0x19, (sensor_read(0x19)|0x10));
-        sensor_write(0x09, 0x00);
-    }
-    
 
     if((iSENSOR_TYPE_S203 == sensor_type)
         || (iSENSOR_TYPE_S205 == sensor_type))

@@ -339,7 +339,7 @@
               <MiscControls></MiscControls>
               <Define>CONFIG_OM6239=1,CONFIG_HARDWARE_VERSION=1,CONFIG_BOARD_OM6239_EVB=1,CONFIG_EVT=1,CONFIG_EXBLE2=1,CONFIG_PM=1,CONFIG_OM_PRINTF=0,CONFIG_OM_ASSERT=0,CONFIG_MOUSE_AUTO_CIRCLE=0,</Define>
               <Undefine></Undefine>
-              <IncludePath>../config;../config;../main;../periph;../../../common/includes;../../../hal/CMSIS/Core/Include;../../../hal/device/include;../../../hal/driver/include;../../../hal/driver/common;../../../components/evt;../../../components/exble2/includes;../../../components/exble2/port;../../../components/tinycrypt/include;../../../components/om_cfg;../../../components/pm;../../../bsp;..\..\..\mode_24g;..\..\..\mode_usb;..\..\..\components\cherry_usb\class;..\..\..\components\cherry_usb\common;..\..\..\components\cherry_usb\core;..\..\..\components\cherry_usb;..\flash;..\..\..\hal\driver\om6239</IncludePath>
+              <IncludePath>../config;../config;../main;../periph;../../../common/includes;../../../hal/CMSIS/Core/Include;../../../hal/device/include;../../../hal/driver/include;../../../hal/driver/common;../../../components/evt;../../../components/exble2/includes;../../../components/exble2/port;../../../components/tinycrypt/include;../../../components/om_cfg;../../../components/pm;../../../bsp;..\..\..\mode_24g;..\..\..\mode_usb;..\..\..\components\cherry_usb\class;..\..\..\components\cherry_usb\common;..\..\..\components\cherry_usb\core;..\..\..\components\cherry_usb;..\flash</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -450,16 +450,6 @@
               <FilePath>..\periph\mode_ind.c</FilePath>
             </File>
             <File>
-              <FileName>ledc.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\periph\ledc.c</FilePath>
-            </File>
-            <File>
-              <FileName>ledc_mode.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\periph\ledc_mode.c</FilePath>
-            </File>
-            <File>
               <FileName>userdefined_key_20260724.o</FileName>
               <FileType>3</FileType>
               <FilePath>..\periph\userdefined_key_20260724.o</FilePath>
@@ -553,11 +543,6 @@
               <FileName>drv_wdt.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\hal\driver\common\drv_wdt.c</FilePath>
-            </File>
-            <File>
-              <FileName>drv_ledc.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\hal\driver\om6239\drv_ledc.c</FilePath>
             </File>
           </Files>
         </Group>

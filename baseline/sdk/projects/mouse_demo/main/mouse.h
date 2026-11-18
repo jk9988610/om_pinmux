@@ -36,7 +36,7 @@ typedef enum {
 #define CFG_START_SYNC_WORD_ADDR            0x30
 
 #define MOUSE_NAME_MAX_LEN         29U
-extern  char mouse_name[MOUSE_NAME_MAX_LEN];
+extern const char mouse_name[MOUSE_NAME_MAX_LEN];
 
 extern void ex2_app_mouse_init(void);
 extern void app_ble_evt_dispatch(uint32_t events);

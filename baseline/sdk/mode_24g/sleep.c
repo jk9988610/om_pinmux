@@ -18,6 +18,7 @@
 // 变量定义区
 //
 extern bool                 bperiph_int;
+
 //============================================================================;
 // 代码区                                                                     ;
 //============================================================================;
@@ -32,8 +33,7 @@ void sleep_process(void)
     uint32_t rtc_value,j;
     static uint8_t no_dongle_time_count;
     static bool led_24g_sta;
-    static uint8_t  ha_pin_status, bak_ha_pin_status;
-    static uint8_t  hb_pin_status, bak_hb_pin_status;
+
     switch(work_mode)
     {
         case iMCU_MODE_NORMAL:
@@ -44,8 +44,7 @@ void sleep_process(void)
                 mouse_periph_wakeup_enable(WAKEUP_SLEEP_LEVEL1);
                 drv_pmu_clear_wakeup();
                 mMCU_MODE_SLEEP;
-                // ledc_cmd(Cmd_Power_Set,(void*)POWER_OFF);
-                ledc_write0();
+
                 drv_senscan_stop();
                 sensor_scan_freq = mSEN_SCAN_US(50000);
 
@@ -62,7 +61,6 @@ void sleep_process(void)
                 bperiph_int = 0;
 				logo_cfg(iLED_CFG_OFF);
                 rtc_value = drv_rtc_read(OM_RTC);
-                led_low_off();
                 while(1)
                 {
                     drv_wdt_keep_alive(OM_WDT);
@@ -77,7 +75,6 @@ void sleep_process(void)
                 rf_ctrl_reg |= (brf_sync_time|brf_sync_status);
 				mMCU_MODE_NORMAL;
                 mouse_24g_init();
-                ledc_cmd(Cmd_Init,NULL);
             }
             else if(iRF_MODE_SYNC == rf_mode_type)
             {
@@ -88,10 +85,6 @@ void sleep_process(void)
                     no_dongle_time_count = 0;
                     b24g_nromal = false;
                     ble_24g_ctrl |= bom6239_sync_ing;
-                    if (!(ble_24g_ctrl & bom6239_sync_ok))
-                    {
-                        // ledc_cmd(Cmd_24G_Reconnect,NULL);
-                    }
                 }
             }
 
@@ -106,48 +99,54 @@ void sleep_process(void)
                 }
                 else
                 {
-                    key_io_scan();
-                    key_status_bak = key_status;
-                    rf_ctrl_reg &= ~(brf_sync_time|brf_sync_status);
-                    if(3 == no_dongle_time_count)
+                    if(key_status & bkey_pair)                          /* 配对键按下，不进入休眠模式 */
                     {
+                        return;
+                    }
+
+                    key_io_scan();
+                    j = key_status;
+                    rf_ctrl_reg &= ~(brf_sync_time|brf_sync_status);
+                    led_bt0_off();
+                    led_bt1_off();
+                    gpio_toggle(LED_MODE_24G_PIN);
+                    if(5 > no_dongle_time_count)
+                    {
+                        for(i=0; i<100; i++)
+                        {
+                            drv_wdt_keep_alive(OM_WDT);
+                            delayus(5000);
+                            key_io_scan();
+                            if(j != key_status)
+                            {
+                                rf_ctrl_reg |= (brf_sync_time|brf_sync_status);         /* 按键唤醒的情况下，如果电脑休眠，则尝试唤醒USB */
+                                break;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        logo_cfg(iLED_CFG_OFF);
+                        mRF_CE_LOW_IDLE;
+                        delayus(250);
+                        mouse_periph_wakeup_enable(WAKEUP_SLEEP_LEVEL1);
+                        drv_pmu_clear_wakeup();
                         drv_senscan_stop();
                         sensor_sleep();
                         drv_encoder_control(OM_ENCODER, ENCODER_CONTROL_WAKEUP_DISABLE, NULL);
                         drv_encoder_control(OM_ENCODER, ENCODER_CONTROL_STOP, NULL);
-                    }
-                    mouse_periph_wakeup_enable(WAKEUP_ALL_DISABLE);
-                    led_bt0_off();
-                    led_bt1_off();
-                    gpio_toggle(LED_MODE_24G_PIN);
-                    for(uint32_t i=0; i<500; i++)
-                    {   
-                        delayus(1000);
-                        OM_CRITICAL_BEGIN();
-                        ledc_polling();
-                        OM_CRITICAL_END();
-                        drv_wdt_keep_alive(OM_WDT);
-                        
 
-                        if(0==(i&0x01))
+                        drv_rtc_set_alarm0(OM_RTC->CNT + iNO_DONGLE_WAKEUP);        /* 500MS 通过RTC唤醒一次，搜索接收器 */
+                        drv_pmu_set_low_power_mode(PMU_LPM_STOP1);
+                        if(OM_PMU->WKINT_CLR&PMU_WKINT_CLR_PIN_WK_MASK)
                         {
-                            
-                            key_io_scan();
-                            if(key_status_bak != key_status)
-                            {
-                                no_dongle_time_count=0;
-                                rf_ctrl_reg |= (brf_sync_time|brf_sync_status);
-                                break;
-                            }
-                        }
-                        else if(1==(i&0x02))
-                        {
-                            scan_mode_swtich(iMODE_CHECK_NO_DELAY);
-                            if(true == bmode_swtich_valid)
-                                return;
-                        }
-
+                            no_dongle_time_count = 6;
+                            rf_ctrl_reg |= (brf_sync_time|brf_sync_status);         /* 按键唤醒的情况下，如果电脑休眠，则尝试唤醒USB */
+                        }  
+                        else
+                            rf_ctrl_reg &= ~(brf_sync_time|brf_sync_status);
                     }
+					drv_wdt_keep_alive(OM_WDT);
                     no_dongle_time_count++;
                     if(iDEFAULT_NO_DONGLE_MODE_TIME <= no_dongle_time_count)        /* 搜索30次之后，则进入深度休眠 */
                     {
@@ -161,29 +160,17 @@ void sleep_process(void)
             break;
         case iMCU_MODE_PD:                  /* 深度休眠 */
 MCU_MODE_PD_PRPCESS:
+            mode_led_all_off();
             pwm_off();
-            sensor_wakeup();
-            sensor_deepsleep_wakeup();
 			OM_ENCODER->EN &= ~(ENCODER_EN_INTERRUPT_EN_MASK|ENCODER_EN_WAKEUP_EN_MASK);
             drv_encoder_control(OM_ENCODER, ENCODER_CONTROL_STOP, NULL);
             drv_senscan_stop();
             sensor_sleep();
             DRV_RCC_CLOCK_ENABLE(RCC_CLK_SENSCAN, 0U);
             DRV_RCC_CLOCK_ENABLE(RCC_CLK_ENCODER, 0U);
-            // sys_deepsleep_process(); 
-            for (size_t i = 0; i < 3; i++)
-            {
-                ledc_write0();
-                delayms(8);
-            }
-            delayms(100);
-            ledc_polling();
-            delayms(500);
-            charg_led_sleep_process();
             mouse_periph_wakeup_enable(WAKEUP_SLEEP_LEVEL2);
             drv_pmu_set_low_power_mode(PMU_LPM_DEEP_SLEEP);
             while(1);
             break;
     }
 }
-

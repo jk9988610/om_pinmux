@@ -13,7 +13,7 @@ from pathlib import Path
 
 import yaml
 
-from . import baseline, model, newproject, rules, smoke, validate
+from . import baseline, blank, model, newproject, rules, smoke, validate
 from .generate import generator
 from .initproject import init_project, missing_markers
 from .targets import sdk, uvprojx
@@ -434,6 +434,205 @@ def cmd_new(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+# ---- 空白起步：从选项逐步构建工程（CubeMX 式） ----
+
+def cmd_blank_new(args: argparse.Namespace) -> int:
+    """从 KC536 骨架建一个引脚为空的草稿工程，等待选项逐步填充。"""
+    name = args.name.strip()
+    problem = baseline.name_problem(name)
+    if problem:
+        _error(problem, "例如 --name MyMouse")
+        return EXIT_VALIDATION
+    target = Path(args.target).expanduser().resolve() if args.target else (Path.cwd() / name).resolve()
+    if target.exists():
+        _error(f"目标路径已存在: {target}", "blank new 不覆盖现有目录")
+        return EXIT_ENVIRONMENT
+
+    id_low = 1
+    if args.id:
+        try:
+            id_low = int(args.id, 0)
+        except ValueError:
+            _error(f"无法解析 --id: {args.id}", "接受 0x0457 或十进制")
+            return EXIT_VALIDATION
+        if not 1 <= id_low <= 0xFFFF:
+            _error(f"--id 超出范围: {id_low}", "范围 1..0xFFFF")
+            return EXIT_VALIDATION
+
+    try:
+        source, _config_source = baseline.ensure_ready()
+    except baseline.BaselineError as exc:
+        print(f"[ERROR] {exc}", file=sys.stderr)
+        return EXIT_ENVIRONMENT
+
+    config = blank.empty_config(name, customer=args.customer or "BYC")
+    config["project"]["id"]["low"] = f"0x{id_low:04X}"
+    # 空白配置缺必需脚，不能用 validate.ok 卡关；但基础字段要对。
+    config_payload = (model.dump_config(config) + "\n").encode("utf-8")
+    transaction = FileTransaction.create(target, "omcfg_blank_new")
+    try:
+        copied = newproject.copy_skeleton(source, target)
+        print(f"骨架: {source}（复制 {copied} 个文件）")
+        config_target = model.default_config_path(target)
+        config_target.parent.mkdir(parents=True, exist_ok=True)
+        transaction.write_bytes(config_target, config_payload, "写入空白项目配置")
+        init_project(target, config_target, force=False, verbose=False, announce_next=False, tx=transaction)
+        transaction.commit()
+    except (sdk.TargetError, OSError) as exc:
+        _error(f"建工程失败: {exc}", "确认目标可写、未被其他程序占用")
+        shutil.rmtree(target, ignore_errors=True)
+        return EXIT_WRITE
+
+    print(f"空白工程: {target}")
+    print(f"工程名: {name} 项目号: 0x{id_low:04X} BLE: {' / '.join(model.ble_names(config))}")
+    status = blank.summary(config)
+    print(f"已建草稿：引脚 {status['assigned']}/{status['total_roles']}，"
+          f"缺必需脚 {len(status['missing'])} 个（这是空白起步的正常状态）")
+    print("下一步: python -m omcfg blank options  查看可选功能")
+    print("       python -m omcfg blank assign --sdk <DIR> --role KEY_R0_PIN --pin P10")
+    print("       python -m omcfg blank status --sdk <DIR>")
+    print("       python -m omcfg blank build --sdk <DIR>  补齐后生成")
+    return EXIT_OK
+
+
+def _blank_load_config(sdk_path: str) -> tuple[Path, dict]:
+    root = sdk.resolve_sdk(sdk_path)
+    path = model.default_config_path(root)
+    if not path.is_file():
+        raise sdk.TargetError(f"工程尚无 project.omcfg: {path}")
+    return path, model.load_config(path)
+
+
+def cmd_blank_options(args: argparse.Namespace) -> int:
+    """列出可选项：功能角色 + 推荐脚 + 合法脚 + 约束。"""
+    opts = blank.load_options()
+    if not opts:
+        _error("选项数据缺失: omcfg/data/options.json", "先运行选项数据生成脚本")
+        return EXIT_ENVIRONMENT
+    only_v1 = not args.all
+    rows = []
+    for mac, opt in sorted(opts.items()):
+        if only_v1 and not opt.get("v1"):
+            continue
+        rows.append((
+            mac,
+            opt.get("display_name", ""),
+            opt.get("suggested_pin") or "-",
+            ",".join(opt.get("alternate_pins", [])) or "-",
+            str(len(opt.get("allowed_pins", []))),
+            "成对:" + opt["pair_with"] if opt.get("pair_with") else ("固定" if opt.get("fixed") else ""),
+        ))
+    print(f"{'角色':22} {'显示名':12} {'推荐':5} {'备选':12} {'合法数':5} 约束")
+    for mac, disp, sug, alt, n, note in rows:
+        print(f"{mac:22} {disp:12} {sug:5} {alt:12} {n:5} {note}")
+    print(f"\n共 {len(rows)} 项" + ("（v1；--all 看全部）" if only_v1 else ""))
+    print("提示: python -m omcfg blank options --all 查看全部角色")
+    return EXIT_OK
+
+
+def cmd_blank_assign(args: argparse.Namespace) -> int:
+    """给空白工程添加一个引脚分配。"""
+    try:
+        path, config = _blank_load_config(args.sdk)
+    except sdk.TargetError as exc:
+        _error(str(exc), "--sdk 指向工程根目录（其下有 projects/mouse_demo/periph）")
+        return EXIT_ENVIRONMENT
+    problem = blank.assign_problem(config, args.role, args.pin.upper())
+    if problem:
+        _error(problem, "用 blank options 查看该角色的合法脚")
+        return EXIT_VALIDATION
+    blank.assign(config, args.role, args.pin.upper())
+    Path(path).write_text(model.dump_config(config) + "\n", encoding="utf-8")
+    status = blank.summary(config)
+    print(f"已分配 {args.role} -> {args.pin.upper()}")
+    print(f"进度: {status['assigned']} 脚，缺必需 {len(status['missing'])}，冲突 {len(status['conflicts'])}")
+    if status["missing"]:
+        print("还缺: " + ", ".join(status["missing"][:8]) + (" ..." if len(status["missing"]) > 8 else ""))
+    return EXIT_OK
+
+
+def cmd_blank_remove(args: argparse.Namespace) -> int:
+    """解除一个引脚分配。"""
+    try:
+        path, config = _blank_load_config(args.sdk)
+    except sdk.TargetError as exc:
+        _error(str(exc), "--sdk 指向工程根目录")
+        return EXIT_ENVIRONMENT
+    if args.role not in config.get("pins", {}):
+        _error(f"角色未分配: {args.role}", "用 blank status 查看已分配角色")
+        return EXIT_VALIDATION
+    blank.unassign(config, args.role)
+    Path(path).write_text(model.dump_config(config) + "\n", encoding="utf-8")
+    print(f"已解除 {args.role}")
+    return EXIT_OK
+
+
+def cmd_blank_status(args: argparse.Namespace) -> int:
+    """显示构建进度。"""
+    try:
+        _path, config = _blank_load_config(args.sdk)
+    except sdk.TargetError as exc:
+        _error(str(exc), "--sdk 指向工程根目录")
+        return EXIT_ENVIRONMENT
+    status = blank.summary(config)
+    print(f"板型: {model.board(config).get('mode_pins')}/{model.board(config).get('logo')}/"
+          f"{model.sensor_bus(config)}")
+    print(f"已分配: {status['assigned']}/{status['total_roles']}")
+    print(f"缺必需脚: {len(status['missing'])}" + (": " + ", ".join(status["missing"]) if status["missing"] else ""))
+    print(f"冲突: {len(status['conflicts'])}")
+    for c in status["conflicts"]:
+        print("  [ERROR] " + c)
+    print(f"可生成: {'是' if status['complete'] else '否'}")
+    if status["complete"]:
+        print("下一步: python -m omcfg blank build --sdk <DIR>")
+    return EXIT_OK if status["complete"] else EXIT_VALIDATION
+
+
+def cmd_blank_build(args: argparse.Namespace) -> int:
+    """草稿补齐后生成源码并写回（复用 gen 链路）。"""
+    try:
+        root = sdk.resolve_sdk(args.sdk)
+    except sdk.TargetError as exc:
+        _error(str(exc), "--sdk 指向工程根目录")
+        return EXIT_ENVIRONMENT
+    config_path = model.default_config_path(root)
+    config = model.load_config(config_path)
+    status = blank.summary(config)
+    if not status["complete"]:
+        _error(
+            "草稿未补齐，不能生成：缺必需脚 " + ", ".join(status["missing"]) +
+            ("；冲突 " + "; ".join(status["conflicts"]) if status["conflicts"] else ""),
+            "先用 blank assign 补齐，再 blank status 确认可生成",
+        )
+        return EXIT_VALIDATION
+    report = validate.validate_config(config)
+    _add_mismatch_warning(report, config, root)
+    _print_report(report, config)
+    if not report.ok:
+        return EXIT_VALIDATION
+    try:
+        outputs = generator.build_outputs(config, root)
+    except (sdk.TargetError, OSError) as exc:
+        _error(f"生成失败: {exc}", "确认工程完整、文件未被占用")
+        return EXIT_WRITE
+    changed = [item for item in outputs if item.changed]
+    for item in outputs:
+        if not item.changed:
+            print(f"无变化: {item.path}")
+        else:
+            print(item.diff())
+    if not changed:
+        print("生成结果与现状一致")
+        return EXIT_OK
+    if not args.apply:
+        print(f"dry-run: {len(changed)} 个文件待写入；确认后加 --apply")
+        return EXIT_OK
+    code, manifest = _apply_outputs(root, outputs)
+    if manifest:
+        print(f"回滚: python -m omcfg rollback --manifest {manifest}")
+    return code
+
+
 def cmd_smoke(args: argparse.Namespace) -> int:
     """重建三 logo 形态冒烟工程。"""
     out = Path(args.out).expanduser().resolve()
@@ -614,6 +813,51 @@ def build_parser() -> argparse.ArgumentParser:
         help="保留 new 的事务备份与 manifest（默认保留，便于 rollback；--no-keep-backup 关闭）",
     )
 
+    blank = sub.add_parser(
+        "blank",
+        help="空白起步：从选项逐步构建工程（CubeMX 式）",
+        description="从内置 KC536 骨架建引脚为空的草稿工程，用选项逐项分配脚位，补齐后生成。",
+        epilog=(
+            "示例:\n"
+            "  python -m omcfg blank new --name MyMouse\n"
+            "  python -m omcfg blank options\n"
+            "  python -m omcfg blank assign --sdk <DIR> --role KEY_R0_PIN --pin P10\n"
+            "  python -m omcfg blank status --sdk <DIR>\n"
+            "  python -m omcfg blank build --sdk <DIR> --apply\n"
+            "所有写盘走既有 transaction；生成/回滚链路与 new/gen 共用。"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    blank_sub = blank.add_subparsers(
+        dest="blank_command", required=True,
+        metavar="{new,options,assign,remove,status,build}",
+    )
+
+    bn = blank_sub.add_parser("new", help="建一个引脚为空的草稿工程")
+    bn.add_argument("--name", required=True, help="工程名")
+    bn.add_argument("--target", help="新工程目录；缺省为当前目录下的 <NAME>")
+    bn.add_argument("--id", help="手工指定项目号低 16 位；缺省 0x0001")
+    bn.add_argument("--customer", help="客户名；缺省 BYC")
+
+    bo = blank_sub.add_parser("options", help="列出可选功能角色与推荐/合法脚")
+    bo.add_argument("--all", action="store_true", help="显示全部角色（默认只 v1）")
+
+    ba = blank_sub.add_parser("assign", help="分配一个引脚")
+    ba.add_argument("--sdk", required=True, help="工程根目录")
+    ba.add_argument("--role", required=True, help="角色宏，如 KEY_R0_PIN")
+    ba.add_argument("--pin", required=True, help="封装脚，如 P10")
+
+    br = blank_sub.add_parser("remove", help="解除一个引脚分配")
+    br.add_argument("--sdk", required=True, help="工程根目录")
+    br.add_argument("--role", required=True, help="角色宏")
+
+    bs = blank_sub.add_parser("status", help="显示构建进度与是否可生成")
+    bs.add_argument("--sdk", required=True, help="工程根目录")
+
+    bb = blank_sub.add_parser("build", help="补齐后生成源码（默认 dry-run）")
+    bb.add_argument("--sdk", required=True, help="工程根目录")
+    bb.add_argument("--apply", action="store_true", help="真正写入")
+
     rollback = sub.add_parser(
         "rollback",
         help="按 manifest 回滚到写入前状态",
@@ -665,6 +909,15 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_gen(args)
     if args.command == "new":
         return cmd_new(args)
+    if args.command == "blank":
+        return {
+            "new": cmd_blank_new,
+            "options": cmd_blank_options,
+            "assign": cmd_blank_assign,
+            "remove": cmd_blank_remove,
+            "status": cmd_blank_status,
+            "build": cmd_blank_build,
+        }[args.blank_command](args)
     if args.command == "rollback":
         return cmd_rollback(args)
     if args.command == "smoke":

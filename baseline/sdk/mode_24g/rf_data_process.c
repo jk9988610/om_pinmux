@@ -11,9 +11,11 @@
 
 #include "main_24g.h"
 #include "usb_cfg_info.h"
+#include "rf_data_process.h"
 
 uint32_t m24g_connect_count;
 extern bool is_app_enable;
+
 //外部函数
 extern void hid_get_fw_mode_info(void);
 extern void hid_process();
@@ -225,13 +227,11 @@ void rf_tx0_irq_callback(void)
 }
 void rf_tx1_idle_callback(void)
 {
-    // ledc_polling();
     if(1==(lvd_scan_count&0x03))
         logo_process();
 }
 void rf_tx1_irq_callback(void)
 {
-    // ledc_polling();
     if(1==(lvd_scan_count&0x03))
         logo_process();
 }
@@ -344,17 +344,7 @@ void rf_connect_get_device_info()
     }
 }
 
-
 void rf_tx_data_callback(uint8_t *TxPayload, uint8_t lenght)
 {
 
-}
-
-bool is_rf_tx_12bit_data()
-{
-    // if (dpi_value > 0x3B)
-    // {
-    //     return true;
-    // }
-    return false;
 }

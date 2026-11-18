@@ -66,7 +66,7 @@ extern void rf_normal_mode_sleep(void);
 extern void rf_app_get_device_info();
 extern void rf_app_get_online_info();
 extern void rf_app_set_cmd();
-extern void rf_respone_callback();
+extern void rf_respone_callback(uint8_t *RxPayload);
 extern bool is_rf_tx_time_enough();
 extern void rf_connect_get_device_info();
 //

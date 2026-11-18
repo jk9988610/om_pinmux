@@ -1,58 +1,183 @@
-# OM6239 项目配置 — CH04（双模式脚 + LEDC LOGO + 矩阵列 + LED_LOW）
+# OM6239 项目配置 — KC536（内置 SDK 基线：来源 SE71M_0023_KC536，single/RGB/滚轮20-21，由 omcfg 依据工程现状推导并复核）
 schema: om6239-project/v1
 chip: OM6239
-
 project:
-  name: CH04
-  customer: App
-  ble_names: ["CH-04 Bt1", "CH-04 Bt2"]
+  name: KC536
+  customer: BYC
   id:
-    low: "0x0457"
-    high: "0x071"
-    version: 4
-
+    low: '0x0023'
+    high: '0x071'
+    version: '5'
+  ble_names:
+  - BT5.1Mouse
 board:
-  mode_pins: dual
-  logo: ledc
-  ledc_rgb_number: 6
-  led_polarity: active_high
+  mode_pins: single
+  logo: rgb
+  led_polarity: active_low
   sensor:
     bus: sdio_3wire
     dir_clock: 6
-    dpi_levels: [1200, 1600, 2400, 3600, 4800, 6400]
-    dpi_default: 1
-  wheel: ENCODER_PINMUX_SEL_IO_00_01
-  uart_pin: KEY_R2_PIN
-
+  wheel: ENCODER_PINMUX_SEL_IO_20_21
+  uart_pin: KEY_R0_PIN
 pins:
-  KEY_R0_PIN: P32
-  KEY_R1_PIN: P36
-  KEY_R2_PIN: P20
-  KEY_PAIR_PIN: P24
-  KEY_C0_PIN: P31
-  WHEEL_A_PIN: P00
-  WHEEL_B_PIN: P01
-  MODE_24G_PIN: P27
-  MODE_BLE_PIN: P26
-  SENSOR_MOTION_PIN: P07
-  SENSOR_SCLK_PIN: P11
-  SENSOR_SDIO_PIN: P12
-  LED_MODE_R_PIN: P23
-  LED_MODE_G_PIN: P22
-  LED_MODE_B_PIN: P21
-  LED_LOW_PIN: P04
-  LEDC_CTRL_PIN: P34
-  LEDC_PIN: P05
-  USB_5V: P25
-  BAT_CHG_PIN: P30
-  LVD_PIN: P33
+  KEY_R0_PIN:
+    pin: P34
+    gpio:
+      mode: input_pullup
+      pull: pu_30k
+      init: high
+  KEY_R1_PIN:
+    pin: P07
+    gpio:
+      mode: input_pullup
+      pull: pu_30k
+      init: high
+  KEY_R2_PIN:
+    pin: P10
+    gpio:
+      mode: input_pullup
+      pull: pu_30k
+      init: high
+  KEY_B_PIN:
+    pin: P22
+    gpio:
+      mode: input_pullup
+      pull: pu_30k
+      init: high
+  KEY_P_PIN:
+    pin: P25
+    gpio:
+      mode: input_pullup
+      pull: pu_30k
+      init: high
+  KEY_DPI_PIN:
+    pin: P31
+    gpio:
+      mode: input_pullup
+      pull: pu_30k
+      init: high
+  KEY_PAIR_PIN:
+    pin: P27
+    gpio:
+      mode: input_pullup
+      pull: pu_30k
+      init: high
+  WHEEL_A_PIN:
+    pin: P21
+    gpio:
+      mode: input_pullup
+      pull: pu_30k
+      init: high
+  WHEEL_B_PIN:
+    pin: P20
+    gpio:
+      mode: input_pullup
+      pull: pu_30k
+      init: high
+  MODE_BLE_24G_PIN:
+    pin: P26
+    gpio:
+      mode: input_pullup
+      pull: pu_30k
+      init: high
+  SENSOR_MOTION_PIN:
+    pin: P13
+    gpio:
+      mode: input_pullup
+      pull: pu_30k
+      init: high
+  SENSOR_SCLK_PIN:
+    pin: P11
+    gpio:
+      mode: output_pp
+      pull: pu_30k
+      init: high
+  SENSOR_SDIO_PIN:
+    pin: P12
+    gpio:
+      mode: input_pullup
+      pull: pu_30k
+      init: high
+  LED_MODE_R_PIN:
+    pin: P32
+    gpio:
+      mode: output_pp
+      pull: pu_30k
+      init: high
+  LED_MODE_G_PIN:
+    pin: P00
+    gpio:
+      mode: output_pp
+      pull: pu_30k
+      init: high
+  LED_MODE_B_PIN:
+    pin: P01
+    gpio:
+      mode: output_pp
+      pull: pu_30k
+      init: high
+  LED_R_PIN:
+    pin: P04
+    gpio:
+      mode: output_pp
+      pull: pu_30k
+      init: high
+  LED_G_PIN:
+    pin: P05
+    gpio:
+      mode: output_pp
+      pull: pu_30k
+      init: high
+  LED_B_PIN:
+    pin: P06
+    gpio:
+      mode: output_pp
+      pull: pu_30k
+      init: high
+  USB_5V:
+    pin: P24
+    gpio:
+      mode: input_pulldown
+      pull: pd_150k
+      init: high
+  BAT_CHG_PIN:
+    pin: P30
+    gpio:
+      mode: input_pullup
+      pull: pu_30k
+      init: high
+  LVD_PIN:
+    pin: P23
+    gpio:
+      mode: input_floating
+      pull: pu_none
+      init: high
   USB_DN_PIN: P02
   USB_DP_PIN: P03
-  FLASH_CS_PIN: P17
-  FLASH_SCLK_PIN: P15
-  FLASH_MOSI_PIN: P16
-  FLASH_MISO_PIN: P14
-
+  FLASH_CS_PIN:
+    pin: P17
+    gpio:
+      mode: input_pullup
+      pull: pu_30k
+      init: high
+  FLASH_SCLK_PIN:
+    pin: P15
+    gpio:
+      mode: input_pullup
+      pull: pu_30k
+      init: high
+  FLASH_MOSI_PIN:
+    pin: P16
+    gpio:
+      mode: input_pullup
+      pull: pu_30k
+      init: high
+  FLASH_MISO_PIN:
+    pin: P14
+    gpio:
+      mode: input_pullup
+      pull: pu_30k
+      init: high
 codegen:
   output: periph
   keil_project: projects/mouse_demo/keil5/SE71M.uvprojx
