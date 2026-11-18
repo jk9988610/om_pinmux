@@ -52,6 +52,11 @@ def available_plugins() -> list[dict[str, Any]]:
             "roles": c.get("roles", []),
             "board_effect": c.get("board_effect", {}),
             "note": c.get("note", ""),
+            # 以下三项供 GUI 显示「启用后会发生什么」的影响预告；数据仍来自契约，
+            # 新增插件只改 plugins.json，不需要改前端。
+            "unlock_roles": c.get("unlock_roles", c.get("roles", [])),
+            "files": c.get("files", []),
+            "auto_reassign": c.get("auto_reassign", []),
         })
     return out
 
@@ -272,6 +277,11 @@ def status(root: Path | str, config: dict[str, Any] | None = None) -> dict[str, 
             "enabled": pid in cur,
             "roles": c.get("roles", []),
             "require_group": c.get("require_group", ""),
+            "note": c.get("note", ""),
+            "board_effect": c.get("board_effect", {}),
+            "unlock_roles": c.get("unlock_roles", c.get("roles", [])),
+            "files": c.get("files", []),
+            "auto_reassign": c.get("auto_reassign", []),
         })
     return {"plugins": out, "enabled": cur}
 

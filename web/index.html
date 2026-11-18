@@ -1,59 +1,109 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>OM6239 配置</title>
-  <link rel="stylesheet" href="style.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>OM6239 板级配置器</title>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header>
-    <div class="brand">OM6239 <span>配置</span></div>
-    <input id="sdk" placeholder="SDK 根目录，例如 E:\M_2026\...\SE71M_0023_KC536_V1_20260909">
-    <button id="browse" title="选择 SDK 根目录">浏览…</button>
-    <button id="load">打开</button>
-    <button id="check">检查</button>
-    <button id="save">保存引脚</button>
-    <button id="preview">预览 diff</button>
-    <button id="apply" class="primary">应用</button>
-  </header>
-  <div id="status" class="status">输入 SDK 路径后回车；配置文件固定为 projects/mouse_demo/project.omcfg</div>
-  <section id="init-panel" class="card init-panel hidden">
-    <div class="card-head"><h2>初始化工程</h2><span>未检测到 OMCFG 标记块</span></div>
-    <p id="init-hint" class="hint"></p>
-    <div class="init-row">
-      <label for="config">配置</label>
-      <input id="config" list="config-options" placeholder="configs\KC536.omcfg 或配置文件绝对路径">
-      <datalist id="config-options"></datalist>
-      <button id="init" class="primary">初始化</button>
-      <button id="derive" title="读取当前 user_config.h/.c 推导引脚，生成 project.omcfg 并初始化">
-        从工程现状生成配置
+
+<!-- ==================== 启动页 ==================== -->
+<div id="start">
+  <div class="start-top">
+    <div class="logo">OM</div>
+    <div class="brand-txt">OM6239 <span>板级配置器</span></div>
+    <div class="spacer"></div>
+    <button class="btn sm ghost" onclick="toggleTheme()" title="切换深浅主题">◐ 主题</button>
+  </div>
+  <div class="start-body">
+    <h1 class="start-h1">从一个明确的起点开始</h1>
+    <p class="start-sub">一份 project.omcfg 管住引脚、板型与功能插件。选择你要做的事，接下来每一步都会有明确指引。</p>
+    <div class="path-grid">
+      <button class="path-card reco" id="path-new" onclick="startRoute('new')">
+        <span class="reco-badge">推荐</span>
+        <div class="path-ico">＋</div>
+        <h3>从空白新建工程</h3>
+        <p>以 KC536 干净骨架起步，像 CubeMX 一样选板型、勾插件、配引脚、生成可编译工程。适合新板子。</p>
+        <ul class="path-feats">
+          <li>先定功能与板型，再逐项分配脚位</li>
+          <li>随时看到「还差几个必需脚」</li>
+          <li>写盘前强制预览，事务可回滚</li>
+        </ul>
+        <div class="path-cta"><span>开始新建</span><span>→</span></div>
+      </button>
+      <button class="path-card" id="path-open" onclick="startRoute('open')">
+        <div class="path-ico">⌂</div>
+        <h3>打开已有工程</h3>
+        <p>对已有 SDK 工程做检查、微调引脚或增减插件，走校验 → 预览 → 应用的安全链路。</p>
+        <ul class="path-feats">
+          <li>缺标记时引导初始化 / 从现状推导配置</li>
+          <li>同一套需求组 · 约束栏 · 脚位图工作区</li>
+          <li>严格校验，保存前提示冲突</li>
+        </ul>
+        <div class="path-cta"><span>选择 SDK 目录</span><span>→</span></div>
       </button>
     </div>
-    <ul id="init-missing" class="issues"></ul>
-  </section>
-  <main>
-    <section class="card">
-      <div class="card-head"><h2>封装脚位</h2><span id="summary"></span></div>
-      <div class="table-wrap"><table>
-        <thead><tr><th>脚号</th><th>脚名</th><th>当前功能</th><th>可选功能</th><th>状态</th></tr></thead>
-        <tbody id="pins"></tbody>
-      </table></div>
-      <div class="card-head"><h2>片内 / 保留脚</h2><span>非封装脚，仅片内 Flash 使用</span></div>
-      <div class="table-wrap"><table>
-        <thead><tr><th>脚名</th><th>用途</th><th>当前功能</th><th>状态</th></tr></thead>
-        <tbody id="internal-pins"></tbody>
-      </table></div>
-      <div class="card-head"><h2>未分配功能</h2></div>
-      <ul id="unassigned" class="issues"></ul>
-    </section>
-    <section class="card">
-      <div class="card-head"><h2>问题</h2></div>
-      <ul id="issues" class="issues"></ul>
-      <div class="card-head"><h2>diff</h2></div>
-      <pre id="diff" class="diff">尚未预览</pre>
-    </section>
-  </main>
-  <script src="app.js"></script>
+    <div class="recent">
+      <h4>最近工程</h4>
+      <div class="recent-row" id="recent-list"></div>
+    </div>
+  </div>
+  <div class="start-foot">后端：omcfg · 配置唯一真相源 &lt;SDK&gt;/projects/mouse_demo/project.omcfg</div>
+</div>
+
+<!-- ==================== 工作台 ==================== -->
+<div id="workbench" class="hidden">
+  <header class="topbar">
+    <div class="logo">OM</div>
+    <div class="brand-txt">OM6239 <span>配置器</span></div>
+    <span class="crumb">/ <b id="route-name">—</b></span>
+    <div class="spacer"></div>
+    <div class="ctx"><span class="k">工程</span><b id="ctx-name">—</b></div>
+    <div class="ctx hidden" id="ctx-sdk-wrap"><span class="k">SDK</span><input id="sdk" class="ctx-input mono" spellcheck="false" placeholder="SDK 根目录" title="修改后按回车重新打开"></div>
+    <span class="tag warn" id="dirty-tag">未保存</span>
+    <button class="btn sm ghost" onclick="showHelp()" title="概念说明与快捷键">? 帮助</button>
+    <button class="btn sm ghost" onclick="toggleTheme()" title="切换深浅主题">◐</button>
+    <button class="btn sm ghost" onclick="goStart()" title="返回启动页">✕ 关闭</button>
+  </header>
+
+  <nav class="sidebar">
+    <div class="side-label">配置流程</div>
+    <div id="step-list"></div>
+    <div class="side-foot" id="side-foot"></div>
+  </nav>
+
+  <main class="main" id="main"></main>
+
+  <aside class="aside" id="aside"></aside>
+
+  <footer class="actionbar">
+    <div class="left">
+      <button class="btn" id="btn-prev" onclick="prevStep()">← 上一步</button>
+      <button class="btn" id="btn-save" onclick="saveDraft()">保存草稿</button>
+    </div>
+    <div class="spacer"></div>
+    <div id="gate-wrap"></div>
+    <div class="cta-wrap">
+      <span class="cta-sub" id="cta-sub"></span>
+      <button class="btn primary big" id="btn-next" onclick="nextStep()">下一步 →</button>
+    </div>
+  </footer>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<div id="modal" class="hidden" onclick="if(event.target===this)hideHelp()">
+  <div class="modal-card">
+    <h3>需求组 / 约束栏 / 脚位图 是什么关系？</h3>
+    <p>它们是<b>同一批角色的三种视图</b>，不是父子关系，也不是包含关系。角色清单来自 <span class="mono">options.json</span>；需求组按「我要什么功能」用 <span class="mono">role_id</span> 分组，约束栏按「芯片允许这个功能落在几只脚上」用 <span class="mono">allowed_pins</span> 数量自动分档，脚位图只是把这批角色摆到 32 个物理位置上。</p>
+    <div class="chain"><span>需求组<br><span class="tiny">按功能分组</span></span><i>→ 同一批角色 →</i><span>约束栏<br><span class="tiny">按合法脚数分档</span></span><i>→ 同一批角色 →</i><span>脚位图<br><span class="tiny">按物理位置</span></span></div>
+    <p>所以选中其中一个视图，另外两处会<b>同步高亮同一批角色</b>：点需求组 → 约束栏筛出该组角色、脚位图高亮它们的合法脚；点某个角色 → 脚位图只高亮这只角色能用的脚。</p>
+    <div class="modal-foot"><button class="btn" onclick="hideHelp()">关闭</button></div>
+  </div>
+</div>
+
+<script src="app.js"></script>
 </body>
 </html>
