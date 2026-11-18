@@ -24,6 +24,15 @@
 #define POWER_ON        1
 #define POWER_OFF       0
 
+/* 插件可移植性：不同工程的 GPIO 操作宏大小写不同（KC536 用小写、CH04/516 用大写）。
+   优先沿用工程已有的大写定义；缺失时用小写别名补齐，保证 ledc.h 即插即用。 */
+#ifndef GPIO_SET
+#define GPIO_SET(pin)     gpio_set(pin)
+#endif
+#ifndef GPIO_CLEAR
+#define GPIO_CLEAR(pin)   gpio_clear(pin)
+#endif
+
 #define LEDC_POWER_SET(x)   (x ? GPIO_SET(LEDC_CTRL_PIN) : GPIO_CLEAR(LEDC_CTRL_PIN)) 
 
 //-----------------------------------------------------------------------------;

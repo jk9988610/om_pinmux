@@ -151,10 +151,12 @@ def render_pins(config: dict, pins: dict[str, dict[str, str]]) -> str:
             lines.append(pin_line("LEDC_PIN", pins["LEDC_PIN"]["pin"], 24))
         lines.append(f"#define {pad('LEDC_RGB_NUMBER', 24)}{model.ledc_rgb_number(config)}")
         lines.append(f"#define {pad('LEDC_RGB_DATA_SIZE', 24)}LEDC_RGB_NUMBER*3")
-    elif model.board(config).get("logo") == "rgb":
-        for role in ("LED_R_PIN", "LED_G_PIN", "LED_B_PIN"):
-            if role in pins:
-                lines.append(pin_line(role, pins[role]["pin"], 24))
+    # KC536 骨架的 led.c / user_config.c 无条件引用 LED_R/G/B，因此这三个宏
+    # 不再按 logo 分支：只要配置里保留了脚位就输出（灯带模式下同样需要）。
+    # 旧 CH04 骨架的灯带工程不含 LED_R/G/B 脚，那里自然不会输出，行为不变。
+    for role in ("LED_R_PIN", "LED_G_PIN", "LED_B_PIN"):
+        if role in pins:
+            lines.append(pin_line(role, pins[role]["pin"], 24))
     lines.append("")
 
     lines.append("//* USB 5V以及充电检测配置 */")

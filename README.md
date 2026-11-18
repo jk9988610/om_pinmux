@@ -120,6 +120,33 @@ python -m omcfg blank build --sdk <DIR> --apply    # 生成源码并写回（可
   **0 Error / 0 Warning**。手动改板型选项（`blank` 的 board 配置或 GUI）
   只影响必需角色集合，不碰生成/回滚链路。
 
+## 功能插件：像 CubeMX 一样勾选扩展（可拔插）
+
+KC536 是干净底座；新板需要的功能（如灯带 LEDC）通过**插件**勾选获得，
+不手改源码。插件契约在 `omcfg/data/plugins.json`，勾选 = 改板型选项 +
+腾让冲突脚 + 从内置模板注入文件 + 解锁一组角色，全部随工程持久化。
+
+**GUI 用法**：打开「按角色配引脚」面板 → 需求组里带勾选框的项（当前是
+「灯带」）即插件。勾上后自动：把 `board.logo` 设为 `ledc`、把占用 DIN
+合法脚的 `LED_MODE_B` 腾到 P36、注入 `ledc.c/.h`、`ledc_mode.c/.h` 四个
+文件并登记 Keil 工程；约束栏随即出现 `LEDC_PIN`(DIN) 和 `LEDC_CTRL_PIN`
+两个角色供配脚。**取消勾选**会干净撤销：删文件、撤登记、还原 logo、
+解除角色。
+
+**程序化调用**：插件通过 `omcfg.api.Api` 暴露（`plugin_status` /
+`plugin_toggle(sdk, "ledc", True|False)`），GUI 与脚本共用；当前没有 CLI
+子命令。所有插件行为由 `plugins.json` 数据驱动，新增插件只需加一条契约 +
+对应模板目录，无需改 GUI 代码。
+
+关键约束（已封装进插件契约，不用手工处理）：
+- `LEDC_PIN` 只有 P01/P05 两个合法脚，与 RGB 占用冲突——勾选时自动腾脚。
+- KC536 的 `led.c`/`user_config.c` 无条件引用 `LED_R/G/B`，灯带模式下
+  这三个宏仍会生成（需要保留对应脚位）。
+- 内置 `ledc.h` 自带 `GPIO_SET/GPIO_CLEAR` 大小写兼容，跨工程即插即用。
+
+实测：空白工程 → 补齐 → 勾 LEDC → 配 DIN/CTRL → 生成 → Keil
+**0 Error / 0 Warning**；取消插件后无文件残留。
+
 ## 从零到编译：5 步
 
 以下 `<副本>` 替换为你的 SDK 副本根目录，例如 `D:\work\KC536_copy`。

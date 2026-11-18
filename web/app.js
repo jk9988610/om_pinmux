@@ -358,6 +358,7 @@ document.addEventListener("DOMContentLoaded", init);
   var currentSelectedRole = null;
   var currentAssignments = {};
   var lastPinmap = null;
+  var pluginState = { plugins: [], enabled: [] };
 
   function ensureUI() {
     if (document.getElementById("roles-panel")) return;
@@ -412,9 +413,20 @@ document.addEventListener("DOMContentLoaded", init);
       packageRows = pinmap.package || [];
       internalRows = pinmap.internal || [];
 
-      // 关键：用芯片全量能力表，不依赖工程里已声明的角色
+      // 关键：用插件过滤后的角色表 —— 未启用插件的专属角色（如 LEDC）不显示
       var caps = await window.pywebview.api.role_capabilities();
       var rolesMap = (caps && caps.roles) || {};
+      if (window.pywebview.api.plugin_status) {
+        var pst = await window.pywebview.api.plugin_status(sdk);
+        if (pst && pst.ok) {
+          rolesMap = pst.roles || rolesMap;
+          pluginState = { plugins: pst.plugins || [], enabled: pst.enabled || [] };
+          demandGroups = pst.demand_groups || [];
+        }
+      } else {
+        demandGroups = (caps && caps.demand_groups) || [];
+        pluginState = { plugins: [], enabled: [] };
+      }
 
       roleAllowedMap = {};
       roleMetaMap = {};
@@ -422,7 +434,6 @@ document.addEventListener("DOMContentLoaded", init);
         roleAllowedMap[mac] = new Set(rolesMap[mac].allowed_pins || []);
         roleMetaMap[mac] = rolesMap[mac];
       }
-      demandGroups = (caps && caps.demand_groups) || [];
 
       // 当前已分配：从 package 的 assigned 拿
       currentAssignments = {};
@@ -470,6 +481,34 @@ document.addEventListener("DOMContentLoaded", init);
     return null;
   }
 
+  async function onPluginToggle(pluginId, enable, box) {
+    var hint = document.getElementById("roles-hint");
+    if (!lastPinmap || !lastPinmap.sdk) { alert("请先在顶部填 SDK 路径并打开配脚面板"); box.checked = !enable; return; }
+    if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.plugin_toggle) {
+      alert("当前后端不支持插件（需更新 omcfg/api.py）"); box.checked = !enable; return;
+    }
+    box.disabled = true;
+    if (hint) hint.textContent = (enable ? "启用" : "停用") + "插件中...";
+    try {
+      var r = await window.pywebview.api.plugin_toggle(lastPinmap.sdk, pluginId, enable);
+      if (!r.ok) { alert("插件切换失败: " + (r.error || "未知")); box.checked = !enable; box.disabled = false; return; }
+      if (hint) hint.textContent = r.message || "插件已更新";
+      // 插件改变了角色表和文件，重新加载面板（脚位分配也从工程重读）
+      await togglePanelReload();
+    } catch (e) {
+      alert("插件切换出错: " + e); box.checked = !enable; box.disabled = false;
+    }
+  }
+
+  async function togglePanelReload() {
+    // 强制重新走一次加载（面板当前是打开的）
+    var panel = document.getElementById("roles-panel");
+    var wasVisible = panel && panel.style.display !== "none";
+    if (panel) panel.style.display = "none";
+    await togglePanel();
+    if (panel && wasVisible) panel.style.display = "block";
+  }
+
   function renderDemandGroups() {
     if (typeof demandGroups === "undefined" || !demandGroups) { demandGroups = []; }
     var el = document.getElementById("demand-groups");
@@ -494,11 +533,37 @@ document.addEventListener("DOMContentLoaded", init);
           if (currentAssignments[p] === mac) { configured++; break; }
         }
       }
+      // 找到该需求组对应的插件（按 require_group 匹配）；有插件就显示勾选框
+      var plugin = null;
+      for (var pi = 0; pi < pluginState.plugins.length; pi++) {
+        if (pluginState.plugins[pi].require_group === g.id) { plugin = pluginState.plugins[pi]; break; }
+      }
       var card = document.createElement("div");
       card.style.cssText = "margin-bottom:6px;border:1px solid #ddd;border-radius:4px;background:white;color:#222";
       var head = document.createElement("div");
-      head.style.cssText = "padding:6px 8px;cursor:pointer;font-size:12px;background:#eef4fa;color:#222;font-weight:bold;border-radius:4px 4px 0 0";
-      head.textContent = "▶ " + g.display_name + " " + configured + "/" + macs.length;
+      head.style.cssText = "padding:6px 8px;font-size:12px;background:#eef4fa;color:#222;border-radius:4px 4px 0 0;display:flex;align-items:center";
+      if (plugin) {
+        var cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = plugin.enabled;
+        cb.id = "plugin-cb-" + plugin.id;
+        cb.style.cssText = "margin-right:6px;cursor:pointer";
+        cb.title = plugin.note || "";
+        cb.addEventListener("change", (function(pid, box) { return function() { onPluginToggle(pid, box.checked, box); }; })(plugin.id, cb));
+        cb.addEventListener("click", function(ev) { ev.stopPropagation(); });
+        head.appendChild(cb);
+        var plabel = document.createElement("span");
+        plabel.style.cssText = "font-weight:bold;flex:1";
+        plabel.textContent = g.display_name + " " + configured + "/" + macs.length;
+        head.appendChild(plabel);
+        var ptag = document.createElement("span");
+        ptag.style.cssText = "font-size:10px;color:" + (plugin.enabled ? "#2e7d32" : "#999");
+        ptag.textContent = plugin.enabled ? "已启用" : "插件";
+        head.appendChild(ptag);
+      } else {
+        head.style.cursor = "pointer";
+        head.textContent = "▶ " + g.display_name + " " + configured + "/" + macs.length;
+      }
       var body = document.createElement("div");
       body.style.cssText = "display:none;padding:4px 8px;color:#222";
       for (var k = 0; k < macs.length; k++) {
@@ -558,12 +623,6 @@ document.addEventListener("DOMContentLoaded", init);
       items.sort();
       for (var i = 0; i < items.length; i++) {
         var _roleBtn = makeRoleButton(items[i]);
-        if (typeof isLedcRole === "function" && isLedcRole(items[i])
-            && typeof shouldBlockLedc === "function" && shouldBlockLedc()) {
-          _roleBtn.disabled = true;
-          _roleBtn.textContent = _roleBtn.textContent + "（未启用）";
-          _roleBtn.title = "需重新准备工作区并勾选「灯带」";
-        }
         el.appendChild(_roleBtn);
       }
     }
@@ -673,24 +732,8 @@ document.addEventListener("DOMContentLoaded", init);
     el.appendChild(legend);
   }
 
-  function isLedcRole(r) {
-    if (!r) return false;
-    return /^ledc\./i.test(r) || /^LEDC_/i.test(r);
-  }
-
-  function shouldBlockLedc() {
-    var _wz = window.__omWizardState;
-    if (!_wz) return false;
-    if (!_wz.prepared) return false;
-    return !_wz.ledcPrepared;
-  }
-
   function onPinClick(pin) {
     if (!currentSelectedRole) return;
-    if (isLedcRole(currentSelectedRole) && typeof shouldBlockLedc === "function" && shouldBlockLedc()) {
-      alert("需要重新准备工作区并勾选「灯带」");
-      return;
-    }
     var cur = currentAssignments[pin];
     if (cur === currentSelectedRole) {
       if (!confirm("取消 " + pin + " 上的 " + currentSelectedRole + "?")) return;

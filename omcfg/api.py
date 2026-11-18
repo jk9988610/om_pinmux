@@ -14,6 +14,7 @@ from . import (
     model,
     newproject,
     pinmap,
+    plugins,
     rules,
     validate,
 )
@@ -869,6 +870,7 @@ class Api:
                     "polarity": sorted(model.GPIO_INITS),
                 },
                 "board_defaults": board,
+                "plugins": plugins.available_plugins(),
             }
         except Exception as exc:
             return _error(str(exc), "确认 omcfg/data/options.json 存在")
@@ -1139,3 +1141,33 @@ class Api:
             return self.apply(sdk_path)
         except Exception as exc:
             return _error(str(exc), "确认 sdk 指向工程根目录")
+
+    def plugin_status(self, sdk_path: str) -> dict:
+        """插件启用状态 + 当前工程可见角色（按插件过滤）。"""
+        try:
+            root = sdk.resolve_sdk(sdk_path)
+            config = model.load_config(model.default_config_path(root))
+            st = plugins.status(root, config)
+            caps = self.role_capabilities()
+            st["roles"] = plugins.visible_roles(config, caps.get("roles", {}))
+            st["demand_groups"] = caps.get("demand_groups", [])
+            st["ok"] = True
+            return st
+        except Exception as exc:
+            return _error(str(exc), "确认 sdk 指向工程根目录")
+
+    def plugin_toggle(self, sdk_path: str, plugin_id: str, enable: bool = True) -> dict:
+        """勾选/取消插件：改 board + 腾脚 + 注入/移除文件。"""
+        try:
+            root = sdk.resolve_sdk(sdk_path)
+            result = plugins.enable(root, plugin_id) if enable else plugins.disable(root, plugin_id)
+            if not result.get("ok"):
+                return result
+            # 插件变更后刷新状态与校验
+            config = model.load_config(model.default_config_path(root))
+            result["status"] = plugins.status(root, config)
+            result["roles"] = plugins.visible_roles(config, self.role_capabilities().get("roles", {}))
+            result["build_status"] = blank.summary(config)
+            return result
+        except Exception as exc:
+            return _error(str(exc), "确认工程已初始化")

@@ -1,0 +1,30 @@
+{
+  "schema": "om6239-plugins/v1",
+  "note": "可拔插功能插件契约。勾选 = 改 board 选项 + 注入文件 + 解锁角色 + 带来约束。display/require_group 用 role_catalog 的 id；files 从 omcfg/templates/<plugin>/ 注入（内置、自包含）。",
+  "plugins": {
+    "ledc": {
+      "display_name": "灯带 LEDC",
+      "require_group": "ledc.strip",
+      "board_effect": {"logo": "ledc"},
+      "board_effect_off": {"logo": "rgb"},
+      "files": [
+        "ledc.c",
+        "ledc.h",
+        "ledc_mode.c",
+        "ledc_mode.h"
+      ],
+      "roles": ["LEDC_PIN", "LEDC_CTRL_PIN"],
+      "required_roles": ["LEDC_PIN"],
+      "pair_with": [["LEDC_PIN", "LEDC_CTRL_PIN"]],
+      "unlock_roles": ["LEDC_PIN", "LEDC_CTRL_PIN"],
+      "auto_reassign": [
+        {"role": "LED_MODE_B_PIN", "from": "P01", "to": "P36"}
+      ],
+      "keep_roles": ["LED_R_PIN", "LED_G_PIN", "LED_B_PIN"],
+      "uvprojx_group": "periph",
+      "source": "omcfg/templates/ledc",
+      "depends_on": [],
+      "note": "DIN(LEDC_PIN) 仅 P01/P05 两个合法脚，与模式灯 B/P01、RGB G/P05 冲突；勾选时把 LED_MODE_B 腾到 P36。KC536 的 led.c/user_config.c 无条件引用 LED_R/G/B，灯带模式下保留这三个脚并由生成器继续输出宏。模板 ledc.h 自带 GPIO_SET/CLEAR 大小写兼容。"
+    }
+  }
+}
