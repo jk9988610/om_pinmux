@@ -28,6 +28,7 @@ var PIN_ROWS = [
 ];
 var TIERS = ["硬约束 (1 脚)", "窄约束 (2–4 脚)", "中约束 (5–10 脚)", "宽约束 (11–23 脚)", "无约束 (24 脚，全 GPIO)"];
 var FORM_KEY = "om_pinmux.blankwiz";
+var RECENT_KEY = "om_pinmux.recent";
 
 var S = {
   route: null, step: 1, maxDone: 0, view: "work",
@@ -40,7 +41,7 @@ var S = {
   assignments: {}, removedRoles: {}, protectedRoles: {},
   selectedRole: null, selectedGroup: null, focusPin: null,
   diff: null, previewed: false, applied: false, applyResult: null,
-  confirming: false, recent: [],
+  confirming: false, applying: false, recent: [],
   busy: false, dirty: false, lastConfig: ""
 };
 
@@ -138,9 +139,7 @@ function healthView() {
 /* ==================== 数据加载 ==================== */
 async function loadWorkspace(sdk) {
   S.sdk = sdk || "";
-  if (S.sdk) {
-    try { localStorage.setItem("omcfg.sdk", S.sdk); } catch (e) {}
-  }
+  if (S.sdk) pushRecent(S.sdk);
   var data = await call("load", S.sdk);
   if (!data) return false;
   if (data.needs_init) {
@@ -204,6 +203,38 @@ async function initOptions() {
   loadFormCache();
 }
 
+function jsAttr(s) { return esc(s).replace(/\\/g, "\\\\").replace(/'/g, "\\'"); }
+function loadRecent() {
+  var list = [];
+  try {
+    var raw = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]");
+    if (Array.isArray(raw)) list = raw.filter(function(x) { return typeof x === "string" && x; });
+  } catch (e) {}
+  var old = "";
+  try { old = localStorage.getItem("omcfg.sdk") || ""; } catch (e) {}
+  if (old && list.indexOf(old) < 0) list.unshift(old);
+  S.recent = list.slice(0, 5);
+  return S.recent;
+}
+function pushRecent(sdk) {
+  if (!sdk) return;
+  var list = loadRecent().filter(function(x) { return x !== sdk; });
+  list.unshift(sdk);
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, 5))); } catch (e) {}
+  try { localStorage.setItem("omcfg.sdk", sdk); } catch (e) {}
+  S.recent = list.slice(0, 5);
+}
+function removeRecent(sdk) {
+  var old = "";
+  try { old = localStorage.getItem("omcfg.sdk") || ""; } catch (e) {}
+  if (old === sdk) { try { localStorage.removeItem("omcfg.sdk"); } catch (e) {} }
+  var list = loadRecent().filter(function(x) { return x !== sdk; });
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify(list)); } catch (e) {}
+  S.recent = list;
+  renderRecent();
+  if (S.route === "open" && S.step === 1) renderMain();
+  toast("已从最近工程移除");
+}
 function loadFormCache() {
   try {
     var s = JSON.parse(localStorage.getItem(FORM_KEY) || "{}");
@@ -343,9 +374,14 @@ function renderAction() {
   var btn = $("btn-next");
   btn.onclick = nextStep;
   btn.textContent = S.route === "new" ? labelsNew[S.step - 1] : labelsOpen[S.step - 1];
-  btn.disabled = !!g || S.busy;
-  $("cta-sub").textContent = g ? "" : (last ? "确认后写入文件，可用 manifest 回滚" : st[Math.min(S.step, st.length - 1)].t + " 完成后进入下一步");
-  $("gate-wrap").innerHTML = g ? '<div class="gate-msg">⚠ ' + esc(g) + '</div>' : "";
+  var waiting = last && S.confirming;
+  btn.disabled = !!g || S.busy || waiting;
+  if (waiting) btn.textContent = "等待确认…";
+  $("cta-sub").textContent = waiting ? "已到写盘步骤，请在上方确认" : (g ? "" :
+    (last ? "确认后写入文件，可用 manifest 回滚" : st[Math.min(S.step, st.length - 1)].t + " 完成后进入下一步"));
+  $("gate-wrap").innerHTML = waiting
+    ? '<div class="gate-msg">⚠ 请在上方确认条点「确认写入」或「取消」</div>'
+    : (g ? '<div class="gate-msg">⚠ ' + esc(g) + '</div>' : "");
 }
 
 /* ==================== 步骤视图 ==================== */
@@ -397,14 +433,8 @@ function viewOpenSdk() {
     '<div class="row gap10 wrap mb-sm">' +
     '<button class="btn primary sm" onclick="initExisting()">打开工程 →</button>' +
     '<span class="muted tiny">当前：' + esc(S.sdk || "（未选择）") + '</span></div>';
-  var saved = "";
-  try { saved = localStorage.getItem("omcfg.sdk") || ""; } catch (e) {}
-  if (saved) {
-    var name = saved.split(/[\\/]/).filter(Boolean).pop() || saved;
-    s += '<div class="recent-row"><button class="recent-item" onclick="openRecent(\'' + esc(saved) + '\')">' +
-      '<span class="dot"></span><span><b>' + esc(name) + '</b><br><span class="tiny mono">' + esc(saved) + '</span></span></button></div>';
-  }
-  s += '<div class="section-title"><span class="n">2</span>初始化引导（仅当缺 OMCFG 标记时出现）</div>';
+  s += '<div class="section-title"><span class="n">2</span>最近工程</div><div class="recent-row">' + recentChips() + '</div>';
+  s += '<div class="section-title"><span class="n">3</span>初始化引导（仅当缺 OMCFG 标记时出现）</div>';
   if (S.needsInit) {
     var ni = S.needsInit;
     var opts = (ni.configs || []).map(function(c) {
@@ -783,14 +813,27 @@ function diffBlock() {
   h += '</div><pre class="diff">' + escDiff(S.diff) + '</pre>';
   return h;
 }
+function hlDiffLine(line) {
+  // 先分段着色再逐段转义，避免 HTML 注入；注释优先，其次字符串 / 预处理指令 / 脚号 / 数字
+  var re = /(\/\/.*$)|("(?:[^"\\]|\\.)*")|(#\s*(?:define|include|pragma|if|ifdef|ifndef|endif|else|elif))|(\bP\d{2}\b)|(\b\d+\b)/g;
+  var out = "", last = 0, m;
+  while ((m = re.exec(line)) !== null) {
+    out += esc(line.slice(last, m.index));
+    var cls = m[1] ? "syn-com" : m[2] ? "syn-str" : m[3] ? "syn-kw" : "syn-num";
+    out += '<span class="' + cls + '">' + esc(m[0]) + '</span>';
+    last = re.lastIndex;
+  }
+  return out + esc(line.slice(last));
+}
 function escDiff(d) {
   var out = "";
   (d.diffs || []).forEach(function(item) {
-    out += "--- " + esc(item.path || "") + "\n";
+    out += '<span class="meta">--- ' + esc(item.path || "") + '</span>\n';
     var lines = String(item.diff || "无内容变化").split("\n");
     lines.forEach(function(line) {
       var cls = /^\+/.test(line) ? "add" : (/^-/.test(line) ? "del" : "");
-      out += cls ? '<span class="' + cls + '">' + esc(line) + '</span>\n' : esc(line) + '\n';
+      var body = hlDiffLine(line);
+      out += cls ? '<span class="' + cls + '">' + body + '</span>\n' : body + '\n';
     });
   });
   return out || "没有文件变化";
@@ -850,25 +893,39 @@ async function doPreview() {
   render();
   toast("预览完成：" + (r.changed || 0) + " 个文件待写入（未写盘）");
 }
+function confirmBlock() {
+  if (!S.confirming) return "";
+  return '<div class="confirm-bar"><div class="cb-tx"><b>⚠ 最后确认</b>' +
+    '<p>将写入 <span class="mono">' + diffFiles().length + ' 个文件</span>到 <span class="mono">' + esc(S.sdk) + '</span>。' +
+    '写入走事务：先备份再落盘，失败自动回滚，成功后可用 manifest 回到写之前的状态。</p></div>' +
+    '<div class="cb-acts"><button class="btn sm" onclick="cancelApply()">取消</button>' +
+    '<button class="btn sm primary" onclick="doApply()">确认写入</button></div></div>';
+}
+function cancelApply() { S.confirming = false; render(); toast("已取消写入"); }
 function viewApply() {
   var h = healthView();
-  return '<div class="summary-box"><h4>写入前确认</h4>' +
+  var s = '<div class="summary-box"><h4>写入前确认</h4>' +
     '<div class="summary-row"><span class="k">工程</span><b>' + esc(S.route === "new" ? S.form.name : S.sdk) + '</b></div>' +
     '<div class="summary-row"><span class="k">已配脚</span><b>' + h.assigned + ' / ' + h.total + '</b></div>' +
     '<div class="summary-row"><span class="k">缺必需 / 冲突</span><b class="' + (h.complete ? "ok" : "err") + '">' + h.missingCount + ' / ' + h.conflicts + '</b></div>' +
     '<div class="summary-row"><span class="k">功能插件</span><b>' + ((S.pluginState.enabled || []).indexOf("ledc") >= 0 ? "灯带 LEDC" : "无") + '</b></div>' +
     '<div class="summary-row"><span class="k">将变更文件</span><b>' + diffFiles().length + ' 个</b></div>' +
     '<div class="summary-row"><span class="k">安全网</span><b class="mono">.omcfg_bak_* / manifest.json</b></div></div>' +
-    '<div class="info-strip"><div class="i">!</div><p>点击底部「' + (S.route === "new" ? "生成工程（写盘）" : "应用改动（写盘）") + '」才真正写入。写入走事务：先备份再落盘，失败自动回滚；成功后可用 manifest 回到写之前的状态。<b>建议用 Keil 编译验证（预期 0 Error / 0 Warning）</b>。</p></div>';
+    '<div class="info-strip"><div class="i">!</div><p>点击底部「' + (S.route === "new" ? "生成工程（写盘）" : "应用改动（写盘）") + '」后出现确认条，<b>在确认条点「确认写入」才会写盘</b>。建议写完后用 Keil 编译验证（预期 0 Error / 0 Warning）。</p></div>';
+  return s + confirmBlock();
 }
 async function doApply() {
-  if (!window.confirm("确认按当前配置写入 user_config.h/.c 等文件？可用 manifest 回滚。")) return;
-  var method = S.route === "new" ? "blank_apply" : "apply";
-  var r = await call(method, S.sdk);
-  if (!r || !r.ok) { toast("应用失败：" + (r.error || "草稿未补齐") + (r.hint ? "；" + r.hint : ""), true); return; }
-  S.applied = true; S.applyResult = r; S.view = "success"; S.dirty = false;
-  render();
-  toast("应用成功：已写入 " + (r.changed || 0) + " 个文件");
+  if (!S.confirming) { S.confirming = true; render(); toast("请在上方确认条点「确认写入」"); return; }
+  if (S.applying) return;
+  S.applying = true;
+  try {
+    var method = S.route === "new" ? "blank_apply" : "apply";
+    var r = await call(method, S.sdk);
+    if (!r || !r.ok) { toast("应用失败：" + (r.error || "草稿未补齐") + (r.hint ? "；" + r.hint : ""), true); return; }
+    S.applied = true; S.applyResult = r; S.view = "success"; S.dirty = false; S.confirming = false;
+    render();
+    toast("应用成功：已写入 " + (r.changed || 0) + " 个文件");
+  } finally { S.applying = false; }
 }
 
 /* ==================== 步骤流转 ==================== */
@@ -931,13 +988,13 @@ async function nextStep() {
 function prevStep() {
   if (S.step <= 1) return;
   S.step--;
-  S.previewed = false;
+  S.previewed = false; S.confirming = false;
   render();
 }
 function saveDraft() { toast("草稿已保存（blank_save / save_pinmap 由「保存到工程」执行）"); }
 function gotoStep(n) {
   if (n > S.maxDone + 1) { toast("请先完成前面的步骤"); return; }
-  S.step = n; S.view = "work"; render();
+  S.step = n; S.view = "work"; S.confirming = false; render();
 }
 function startRoute(route) {
   S.route = route; S.step = 1; S.maxDone = 0; S.view = "work";
@@ -946,6 +1003,7 @@ function startRoute(route) {
   S.assignments = {}; S.removedRoles = {}; S.protectedRoles = {};
   S.selectedRole = null; S.selectedGroup = null;
   S.diff = null; S.previewed = false; S.applied = false; S.applyResult = null;
+  S.confirming = false; S.applying = false; S.focusPin = null;
   S.dirty = false; S.busy = false;
   $("start").classList.add("hidden");
   $("workbench").classList.remove("hidden");
@@ -967,18 +1025,21 @@ function openRecent(sdk) {
   if ($("sdk")) $("sdk").value = sdk;
   initExisting();
 }
+function recentChips() {
+  var list = S.recent.length ? S.recent : loadRecent();
+  if (!list.length) return '<span class="muted recent-empty">打开或新建工程后，这里会显示最近路径</span>';
+  var h = "";
+  list.forEach(function(sdk) {
+    var name = sdk.split(/[\\/]/).filter(Boolean).pop() || sdk;
+    h += '<span class="recent-chip"><button class="recent-item" onclick="openRecent(\'' + jsAttr(sdk) + '\')">' +
+      '<span class="dot"></span><span><b>' + esc(name) + '</b><br><span class="tiny mono">' + esc(sdk) + '</span></span></button>' +
+      '<button class="recent-del" title="从最近列表移除" onclick="removeRecent(\'' + jsAttr(sdk) + '\')">×</button></span>';
+  });
+  return h;
+}
 function renderRecent() {
   var el = $("recent-list");
-  if (!el) return;
-  var saved = "";
-  try { saved = localStorage.getItem("omcfg.sdk") || ""; } catch (e) {}
-  if (!saved) {
-    el.innerHTML = '<span class="muted recent-empty">打开或新建工程后，这里会显示最近路径</span>';
-    return;
-  }
-  var name = saved.split(/[\\/]/).filter(Boolean).pop() || saved;
-  el.innerHTML = '<button class="recent-item" onclick="openRecent(\'' + esc(saved).replace(/'/g, "\\'") + '\')">' +
-    '<span class="dot"></span><span><b>' + esc(name) + '</b><br><span class="tiny mono">' + esc(saved) + '</span></span></button>';
+  if (el) el.innerHTML = recentChips();
 }
 function renderSuccess() {
   var r = S.applyResult || {};
@@ -1017,8 +1078,22 @@ function init() {
     sdk.addEventListener("change", function() { S.sdk = sdk.value.trim(); });
   }
   document.addEventListener("keydown", function(e) {
-    if (e.key === "Escape" && !$("modal").classList.contains("hidden")) hideHelp();
+    var modalOpen = !$("modal").classList.contains("hidden");
+    if (e.key === "Escape") {
+      if (modalOpen) { hideHelp(); return; }
+      if (S.confirming) { cancelApply(); return; }
+    }
+    if (e.key === "?" || (e.key === "/" && e.shiftKey)) { showHelp(); return; }
+    if (modalOpen) return;
+    if (e.ctrlKey || e.metaKey) {
+      var k = e.key.toLowerCase();
+      if (k === "s") { e.preventDefault(); savePins(); return; }
+      if (k === "p") { e.preventDefault(); doPreview(); return; }
+    }
+    if (e.altKey && e.key === "ArrowRight") { e.preventDefault(); nextStep(); return; }
+    if (e.altKey && e.key === "ArrowLeft") { e.preventDefault(); prevStep(); }
   });
+  loadRecent();
   renderRecent();
 }
 window.addEventListener("pywebviewready", init);

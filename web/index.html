@@ -100,6 +100,7 @@
     <p>它们是<b>同一批角色的三种视图</b>，不是父子关系，也不是包含关系。角色清单来自 <span class="mono">options.json</span>；需求组按「我要什么功能」用 <span class="mono">role_id</span> 分组，约束栏按「芯片允许这个功能落在几只脚上」用 <span class="mono">allowed_pins</span> 数量自动分档，脚位图只是把这批角色摆到 32 个物理位置上。</p>
     <div class="chain"><span>需求组<br><span class="tiny">按功能分组</span></span><i>→ 同一批角色 →</i><span>约束栏<br><span class="tiny">按合法脚数分档</span></span><i>→ 同一批角色 →</i><span>脚位图<br><span class="tiny">按物理位置</span></span></div>
     <p>所以选中其中一个视图，另外两处会<b>同步高亮同一批角色</b>：点需求组 → 约束栏筛出该组角色、脚位图高亮它们的合法脚；点某个角色 → 脚位图只高亮这只角色能用的脚。</p>
+    <p class="tiny">快捷键：<span class="mono">Alt+←/→</span> 切换步骤 · <span class="mono">Ctrl/⌘+S</span> 保存脚位 · <span class="mono">Ctrl/⌘+P</span> 生成预览 · <span class="mono">Esc</span> 关闭弹窗 / 取消写入 · <span class="mono">?</span> 打开本说明</p>
     <div class="modal-foot"><button class="btn" onclick="hideHelp()">关闭</button></div>
   </div>
 </div>

@@ -288,6 +288,21 @@ pre.diff .add { color:#7fd88f; } pre.diff .del { color:#f08a8a; } pre.diff .meta
 .legend i.lconflict { background:var(--pin-conflict); }
 .legend i.lillegal { background:var(--pin-illegal); }
 
+/* ---------- 交互补充（P2） ---------- */
+.confirm-bar { display:flex; align-items:center; gap:14px; padding:14px 16px; margin-top:18px; border:1px solid var(--warn); border-left:3px solid var(--warn); background:var(--warn-weak); border-radius:8px; max-width:760px; }
+.confirm-bar .cb-tx { flex:1; }
+.confirm-bar b { font-size:13px; color:var(--warn); }
+.confirm-bar p { margin:3px 0 0; font-size:11.5px; color:var(--text-2); line-height:1.6; }
+.confirm-bar .cb-acts { display:flex; gap:8px; flex:none; }
+.recent-chip { display:inline-flex; align-items:center; border:1px solid var(--line); border-radius:7px; background:var(--surface); }
+.recent-chip .recent-item { border:0; background:transparent; }
+.recent-del { border:0; background:transparent; color:var(--text-3); font-size:15px; padding:4px 8px; }
+.recent-del:hover { color:var(--err); }
+pre.diff .syn-com { color:#7a8ba6; font-style:italic; }
+pre.diff .syn-str { color:#e5c07b; }
+pre.diff .syn-kw { color:#c678dd; font-weight:600; }
+pre.diff .syn-num { color:#d19a66; }
+
 /* ---------- toast / modal ---------- */
 #toast { position:fixed; bottom:74px; left:50%; transform:translateX(-50%) translateY(12px); background:var(--text); color:var(--bg); padding:9px 16px; border-radius:7px; font-size:12px; opacity:0; pointer-events:none; transition:.22s; z-index:60; box-shadow:var(--shadow); max-width:80vw; text-align:center; }
 #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
