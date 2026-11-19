@@ -38,8 +38,9 @@ var S = {
   board: {}, boardChoice: {}, health: null,
   form: { name: "", id: "", customer: "BYC", version: "1", out: "" },
   assignments: {}, removedRoles: {}, protectedRoles: {},
-  selectedRole: null, selectedGroup: null,
+  selectedRole: null, selectedGroup: null, focusPin: null,
   diff: null, previewed: false, applied: false, applyResult: null,
+  confirming: false, recent: [],
   busy: false, dirty: false, lastConfig: ""
 };
 
@@ -265,11 +266,19 @@ function renderAside() {
   s += '<div class="hrow link" onclick="jumpToPin()"><span class="k">缺必需</span><span class="v ' + (h.missingCount ? "warn" : "ok") + '">' + h.missingCount + '</span></div>';
   s += '<div class="hrow"><span class="k">脚位冲突</span><span class="v ' + (h.conflicts ? "err" : "ok") + '">' + h.conflicts + '</span></div>';
   s += '<div class="hrow"><span class="k">校验错误</span><span class="v ' + (h.errors ? "err" : "ok") + '">' + h.errors + '</span></div>';
-  s += '<div class="health-div"></div><div class="tiny" style="margin-bottom:6px;font-weight:700">功能插件</div>';
-  var ledcOn = (S.pluginState.enabled || []).indexOf("ledc") >= 0;
-  s += '<div class="plugin-mini ' + (ledcOn ? "" : "off") + '"><span class="bullet"></span>灯带 LEDC · ' + (ledcOn ? "已启用 (+2 角色)" : "未启用") + '</div>';
+  s += '<div class="health-div"></div><div class="aside-lbl">功能插件</div>';
+  var enabledPlugins = S.pluginState.enabled || [];
+  if (!(S.pluginState.plugins || []).length) {
+    s += '<div class="plugin-mini off"><span class="bullet"></span>无可用插件</div>';
+  }
+  (S.pluginState.plugins || []).forEach(function(p) {
+    var on = enabledPlugins.indexOf(p.id) >= 0;
+    var n = (p.unlock_roles || p.roles || []).length;
+    s += '<div class="plugin-mini ' + (on ? "" : "off") + '"><span class="bullet"></span>' +
+      esc(p.display_name || p.id) + ' · ' + (on ? "已启用 (+" + n + " 角色)" : "未启用") + '</div>';
+  });
   s += '<div class="gen-box ' + (h.complete ? "ok" : "") + '"><div class="l">可生成</div>' +
-    '<div class="g" style="color:' + (h.complete ? "var(--ok)" : "var(--warn)") + '">' + (h.complete ? "是" : "否") + '</div>' +
+    '<div class="g ' + (h.complete ? "ok" : "warn") + '">' + (h.complete ? "是" : "否") + '</div>' +
     '<div class="hint">' + (h.complete ? "必需脚齐全、无冲突，可进入「校验与预览」。" : "补齐 " + h.missingCount + " 个必需脚后即可进入「校验与预览」。") + '</div></div>';
   var help = helpForStep();
   s += '<div class="help-box"><h5>' + esc(help[0]) + '</h5><p>' + esc(help[1]) + '</p></div>';
@@ -385,7 +394,7 @@ function field(label, key, ph, hint, full) {
 function viewOpenSdk() {
   var s = '<div class="info-strip"><div class="i">i</div><p><b>在顶部「SDK」输入框填入工程根目录并按回车</b>，或点下方「打开工程」按钮。工具读取 <span class="mono">projects/mouse_demo/project.omcfg</span>，配置随工程走。</p></div>';
   s += '<div class="section-title"><span class="n">1</span>打开工程</div>' +
-    '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:6px">' +
+    '<div class="row gap10 wrap mb-sm">' +
     '<button class="btn primary sm" onclick="initExisting()">打开工程 →</button>' +
     '<span class="muted tiny">当前：' + esc(S.sdk || "（未选择）") + '</span></div>';
   var saved = "";
@@ -405,10 +414,10 @@ function viewOpenSdk() {
       '<b>未检测到 OMCFG / USER CODE 标记块</b>' +
       '<p>' + esc(ni.hint || "选择一份配置初始化，或从工程现状推导初稿。") +
       (ni.missing && ni.missing.length ? '<br>缺少：' + esc(ni.missing.join("、")) : '') + '</p>' +
-      '<div class="input-row" style="margin-top:9px;max-width:540px">' +
+      '<div class="input-row mt-sm maxw540">' +
       '<input id="f-config" list="cfg-options" value="' + esc(ni.prefill || "") + '" placeholder="configs\\KC536.omcfg">' +
       '<datalist id="cfg-options">' + opts + '</datalist></div>' +
-      '<div style="margin-top:9px;display:flex;gap:8px;flex-wrap:wrap">' +
+      '<div class="row gap8 wrap mt-sm">' +
       '<button class="btn sm primary" onclick="doInitialize(document.getElementById(\'f-config\').value.trim())">初始化</button>' +
       '<button class="btn sm" onclick="doInitializeDerived()">从工程现状生成配置</button></div></div></div>';
   } else if (S.sdk) {
@@ -509,21 +518,27 @@ function viewPlugin() {
     '<div class="info-strip"><div class="i">i</div><p>插件状态写进 <span class="mono">project.plugins</span>，随工程持久化。所有行为由 <span class="mono">plugins.json</span> 数据驱动，新增插件无需改 UI。</p></div>';
   return s;
 }
-async function togglePlugin() {
+async function togglePlugin(id) {
+  id = id || "ledc";
   if (!S.sdk) { toast("请先完成项目身份", true); return; }
-  var on = (S.pluginState.enabled || []).indexOf("ledc") >= 0;
-  var r = await call("plugin_toggle", S.sdk, "ledc", !on);
+  var on = (S.pluginState.enabled || []).indexOf(id) >= 0;
+  var r = await call("plugin_toggle", S.sdk, id, !on);
   if (!r || !r.ok) { toast("插件切换失败：" + ((r && r.error) || "未知"), true); return; }
   await loadWorkspace(S.sdk);
+  var p = findPlugin(id);
+  // 启用后自动选中该需求组，解锁的角色立刻可见；停用则清除相关选择
+  if (!on && p && p.require_group) { S.selectedGroup = p.require_group; S.selectedRole = null; }
+  if (on) { S.selectedGroup = null; S.selectedRole = null; }
+  S.focusPin = null;
   render();
-  toast(r.message || ("插件已" + (on ? "停用" : "启用")));
+  toast((p ? (p.display_name || id) : id) + " 已" + (on ? "停用" : "启用"));
 }
 
 /* ---- 三视图工作区 ---- */
 function viewPins() {
   var h = '<div class="concept"><b>需求组、约束栏、脚位图是同一批角色的三种视图</b>，不是包含关系：' +
     '<div class="chain"><span>需求组 · 按功能分组</span><i>同一批角色</i><span>约束栏 · 按合法脚数分档</span><i>同一批角色</i><span>脚位图 · 按物理位置</span></div>' +
-    '选中其一，另外两处同步高亮。<button class="btn sm ghost" onclick="showHelp()" style="margin-left:6px">? 详细</button></div>';
+    '选中其一，另外两处同步高亮。<button class="btn sm ghost ml-6" onclick="showHelp()">? 详细</button></div>';
   h += '<div class="ctxbar">' + (S.selectedRole
       ? '<span>当前正在配：<b>' + esc(roleName(S.selectedRole)) + '</b></span><span class="tag info mono">' + esc(S.selectedRole) + '</span>' +
         '<span class="muted">合法 ' + (roleMeta(S.selectedRole).allowed_pins || []).length + ' 脚 · 推荐 ' + esc(roleMeta(S.selectedRole).suggested_pin || "—") + '</span>'
@@ -550,20 +565,36 @@ function groupMacs(g) {
   });
   return out;
 }
+function findPlugin(id) {
+  var found = null;
+  (S.pluginState.plugins || []).forEach(function(p) { if (p.id === id) found = p; });
+  return found;
+}
+function findPluginByGroup(gid) {
+  var found = null;
+  (S.pluginState.plugins || []).forEach(function(p) { if (p.require_group === gid) found = p; });
+  return found;
+}
 function colGroups() {
   var s = '<div class="tri-col"><div class="tri-h"><b>① 需求组</b><span>按功能 · ' + (S.caps.demand_groups || []).length + ' 组</span></div><div class="tri-b">';
   var enabled = S.pluginState.enabled || [];
   (S.caps.demand_groups || []).forEach(function(g) {
-    var plug = null;
-    (S.pluginState.plugins || []).forEach(function(p) { if (p.require_group === g.id) plug = p; });
-    if (plug && enabled.indexOf(plug.id) < 0) return;
-    var macs = groupMacs(g).filter(function(m) { return roleMeta(m).v1 !== false; });
+    var plug = findPluginByGroup(g.id);
+    var plugOn = plug && enabled.indexOf(plug.id) >= 0;
+    var macs = groupMacs(g).filter(function(m) { return !!S.caps.roles[m] && roleMeta(m).v1 !== false; });
     var done = macs.filter(function(m) { return !!pinOfRole(m); }).length;
-    s += '<button class="grp ' + (S.selectedGroup === g.id ? "on" : "") + '" onclick="selGroup(\'' + g.id + '\')">' +
-      '<div class="r1"><b>' + esc(g.display_name) + '</b><span class="tag ' + (done === macs.length ? "ok" : "neutral") + '">' + done + '/' + macs.length + '</span></div>' +
-      '<div class="r2">' + esc(g.note || "") + (plug ? ' · 插件' : '') + '</div></button>';
+    var cls = "grp" + (S.selectedGroup === g.id ? " on" : "") + (plug && !plugOn ? " plug-off" : "");
+    s += '<div class="' + cls + '" role="button" tabindex="0" onclick="selGroup(\'' + g.id + '\')">' +
+      '<div class="r1"><b>' + esc(g.display_name) + '</b><span class="tag ' + (macs.length && done === macs.length ? "ok" : "neutral") + '">' + done + '/' + macs.length + '</span></div>' +
+      '<div class="r2">' + esc(g.note || "") + '</div>';
+    if (plug) {
+      s += '<div class="grp-plug-row"><span>' + (plugOn ? "插件已启用" : "插件未启用 · 勾选解锁") + '</span>' +
+        '<button class="mini-switch ' + (plugOn ? "on" : "") + '" title="在需求组直接切换插件" ' +
+        'onclick="event.stopPropagation();togglePlugin(\'' + plug.id + '\')">' + (plugOn ? "✓" : "+") + '</button></div>';
+    }
+    s += '</div>';
   });
-  s += '<div class="matrix-note" style="margin-top:10px">带「插件」的组由步骤 3 的开关控制；未启用时不显示其角色。</div></div></div>';
+  s += '<div class="matrix-note mt-md">带「插件」的组可直接在这里勾选，与步骤 3 的开关双向同步；取消会对称撤销新角色。</div></div></div>';
   return s;
 }
 function pinOfRole(mac) {
@@ -654,14 +685,15 @@ function colMatrix() {
         if (S.assignments[pin]) label = shortName(S.assignments[pin]);
         click = "onPinClick('" + pin + "')";
       }
-      s += '<button class="pin ' + st + '" onclick="' + (click || "void(0)") + '" title="' + esc(pin) + (label ? ' · ' + esc(label) : '') + '">' +
+      var focusCls = S.focusPin === pin ? " focus" : "";
+      s += '<button class="pin ' + st + focusCls + '" onclick="' + (click || "void(0)") + '" title="' + esc(pin) + (label ? ' · ' + esc(label) : '') + '">' +
         esc(pin) + (label ? '<small>' + esc(label) + '</small>' : '') + '</button>';
     });
   });
-  s += '</div><div class="legend"><span><i style="background:var(--pin-ok)"></i>可配</span>' +
-    '<span><i style="background:var(--pin-own)"></i>本角色已占</span>' +
-    '<span><i style="background:var(--pin-conflict)"></i>被其他角色占</span>' +
-    '<span><i style="background:var(--pin-illegal)"></i>不合法 / 保留</span></div>';
+  s += '</div><div class="legend"><span><i class="lok"></i>可配</span>' +
+    '<span><i class="lown"></i>本角色已占</span>' +
+    '<span><i class="lconflict"></i>被其他角色占</span>' +
+    '<span><i class="lillegal"></i>不合法 / 保留</span></div>';
   s += '<div class="matrix-note">' + (S.selectedRole
       ? '点击绿格把 <b>' + esc(S.selectedRole) + '</b> 分配到该脚；点深绿格取消，点黄格覆盖。'
       : (S.selectedGroup ? '高亮的是「' + esc(groupName(S.selectedGroup)) + '」全组角色的合法脚；再点中栏某角色可收窄到单角色。' : '先选组或角色，这里才会高亮可配范围 —— 避免盲点。')) + '</div></div></div>';
@@ -771,26 +803,41 @@ function viewValidate() {
     (h.missingDetail || []).forEach(function(m) {
       s += '<div class="issue err"><div class="ic">!</div><div class="tx"><b>缺必需角色：' + esc(m.role ? roleName(m.role) : m.role) + '</b>' +
         '<p><span class="mono">' + esc(m.role) + '</span> · 推荐 ' + esc(m.suggested || "—") + '。这个角色未分配脚位，生成会被阻断。</p></div>' +
-        '<button class="btn sm" onclick="fixRole(\'' + m.role + '\')">去修复 →</button></div>';
+        '<button class="btn sm" onclick="fixRole(\'' + m.role + '\',\'' + esc(m.suggested || "") + '\')">去修复 →</button></div>';
     });
-    if (h.conflicts) s += '<div class="issue err"><div class="ic">!</div><div class="tx"><b>存在 ' + h.conflicts + ' 处脚位冲突</b><p>同一只脚被分配给多个角色，请在脚位图里化解。</p></div><button class="btn sm" onclick="jumpToPin()">去修复 →</button></div>';
-    if (h.errors) s += '<div class="issue err"><div class="ic">!</div><div class="tx"><b>' + h.errors + ' 条校验错误</b><p>详见工程健康卡；修复后才能生成。</p></div></div>';
+    if (h.conflicts) s += '<div class="issue err"><div class="ic">!</div><div class="tx"><b>存在 ' + h.conflicts + ' 处脚位冲突</b><p>同一只脚被分配给多个角色，已在脚位图用黄色标出。</p></div><button class="btn sm" onclick="fixConflict()">去修复 →</button></div>';
+    if (h.errors) s += '<div class="issue err"><div class="ic">!</div><div class="tx"><b>' + h.errors + ' 条校验错误</b><p>由后端校验器给出，定位到首个关联角色后修复。</p></div><button class="btn sm" onclick="fixIssue()">去修复 →</button></div>';
     if (!(h.missingDetail || []).length && !h.conflicts && !h.errors) s += '<div class="empty-ok">✓ 0 error · 0 warning</div>';
   }
   s += '<div class="section-title"><span class="n">2</span>生成预览（不写盘）</div>' +
-    '<div style="display:flex;gap:10px;align-items:center;margin-bottom:12px"><button class="btn primary sm" onclick="doPreview()">生成预览</button>' +
+    '<div class="row gap10 mb-md"><button class="btn primary sm" onclick="doPreview()">生成预览</button>' +
     (S.previewed ? '<span class="tag ok">✓ 已预览</span>' : '<span class="muted tiny">点这里才会放行「下一步」</span>') + '</div>' + diffBlock();
   return s;
 }
 function viewPreview() {
-  return '<div style="display:flex;gap:10px;align-items:center;margin-bottom:12px"><button class="btn primary sm" onclick="doPreview()">生成预览</button>' +
+  return '<div class="row gap10 mb-md"><button class="btn primary sm" onclick="doPreview()">生成预览</button>' +
     (S.previewed ? '<span class="tag ok">✓ 已预览</span>' : '<span class="muted tiny">预览后才可进入应用</span>') + '</div>' + diffBlock();
 }
-function fixRole(mac) {
-  S.step = S.route === "new" ? 4 : 2;
-  S.selectedRole = mac; S.selectedGroup = null;
+function fixRole(mac, pin) {
+  var target = S.route === "new" ? 4 : 2;
+  S.step = target;
+  S.maxDone = Math.max(S.maxDone, target - 1);
+  S.selectedRole = mac || null; S.selectedGroup = null;
+  S.focusPin = pin || null; S.view = "work";
   render();
-  toast("已定位到 " + mac);
+  toast(mac ? "已定位到 " + roleName(mac) + (pin ? " · " + pin : "") : "已定位到脚位图");
+}
+function fixConflict() {
+  var txt = ((S.health && S.health.conflicts) || []).join(" ");
+  var m = txt.match(/P\d{2}/);
+  var pin = m ? m[0] : null;
+  fixRole(pin ? S.assignments[pin] : null, pin);
+}
+function fixIssue() {
+  var it = null;
+  (S.issues || []).forEach(function(x) { if (!it && (x.level === "error" || x.severity === "error")) it = x; });
+  var mac = it && (it.role || it.macro || it.name);
+  fixRole(mac && S.caps.roles[mac] ? mac : null, it && it.pin);
 }
 async function doPreview() {
   var r = await call("preview", S.sdk);
@@ -808,7 +855,7 @@ function viewApply() {
   return '<div class="summary-box"><h4>写入前确认</h4>' +
     '<div class="summary-row"><span class="k">工程</span><b>' + esc(S.route === "new" ? S.form.name : S.sdk) + '</b></div>' +
     '<div class="summary-row"><span class="k">已配脚</span><b>' + h.assigned + ' / ' + h.total + '</b></div>' +
-    '<div class="summary-row"><span class="k">缺必需 / 冲突</span><b style="color:' + (h.complete ? "var(--ok)" : "var(--err)") + '">' + h.missingCount + ' / ' + h.conflicts + '</b></div>' +
+    '<div class="summary-row"><span class="k">缺必需 / 冲突</span><b class="' + (h.complete ? "ok" : "err") + '">' + h.missingCount + ' / ' + h.conflicts + '</b></div>' +
     '<div class="summary-row"><span class="k">功能插件</span><b>' + ((S.pluginState.enabled || []).indexOf("ledc") >= 0 ? "灯带 LEDC" : "无") + '</b></div>' +
     '<div class="summary-row"><span class="k">将变更文件</span><b>' + diffFiles().length + ' 个</b></div>' +
     '<div class="summary-row"><span class="k">安全网</span><b class="mono">.omcfg_bak_* / manifest.json</b></div></div>' +
@@ -926,7 +973,7 @@ function renderRecent() {
   var saved = "";
   try { saved = localStorage.getItem("omcfg.sdk") || ""; } catch (e) {}
   if (!saved) {
-    el.innerHTML = '<span class="muted" style="font-size:12px">打开或新建工程后，这里会显示最近路径</span>';
+    el.innerHTML = '<span class="muted recent-empty">打开或新建工程后，这里会显示最近路径</span>';
     return;
   }
   var name = saved.split(/[\\/]/).filter(Boolean).pop() || saved;
