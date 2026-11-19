@@ -596,6 +596,24 @@ python -m ruff check .
 python -m omcfg check --all configs
 ```
 
+### 端到端回归（真实 Api + 可选 Keil 编译）
+
+`tests/test_e2e_pipeline.py` 用真实 `Api` 从零建工程→配脚→写盘，覆盖三种操作顺序
+（先勾插件后推荐 / 先推荐后插件 / 取消插件对称撤销），断言生成头宏齐全、无缺脚无冲突；
+有 Keil UV4 时还会全量重编断言 `0 Error / 0 Warning`（无 UV4 自动跳过该用例）。
+这是「先勾插件后一键推荐」这类顺序 bug 的回归防线，纯后端、不依赖 pywebview/jsdom。
+
+一键命令行验收（输出工程 + 编译报告，便于人工复现）：
+
+```powershell
+python scripts/e2e_check.py                       # 临时目录产出并编译
+python scripts/e2e_check.py --out D:\work\e2e    # 指定输出目录
+python scripts/e2e_check.py --no-keil            # 只验证生成产物
+```
+
+预期结尾：`✓ 工程完整、无缺脚、无冲突` + `✓ Keil 编译通过：0 Error / 0 Warning`。
+Keil 路径可用环境变量 `OMCFG_UV4` 覆盖。
+
 ## 明确不在本轮范围
 
 - 4 线板（HYC-275QLH）模板与端到端支持：延后。

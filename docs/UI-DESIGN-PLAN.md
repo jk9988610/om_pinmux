@@ -454,6 +454,21 @@ blank_apply，产出工程 `om_pinmux_e2e/OM_E2E_20261119`，Keil UV4 `-r` 全�
 修复后关键宏：`LED_MODE_B=P36`、`LEDC_PIN=P01`、`LEDC_CTRL_PIN=P33`、
 `LED_R/G/B=P04/P05/P06`，blank_status `complete=true / 无缺脚 / 无冲突 / 0 校验错误`。
 
+## 17. 端到端回归固化（2026-11-19）
+
+§16 的验收与顺序 bug 修复已固化为项目资产，不再依赖一次性临时脚本：
+
+- `tests/test_e2e_pipeline.py`：纯真实 `Api`（不依赖 pywebview / jsdom / node_modules），
+  覆盖三种操作顺序——① 先勾插件后一键推荐（GUI 默认）、② 先推荐后插件并手工配
+  DIN/CTRL、③ 取消插件对称撤销；断言生成头 `BUILD_REQUIRED_MACROS` 齐全、完整性、
+  无冲突、文件注入/清理正确。第 4 个用例在有 Keil UV4 时（`OMCFG_UV4` 可覆盖路径）
+  全量重编并断言 `0 Error / 0 Warning`，无 UV4 自动跳过，不把外部 exe 当硬依赖。
+- `scripts/e2e_check.py`：一键命令行验收，从零产出工程、逐阶段打印结果、生成头与
+  完整性断言、可选 Keil 编译报告。用于人工复现与 CI。
+
+该回归是「新增插件必须写全契约（keep_roles / pair_with / required_roles）」的守门人：
+任何插件若在源码里硬引用了未声明的角色，端到端用例会立刻在编译阶段暴露。
+
 ## 附：原型说明
 
 `docs/ui-prototype.html` 为自包含单文件（无外部依赖、无 pywebview），用 mock 数据演示：
