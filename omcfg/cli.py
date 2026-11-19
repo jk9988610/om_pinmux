@@ -485,7 +485,7 @@ def cmd_blank_new(args: argparse.Namespace) -> int:
 
     print(f"空白工程: {target}")
     print(f"工程名: {name} 项目号: 0x{id_low:04X} BLE: {' / '.join(model.ble_names(config))}")
-    status = blank.summary(config)
+    status = blank.summary(config, target)
     print(f"已建草稿：引脚 {status['assigned']}/{status['total_roles']}，"
           f"缺必需脚 {len(status['missing'])} 个（这是空白起步的正常状态）")
     print("下一步: python -m omcfg blank options  查看可选功能")
@@ -543,7 +543,7 @@ def cmd_blank_assign(args: argparse.Namespace) -> int:
         return EXIT_VALIDATION
     blank.assign(config, args.role, args.pin.upper())
     Path(path).write_text(model.dump_config(config) + "\n", encoding="utf-8")
-    status = blank.summary(config)
+    status = blank.summary(config, args.sdk)
     print(f"已分配 {args.role} -> {args.pin.upper()}")
     print(f"进度: {status['assigned']} 脚，缺必需 {len(status['missing'])}，冲突 {len(status['conflicts'])}")
     if status["missing"]:
@@ -574,7 +574,7 @@ def cmd_blank_status(args: argparse.Namespace) -> int:
     except sdk.TargetError as exc:
         _error(str(exc), "--sdk 指向工程根目录")
         return EXIT_ENVIRONMENT
-    status = blank.summary(config)
+    status = blank.summary(config, args.sdk)
     print(f"板型: {model.board(config).get('mode_pins')}/{model.board(config).get('logo')}/"
           f"{model.sensor_bus(config)}")
     print(f"已分配: {status['assigned']}/{status['total_roles']}")
@@ -597,7 +597,7 @@ def cmd_blank_build(args: argparse.Namespace) -> int:
         return EXIT_ENVIRONMENT
     config_path = model.default_config_path(root)
     config = model.load_config(config_path)
-    status = blank.summary(config)
+    status = blank.summary(config, root)
     if not status["complete"]:
         _error(
             "草稿未补齐，不能生成：缺必需脚 " + ", ".join(status["missing"]) +

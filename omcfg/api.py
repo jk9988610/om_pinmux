@@ -911,7 +911,7 @@ class Api:
             )
             transaction.commit()
 
-            status = blank.summary(config)
+            status = blank.summary(config, dest)
             return {
                 "ok": True,
                 "sdk": str(dest),
@@ -936,7 +936,7 @@ class Api:
             if not path.is_file():
                 return _error(f"工程尚无 project.omcfg: {path}", "先用空白新建或初始化")
             config = model.load_config(path)
-            status = blank.summary(config)
+            status = blank.summary(config, root)
             board = model.board(config)
             report = validate.validate_config(config)
             status.update(
@@ -1032,7 +1032,7 @@ class Api:
                             text = model.remove_pin_text(text, role)
                     new_config = model.load_config_text(text)
             result = _payload(root, new_config, validate.validate_config(new_config))
-            status = blank.summary(new_config)
+            status = blank.summary(new_config, root)
             result["status"] = status
             result["reconciled"] = reconcile_notes
             # 草稿态：ok 表示“写入成功”，完整性看 status.complete。
@@ -1076,7 +1076,7 @@ class Api:
                 for role, value in base_cfg.get("pins", {}).items()
             }
 
-            required = set(blank.missing_roles(config))
+            required = set(blank.missing_roles(config, root))
             # 当前已分配的角色也纳入：整体的基线方案要保证同脚唯一，需要一起重写。
             already = set(model.pin_entries(config))
             rewrite = {role for role in (required | already) if role in base_pins}
@@ -1140,7 +1140,7 @@ class Api:
                     "GUI 设置板型选项",
                 )
                 transaction.commit()
-            status = blank.summary(config)
+            status = blank.summary(config, root)
             return {
                 "ok": True,
                 "board": model.board(config),
@@ -1155,7 +1155,7 @@ class Api:
         try:
             root = sdk.resolve_sdk(sdk_path)
             config = model.load_config(model.default_config_path(root))
-            status = blank.summary(config)
+            status = blank.summary(config, root)
             if not status["complete"]:
                 return _error(
                     "草稿尚未补齐，不能生成：缺必需脚 "
@@ -1192,7 +1192,7 @@ class Api:
             config = model.load_config(model.default_config_path(root))
             result["status"] = plugins.status(root, config)
             result["roles"] = plugins.visible_roles(config, self.role_capabilities().get("roles", {}))
-            result["build_status"] = blank.summary(config)
+            result["build_status"] = blank.summary(config, root)
             return result
         except Exception as exc:
             return _error(str(exc), "确认工程已初始化")

@@ -72,6 +72,28 @@ def _key_mode_map(key_io_h: str) -> dict[str, str]:
     """
     mapping = {m.group(1): m.group(2) for m in KEY_MODE_DEF_RE.finditer(key_io_h)}
     return mapping if mapping else dict(FALLBACK_KEY_MODE_TO_PIN)
+
+
+def active_key_mode_roles(root: Path | str, config: dict | None = None) -> set[str] | None:
+    """工程源码里真正参与编译的 KEY_MODE_* 所对应的角色集合。
+
+    key_io.h 里定义但未在 key_io.c 使用的宏不会展开，不能算“硬依赖”；
+    这是 CH04 旧工程能被当前工具正确打开的关键。读不到源码时返回 None，
+    调用方应保守沿用 options.json 的全局 build_required。
+    """
+    try:
+        key_c = _read(root, "projects/mouse_demo/periph/key_io.c")
+        key_h = _read(root, "projects/mouse_demo/periph/key_io.h")
+    except (OSError, UnicodeError):
+        return None
+    if config and "KEY_PAIR_PIN" not in model.pin_entries(config):
+        key_c = _strip_ifdef_block(key_c, "KEY_PAIR_PIN")
+    mapping = _key_mode_map(key_h)
+    return {
+        mapping[mode]
+        for mode in KEY_MODE_USE_RE.findall(key_c)
+        if mode in mapping
+    }
 LED_ON_RE = re.compile(r"#define\s+led_r_on\(\)\s+\((gpio_set|gpio_clear)\(LED_MODE_R_PIN\)\)")
 LEDC_SEL_RE = re.compile(r"drv_pmu_ledc_sel\s*\(\s*PMU_LEDC_SEL_IO_(\d{2})\s*\)")
 DPI_INI_RE = re.compile(r"sensor_dpi_ini\s*\[\s*\]\s*=\s*\{([^}]*)\}", re.S)

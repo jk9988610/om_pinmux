@@ -132,20 +132,34 @@ def set_board_option(config: dict[str, Any], key: str, value: Any) -> dict[str, 
     return config
 
 
-def build_required_roles() -> list[str]:
-    """key_io 等软件侧硬依赖的角色：不配会编译失败（与板型无关的额外必需集）。"""
-    return [mac for mac, opt in load_options().items() if opt.get("build_required")]
+def build_required_roles(
+    sdk_path: Path | str | None = None,
+    config: dict[str, Any] | None = None,
+) -> list[str]:
+    """软件侧硬依赖角色：不配会编译失败。
+
+    提供 sdk_path 时按工程源码实际引用过滤：key_io.h 里定义但 key_io.c 不用的
+    KEY_MODE_* 不算硬依赖（CH04 旧工程即此类）。读不到源码则保守沿用全局清单。
+    """
+    roles = [mac for mac, opt in load_options().items() if opt.get("build_required")]
+    if sdk_path is None:
+        return roles
+    from . import rules
+
+    active = rules.active_key_mode_roles(Path(sdk_path), config)
+    if active is None:
+        return roles
+    return [role for role in roles if role in active]
 
 
-def missing_roles(config: dict[str, Any]) -> list[str]:
+def missing_roles(config: dict[str, Any], sdk_path: Path | str | None = None) -> list[str]:
     """当前 board 选项下缺哪些必需角色。
 
-    = validate 按板型推导的必需角色 ∪ options.json 标了 build_required 的软件硬依赖
-    （如 KC536 的 key_io.h 无条件展开 KEY_B/P/DPI/PAIR）。
+    = validate 按板型推导的必需角色 ∪ 当前工程源码真正引用的 build_required 角色。
     """
     pins = model.pin_entries(config)
     required = list(validate.required_roles(config, pins))
-    for role in build_required_roles():
+    for role in build_required_roles(sdk_path, config):
         if role not in required:
             required.append(role)
     return [role for role in required if role not in pins]
@@ -173,19 +187,19 @@ def conflicts(config: dict[str, Any]) -> list[str]:
     return problems
 
 
-def is_complete(config: dict[str, Any]) -> bool:
+def is_complete(config: dict[str, Any], sdk_path: Path | str | None = None) -> bool:
     """是否可交给 gen：必需脚齐、已分配脚无冲突。"""
-    return not missing_roles(config) and not conflicts(config)
+    return not missing_roles(config, sdk_path) and not conflicts(config)
 
 
-def summary(config: dict[str, Any]) -> dict[str, Any]:
+def summary(config: dict[str, Any], sdk_path: Path | str | None = None) -> dict[str, Any]:
     """给 GUI/CLI 展示的构建进度。"""
     opts = load_options()
     assigned = config.get("pins", {})
     return {
         "total_roles": len(opts),
         "assigned": len(assigned),
-        "missing": missing_roles(config),
+        "missing": missing_roles(config, sdk_path),
         "conflicts": conflicts(config),
-        "complete": is_complete(config),
+        "complete": is_complete(config, sdk_path),
     }

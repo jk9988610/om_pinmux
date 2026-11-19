@@ -614,6 +614,21 @@ python scripts/e2e_check.py --no-keil            # 只验证生成产物
 预期结尾：`✓ 工程完整、无缺脚、无冲突` + `✓ Keil 编译通过：0 Error / 0 Warning`。
 Keil 路径可用环境变量 `OMCFG_UV4` 覆盖。
 
+### CH04 旧工程兼容性
+
+健康卡的 `build_required` 角色按**工程源码实际引用**判定，而不是全局写死：
+CH04 的 `key_io.c` 不编译 `KEY_MODE_R3/R4/R7`，因此不会误报缺
+`KEY_B/P/DPI`；KC536 的 `key_io.c` 确实使用它们，仍会强制要求。
+
+```powershell
+$env:OMCFG_CH04_BASELINE = "E:\tools\om_pinmux_baseline_backup_ch04_20261118_100842\sdk"
+python -m pytest tests/test_ch04_compat.py
+```
+
+在 CH04 干净基线副本上实测 `check → init → gen --apply → Keil -r`：
+生成结果与工程现状零差异，`0 Error / 0 Warning`
+（Code=39912 RO=2128 RW=236 ZI=2304）。
+
 ## 明确不在本轮范围
 
 - 4 线板（HYC-275QLH）模板与端到端支持：延后。

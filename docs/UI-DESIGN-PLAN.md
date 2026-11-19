@@ -469,6 +469,27 @@ blank_apply，产出工程 `om_pinmux_e2e/OM_E2E_20261119`，Keil UV4 `-r` 全�
 该回归是「新增插件必须写全契约（keep_roles / pair_with / required_roles）」的守门人：
 任何插件若在源码里硬引用了未声明的角色，端到端用例会立刻在编译阶段暴露。
 
+## §18 实施记录：CH04 旧工程兼容性修复
+
+用仓库外的 CH04 干净备份（`om_pinmux_baseline_backup_ch04_20261118_100842`）
+做旧工程回归时发现：CLI `check --sdk` 为 0 error，但新健康卡显示
+`complete=false` 并列出 `KEY_B_PIN / KEY_P_PIN / KEY_DPI_PIN` 缺脚。根因是
+`options.json` 的 `build_required` 被当成**全局硬依赖**，实际这些脚只在 KC536 的
+`key_io.c` 里被 `KEY_MODE_R3/R4/R7` 使用；CH04 只定义宏、不调用，源码不依赖。
+
+修复保持数据驱动：
+
+- `rules.active_key_mode_roles(root, config)` 从当前工程的 `key_io.h` 解析
+  `KEY_MODE_* → KEY_*_PIN` 映射，再扫描 `key_io.c` 中真正出现的宏；
+- `blank.build_required_roles(sdk_path, config)` 用该集合过滤全局清单；读不到源码
+  时保守沿用旧清单，避免放宽未知工程；
+- 所有 `blank.summary()` / `missing_roles()` 调用点（Api 与 CLI）都传入工程根目录。
+
+验证：CH04 副本健康卡恢复 `complete=true`、缺脚为空；`check/init/gen --apply`
+无差异，Keil `-r` 全量重编 `0 Error / 0 Warning`（Code=39912 / RO=2128 /
+RW=236 / ZI=2304）。新增 `tests/test_ch04_compat.py` 固化两点：CH04 不误报、
+KC536 仍强制要求同一批硬依赖。设置 `OMCFG_CH04_BASELINE` 后全量 187 项通过。
+
 ## 附：原型说明
 
 `docs/ui-prototype.html` 为自包含单文件（无外部依赖、无 pywebview），用 mock 数据演示：
