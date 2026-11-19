@@ -22,6 +22,9 @@ _test_gen/
 .cursor/*
 !.cursor/plans/
 
+# WorkBuddy 工作区数据（记忆、会话状态，按本地保留）
+.workbuddy/
+
 # baseline 编译产物（Keil 每次编译会生成，不进仓库）
 baseline/sdk/**/out/
 baseline/sdk/**/_build/
