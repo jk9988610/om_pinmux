@@ -126,8 +126,9 @@ python -m omcfg blank build --sdk <DIR> --apply    # 生成源码并写回（可
   基线现状）、`alternate_pins`（其他模板出现过的脚）、`allowed_pins`（芯片 mux
   约束）、`required` / `build_required`（必需与 key_io 硬依赖）。GUI 的
   `role_capabilities()` 与 CLI 共用这份数据。
-- **可生成条件**：`validate.required_roles` 按板型推导的必需脚 + `key_io.h`
-  无条件展开的 `KEY_B/KEY_P/KEY_DPI/KEY_PAIR` 全部落位，且无冲突。
+- **可生成条件**：`validate.required_roles` 按板型推导的必需脚，加上**当前工程
+  源码真正引用**的 `build_required` 角色，全部落位且无冲突。CH04 只定义但未调用
+  `KEY_MODE_R3/R4/R7`，因此不会被误判缺 `KEY_B/P/DPI`；KC536 仍强制要求。
   `blank status` 会列出缺项；缺项时用 `build` 会被拒绝（退 1）。
 - 空白起步交付的工程，按推荐脚补齐后与 KC536 现状等价，Keil 实测
   **0 Error / 0 Warning**。手动改板型选项（`blank` 的 board 配置或 GUI）
@@ -139,8 +140,8 @@ KC536 是干净底座；新板需要的功能（如灯带 LEDC）通过**插件*
 不手改源码。插件契约在 `omcfg/data/plugins.json`，勾选 = 改板型选项 +
 腾让冲突脚 + 从内置模板注入文件 + 解锁一组角色，全部随工程持久化。
 
-**GUI 用法**：打开「按角色配引脚」面板 → 需求组里带勾选框的项（当前是
-「灯带」）即插件。勾上后自动：把 `board.logo` 设为 `ledc`、把占用 DIN
+**GUI 用法**：新建向导第 3 步「功能插件」卡，或第 4 步需求组里带勾选框的项
+（当前是「灯带」），两处双向同步。勾上后自动：把 `board.logo` 设为 `ledc`、把占用 DIN
 合法脚的 `LED_MODE_B` 腾到 P36、注入 `ledc.c/.h`、`ledc_mode.c/.h` 四个
 文件并登记 Keil 工程；约束栏随即出现 `LEDC_PIN`(DIN) 和 `LEDC_CTRL_PIN`
 两个角色供配脚。**取消勾选**会干净撤销：删文件、撤登记、还原 logo、
