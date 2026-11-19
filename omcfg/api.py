@@ -959,7 +959,12 @@ class Api:
         except Exception as exc:
             return _error(str(exc), "确认 sdk 指向工程根目录")
 
-    def blank_save(self, sdk_path: str, assignments: dict[str, str] | None = None) -> dict:
+    def blank_save(
+        self,
+        sdk_path: str,
+        assignments: dict[str, str] | None = None,
+        reconcile: bool = False,
+    ) -> dict:
         """草稿态写引脚：只做芯片 mux/占用校验，不卡必需脚（允许逐步构建）。
 
         语义与 save_pinmap 一致（全量角色→脚映射，空值解除），但跳过完整性校验，
@@ -1012,9 +1017,24 @@ class Api:
             text = _sync_wheel(text)
 
             new_config = model.load_config_text(text)
+            reconcile_notes: list[str] = []
+            if reconcile:
+                from . import plugins as _plugins
+
+                reconcile_notes = _plugins.reconcile_pins(new_config)
+                if reconcile_notes:
+                    for role in list(target) + [n.split(":")[0] for n in reconcile_notes]:
+                        val = new_config.get("pins", {}).get(role)
+                        pin = (val.get("pin") if isinstance(val, dict) else val) or ""
+                        if pin:
+                            text = model.add_pin_text(text, role, str(pin))
+                        else:
+                            text = model.remove_pin_text(text, role)
+                    new_config = model.load_config_text(text)
             result = _payload(root, new_config, validate.validate_config(new_config))
             status = blank.summary(new_config)
             result["status"] = status
+            result["reconciled"] = reconcile_notes
             # 草稿态：ok 表示“写入成功”，完整性看 status.complete。
             result["ok"] = True
             if text == source.text:
@@ -1074,13 +1094,18 @@ class Api:
                 else:
                     problems.append(f"{role}: 基线无推荐脚，请手动选")
 
-            saved = self.blank_save(sdk_path, assignments) if assignments else {"ok": True, "changed": 0}
+            saved = (
+                self.blank_save(sdk_path, assignments, reconcile=True)
+                if assignments
+                else {"ok": True, "changed": 0}
+            )
             if not saved.get("ok"):
                 return saved
             status = self.blank_status(sdk_path)
             return {
                 "ok": True,
                 "filled": assignments,
+                "reconciled": saved.get("reconciled", []),
                 "problems": problems,
                 "changed": saved.get("changed", 0),
                 "status": status,

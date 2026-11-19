@@ -101,3 +101,30 @@ def test_plugin_status_reports_state(tmp_path):
     st2 = Api().plugin_status(sdk)
     ledc2 = next(p for p in st2["plugins"] if p["id"] == "ledc")
     assert ledc2["enabled"] is True
+
+
+def test_enable_then_fill_recommended_is_buildable(tmp_path):
+    """先勾插件、后一键推荐（GUI 顺序）：所有源码硬依赖角色都必须配齐且不冲突。
+
+    回归：此前 required_roles 只看 board.logo=ledc → LEDC_PIN，漏了契约的
+    keep_roles（led.c 无条件引用 LED_R/G/B）与 pair_with 的 LEDC_CTRL_PIN，
+    且草稿阶段 auto_reassign 无脚可腾、一键推荐又把基线冲突脚填回，导致
+    Keil 编译 16 error。修复后应完整、无冲突、生成头含全部宏。
+    """
+    sdk = str((tmp_path / "Proj").resolve())
+    api = Api()
+    assert api.blank_new("Proj", sdk, id_low=0x0701)["ok"]
+    assert api.plugin_toggle(sdk, "ledc", True)["ok"]
+    filled = api.blank_fill_recommended(sdk)
+    assert filled["ok"], filled
+    status = filled["status"]
+    assert status["complete"], status
+    assert not status["missing"] and not status["conflicts"], status
+    assert status["validate_errors"] == 0, status
+
+    cfg = model.load_config(model.default_config_path(Path(sdk)))
+    pins = cfg["pins"]
+    for role in ("LED_R_PIN", "LED_G_PIN", "LED_B_PIN", "LEDC_PIN", "LEDC_CTRL_PIN"):
+        assert role in pins, f"{role} 未分配"
+    assert pins["LED_MODE_B_PIN"] != "P01", "LED_MODE_B 未腾出 LEDC 的 P01"
+    assert len({p if isinstance(p, str) else p.get("pin") for p in pins.values()}) == len(pins), "存在同脚冲突"

@@ -426,6 +426,34 @@ P0 已吸收了规划中大部分 P1 内容（概念说明条、三视图联动�
 
 **验证**：jsdom 35 项断言全绿（两段式写盘、最近工程增删、快捷键、diff 着色、P1 全部链路）；真实 Api 只读桥接 14 项全绿（58 角色 / 4 需求组 / 32 脚矩阵 / 插件契约字段）。
 
+## 16. 真实端到端验收与顺序 bug 修复（2026-11-19）
+
+用真实 `Api`（非 mock）驱动前端 `app.js` 走完「从空白新建」6 步：blank_new →
+blank_set_board → plugin_toggle(ledc) → blank_fill_recommended → preview → 两段式
+blank_apply，产出工程 `om_pinmux_e2e/OM_E2E_20261119`，Keil UV4 `-r` 全量重编
+**0 Error / 0 Warning**（Code=38900 RO=1772 RW=172 ZI=2252）。
+
+**过程中抓到一个真 bug**：GUI 默认顺序是先勾插件、后一键推荐，而此前的测试顺序
+相反（先补齐再勾插件），从未覆盖。该顺序下：
+
+1. 草稿阶段没有脚，`enable()` 的 `auto_reassign`（LED_MODE_B P01→P36）无角色可腾；
+2. 一键推荐按 KC536 基线把 `LED_MODE_B` 填回 P01、`LED_G` 填回 P05，与 LEDC 冲突；
+3. `validate.required_roles` 只看 `board.logo=ledc → LEDC_PIN`，漏掉契约的
+   `keep_roles`（led.c 无条件引用的 LED_R/G/B）和 `pair_with` 的 `LEDC_CTRL_PIN`
+   （ledc.c 无条件引用）→ 生成头缺 4 个宏 → Keil **16 error**。
+
+修复（数据驱动，未来插件通用）：
+
+- `validate._required_roles` 消费已启用插件契约的 `required_roles` / `keep_roles` /
+  `pair_with`，不再依赖 `board.logo` 硬编码。
+- `plugins.reconcile_pins()`：配脚后重新执行 `auto_reassign`，并为契约必需但未配/
+  冲突的角色按 `allowed_pins` 找空闲脚（幂等）。
+- `blank_save(..., reconcile=True)`：仅一键推荐写盘时触发协调，草稿手存不受影响。
+- 回归用例 `test_enable_then_fill_recommended_is_buildable` 固化该顺序。
+
+修复后关键宏：`LED_MODE_B=P36`、`LEDC_PIN=P01`、`LEDC_CTRL_PIN=P33`、
+`LED_R/G/B=P04/P05/P06`，blank_status `complete=true / 无缺脚 / 无冲突 / 0 校验错误`。
+
 ## 附：原型说明
 
 `docs/ui-prototype.html` 为自包含单文件（无外部依赖、无 pywebview），用 mock 数据演示：

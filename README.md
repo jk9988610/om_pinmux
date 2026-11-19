@@ -157,8 +157,13 @@ KC536 是干净底座；新板需要的功能（如灯带 LEDC）通过**插件*
   这三个宏仍会生成（需要保留对应脚位）。
 - 内置 `ledc.h` 自带 `GPIO_SET/GPIO_CLEAR` 大小写兼容，跨工程即插即用。
 
-实测：空白工程 → 补齐 → 勾 LEDC → 配 DIN/CTRL → 生成 → Keil
-**0 Error / 0 Warning**；取消插件后无文件残留。
+实测两种勾选顺序均可生成 Keil **0 Error / 0 Warning** 工程，取消插件后无文件残留：
+
+- 先补齐再勾插件：空白工程 → 一键推荐 → 勾 LEDC → 配 DIN/CTRL → 生成。
+- **先勾插件再一键推荐**（GUI 默认顺序）：建空白工程 → 勾 LEDC → 一键推荐 → 生成。
+  此时 `validate.required_roles` 会从插件契约补齐 `keep_roles`（LED_R/G/B）与
+  `LEDC_CTRL_PIN`，并在配脚后重新执行腾脚（`LED_MODE_B P01→P36`），
+  自动为源码硬依赖角色找空闲合法脚。
 
 ## 从零到编译：5 步
 

@@ -93,12 +93,28 @@ def _required_roles(config: dict, pins: dict) -> list[str]:
         required += ["MODE_BLE_24G_PIN"]
     if b.get("logo") == "rgb":
         required += ["LED_R_PIN", "LED_G_PIN", "LED_B_PIN"]
-    elif b.get("logo") == "ledc":
-        required += ["LEDC_PIN"]
     if model.sensor(config).get("bus") == "spi_4wire":
         required += ["SENSOR_NCS_PIN", "SENSOR_MOSI_PIN", "SENSOR_MISO_PIN"]
     else:
         required += ["SENSOR_SDIO_PIN"]
+
+    # 已启用插件的硬依赖来自契约：required_roles、keep_roles（被源码无条件引用、
+    # 即使换了 board.logo 也必须保留）、pair_with（配对双方缺一不可）。
+    # 从 config.plugins 读取，不依赖 board.logo，避免「勾选后 logo 变了但角色漏配」。
+    from . import plugins as _plugins
+
+    for pid in _plugins.enabled(config):
+        c = _plugins.contract(pid)
+        if not c:
+            continue
+        for key in ("required_roles", "keep_roles"):
+            for role in c.get(key, []):
+                if role not in required:
+                    required.append(role)
+        for pair in c.get("pair_with", []):
+            for role in pair:
+                if role not in required:
+                    required.append(role)
     return required
 
 

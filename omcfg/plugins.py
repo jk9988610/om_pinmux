@@ -187,6 +187,75 @@ def _auto_reassign(config: dict[str, Any], c: dict[str, Any]) -> list[str]:
     return notes
 
 
+def _pin_of(config: dict[str, Any], role: str) -> str | None:
+    entry = config.get("pins", {}).get(role)
+    if isinstance(entry, dict):
+        value = str(entry.get("pin", "")).strip()
+    else:
+        value = str(entry or "").strip()
+    return value or None
+
+
+def _set_pin(config: dict[str, Any], role: str, pin: str) -> None:
+    entry = config.setdefault("pins", {}).get(role)
+    if isinstance(entry, dict):
+        entry["pin"] = pin
+    else:
+        config["pins"][role] = pin
+
+
+def reconcile_pins(config: dict[str, Any]) -> list[str]:
+    """一键配脚后按已启用插件契约重新协调脚位，返回变更说明。
+
+    解决「先勾插件、后一键推荐」的顺序问题：草稿阶段插件的 auto_reassign
+    没有角色可腾，一键推荐又按基线把冲突脚填回去。这里在脚位最终确定后
+    重新执行契约的腾脚规则，并为契约必需但缺失的角色（源码硬引用的
+    keep_roles / pair_with / required_roles）按合法脚顺序找空位。
+
+    幂等：重复调用不产生额外变化。未来新增插件只要契约写全，无需改这里。
+    """
+    from . import blank as _blank
+
+    opts = _blank.load_options()
+    notes: list[str] = []
+    for pid in enabled(config):
+        c = contract(pid)
+        if not c:
+            continue
+        # 1. 重新执行腾脚：把插件占用脚上的旧角色挪到契约指定位置。
+        notes += _auto_reassign(config, c)
+        # 2. 契约必需角色：required_roles + keep_roles + pair_with 双方。
+        needed: list[str] = []
+        for key in ("required_roles", "keep_roles"):
+            for role in c.get(key, []):
+                if role not in needed:
+                    needed.append(role)
+        for pair in c.get("pair_with", []):
+            for role in pair:
+                if role not in needed:
+                    needed.append(role)
+        for role in needed:
+            cur = _pin_of(config, role)
+            if cur and not _blank.assign_problem(config, role, cur):
+                continue  # 已在合法脚上，不动
+            if cur:  # 当前脚非法/冲突，先清掉再重找
+                config.get("pins", {}).pop(role, None)
+            candidates = [opts.get(role, {}).get("suggested_pin")] + list(
+                opts.get(role, {}).get("allowed_pins", [])
+            )
+            seen: set[str] = set()
+            for pin in candidates:
+                if not pin or pin in seen:
+                    continue
+                seen.add(pin)
+                if _blank.assign_problem(config, role, pin):
+                    continue
+                _set_pin(config, role, pin)
+                notes.append(f"{role}: {cur or '未配'}->{pin}")
+                break
+    return notes
+
+
 def enable(root: Path | str, plugin_id: str) -> dict[str, Any]:
     """勾选插件：改 board + 腾脚 + 写 plugins 字段 + 注入文件。"""
     root = Path(root)
