@@ -8,6 +8,7 @@ fixtures for the parser unit tests so CI without those roots still passes.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -97,26 +98,42 @@ def test_source_scan_parse_defines_active_vs_commented():
 
 
 def test_scan_pipeline_outputs():
-    """The full pipeline must emit all three data assets with real content."""
+    """校验已提交的扫描产物有效（秒级）。
+
+    真实全盘重扫（约 134s）已隔离到 test_scan_pipeline_rescan，由 opt-in 开关控制，
+    不再在每次回归里重扫 E:/M_2026 + E:/history。产物是仓库内真相源，
+    重扫属于数据更新操作，单独按需执行。
+    """
+    out = Path(__file__).resolve().parent.parent
+    catalog = json.loads((out / "omcfg/data/material_scan.json").read_text(encoding="utf-8"))
+    assert catalog["schema"] == "om6239-material-catalog/v1"
+    assert len(catalog["materials"]) >= 3
+    assert "params_default" in catalog
+    assert catalog["params_default"]["rgb_polarity_default"] in ("active_low", "active_high")
+
+    projects = json.loads((out / "omcfg/data/project_scan.json").read_text(encoding="utf-8"))
+    assert len(projects["projects"]) >= 20
+    assert sum(1 for r in projects["projects"] if r.get("bom")) >= 5
+
+    stats = (out / "docs/MATERIAL-STATS.md").read_text(encoding="utf-8")
+    assert "项目时间线" in stats and "关键参数分布" in stats
+    assert "S205" in stats  # known deviation note
+
+
+@pytest.mark.skipif(
+    os.environ.get("OMCFG_RESCAN") != "1",
+    reason="全盘重扫约 134s，设 OMCFG_RESCAN=1 时执行（数据更新用，非日常回归）",
+)
+def test_scan_pipeline_rescan():
+    """真·全盘重扫并刷新产物：仅数据更新时手动跑，不进日常回归。"""
     from scan_projects import run
 
     if not M2026.is_dir() or not HISTORY.is_dir():
         pytest.skip("缺少 E:/M_2026 或 E:/history")
     out = Path(__file__).resolve().parent.parent
     result = run([str(M2026), str(HISTORY)], out)
-
     assert result["projects"] >= 20
     assert result["with_bom"] >= 5
-    assert result["materials"] >= 3
-    assert result["params"]["rgb_polarity_default"] in ("active_low", "active_high")
-
-    catalog = json.loads((out / "omcfg/data/material_scan.json").read_text(encoding="utf-8"))
-    assert catalog["schema"] == "om6239-material-catalog/v1"
-    assert "materials" in catalog and "params_default" in catalog
-
-    stats = (out / "docs/MATERIAL-STATS.md").read_text(encoding="utf-8")
-    assert "项目时间线" in stats and "关键参数分布" in stats
-    assert "S205" in stats  # known deviation note
 
 
 def test_generated_catalog_sensor_contracts():

@@ -13,6 +13,9 @@ venv/
 
 # Local application state
 launch.log
+# 里程碑测试运行器：临时 basetemp + 运行状态（本地保留，不入仓库）
+.pytest_tmp/
+tests/.milestone_state.json
 
 # 回归样本（工具生成的临时工程）
 _test_gen/

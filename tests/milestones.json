@@ -1,0 +1,96 @@
+{
+  "version": 2,
+  "note": "后台测试里程碑：按测试层分组，从快到慢。expect_sec 为预期完成秒数（超时则抓取已完成输出后继续），enabled=false 表示禁用。日常里程碑用 kw='not keil' 过滤真编译用例（Keil 0/0 集中在独立的 keil 里程碑，默认禁用，验收时 restore 后跑）。扫描产物已提交仓库，日常只读校验，全盘重扫由 OMCFG_RESCAN=1 控制。用 scripts/milestone_run.py 管理；进度用 run --live 或 watch 查看。",
+  "milestones": [
+    {
+      "id": "parity",
+      "name": "生成一致性层",
+      "expect_sec": 30,
+      "enabled": true,
+      "files": [
+        "test_generate_parity.py",
+        "test_baseline.py",
+        "test_artifacts.py",
+        "test_uvprojx.py",
+        "test_ledc_sel_finalize.py",
+        "test_ledc_colors.py",
+        "test_logo_variants.py",
+        "test_sdk_drift.py"
+      ]
+    },
+    {
+      "id": "core",
+      "name": "核心模型层",
+      "expect_sec": 45,
+      "enabled": true,
+      "files": [
+        "test_model.py",
+        "test_rules.py",
+        "test_validate.py",
+        "test_schema_board_fields.py",
+        "test_pinmap.py",
+        "test_transaction.py",
+        "test_blank.py",
+        "test_api.py",
+        "test_api_blank.py"
+      ]
+    },
+    {
+      "id": "material",
+      "name": "物料与插件层",
+      "expect_sec": 75,
+      "enabled": true,
+      "kw": "not keil",
+      "files": [
+        "test_materials.py",
+        "test_material_scan.py",
+        "test_plugins.py",
+        "test_newproject.py",
+        "test_keys_pair_optional.py"
+      ]
+    },
+    {
+      "id": "autofill",
+      "name": "自动填表层",
+      "expect_sec": 60,
+      "enabled": true,
+      "kw": "not keil",
+      "files": [
+        "test_autofill.py",
+        "test_ch04_autofill.py",
+        "test_firmware_version.py",
+        "test_led_indicator_identity.py",
+        "test_web_browseout.py",
+        "test_schematic_driven.py"
+      ]
+    },
+    {
+      "id": "e2e",
+      "name": "端到端层（不含 Keil 编译）",
+      "expect_sec": 35,
+      "enabled": true,
+      "kw": "not keil",
+      "files": [
+        "test_e2e_pipeline.py",
+        "test_smoke.py",
+        "test_ch04_compat.py",
+        "test_polarity_per_pin.py",
+        "test_sensor_bus.py"
+      ]
+    },
+    {
+      "id": "keil",
+      "name": "Keil 真编译验收层（0 Error / 0 Warning）",
+      "expect_sec": 300,
+      "enabled": false,
+      "kw": "keil",
+      "files": [
+        "test_ch04_autofill.py",
+        "test_schematic_driven.py",
+        "test_materials.py",
+        "test_e2e_pipeline.py",
+        "test_polarity_per_pin.py"
+      ]
+    }
+  ]
+}

@@ -27,6 +27,16 @@ def ch04_sdk_path() -> Path | None:
     return path if path.is_dir() else None
 
 
+def pytest_runtest_logstart(nodeid: str, location: tuple[str, int, str]) -> None:
+    """里程碑运行器专用：用例开始时打印 RUN 行，供超时定位卡点。
+
+    仅当 OMCFG_TEST_PROGRESS=1 时生效（由 milestone_run.py 设置），
+    普通 pytest 运行完全不受影响。
+    """
+    if os.environ.get("OMCFG_TEST_PROGRESS") == "1":
+        print(f">>>RUN {nodeid}", flush=True)
+
+
 @pytest.fixture(scope="session")
 def ch04_baseline() -> Path:
     """CH04 SDK 根目录（periph 的父级工程的 SDK 根）。未配置则跳过。"""

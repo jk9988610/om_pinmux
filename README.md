@@ -632,6 +632,46 @@ python -m ruff check .
 python -m omcfg check --all configs
 ```
 
+### 后台测试里程碑（分组 / 实时进度 / 超时诊断 / 可改时间删项）
+
+全套 pytest 用里程碑运行器按测试层从快到慢分组跑，每项有预期秒数；超时就抓取该项
+**已产生的输出**并标记 `timeout`，继续下一项，已完成结果不丢失（`tests/.milestone_state.json`）。
+配置在 `tests/milestones.json`。
+
+```powershell
+python scripts/milestone_run.py run                    # 跑全部（配合终端后台能力即为后台任务）
+python scripts/milestone_run.py run --only parity core # 只跑指定里程碑
+python scripts/milestone_run.py run --live             # 当前终端实时刷新进度条
+python scripts/milestone_run.py run --popup            # 弹出本地终端窗口实时显示进度
+python scripts/milestone_run.py watch                  # 另开终端，实时看正在跑的进度
+python scripts/milestone_run.py watch --once           # 只看一帧快照
+python scripts/milestone_run.py status                 # 进度 / 已完成输出（静态一帧）
+python scripts/milestone_run.py report -v              # 汇总 + 每个里程碑的耗时榜单
+python scripts/milestone_run.py list                   # 列出里程碑、预期秒数、启用状态
+python scripts/milestone_run.py set-time e2e 35        # 改预期秒数
+python scripts/milestone_run.py remove e2e             # 禁用项（enabled=false，可恢复）
+python scripts/milestone_run.py remove e2e --hard      # 彻底从配置移除
+python scripts/milestone_run.py restore e2e            # 恢复被禁用项
+```
+
+**实时进度**：后台跑时另开一个终端执行 `watch`，或用 `run --live` / `run --popup`，
+即可看到每个里程碑的状态、进度条、已用/预期秒数、超时长（`+Ns`）、卡点用例与慢因诊断，
+不必反复手动 `status`。
+
+**超时诊断**：每个里程碑采集 pytest `--durations`，`report -v` 打印耗时榜单，
+`status`/`report` 显示 `overtime`（超了几秒）、`stuck_at`（卡在哪个用例）、
+`slow_reason`（瓶颈用例或"无单点瓶颈/累积耗时"）。据此判断是否要给某项改时间、
+删冗余用例，还是优化具体的慢用例。
+
+**为什么快**：日常 5 项用 `kw="not keil"` 过滤掉 6 个 Keil 真编译用例（实测合计约 187s），
+集中在默认禁用的 `keil` 里程碑——需要 `0 Error / 0 Warning` 验收时执行
+`python scripts/milestone_run.py restore keil && python scripts/milestone_run.py run --only keil`。
+全盘工程重扫（原约 134s）已改为读仓库内已提交的扫描产物，真重扫由 `OMCFG_RESCAN=1`
+单独触发。优化后日常 5 项合计约 144s（原约 493s）。
+
+`report` 全通过返回 0、有失败/超时返回 1，便于脚本判定。`env-blocked`（沙箱删除钩子拦截）
+不算测试失败但会显式提示。预期时间是软阈值：超过记 `timeout` 但不判失败，只表示比预期慢。
+
 ### 端到端回归（真实 Api + 可选 Keil 编译）
 
 `tests/test_e2e_pipeline.py` 用真实 `Api` 从零建工程→配脚→写盘，覆盖三种操作顺序
