@@ -218,6 +218,16 @@ void sensor_type_check(void)
 // sensor的类型检测最多3次
     sensor_status_reg = 0;
 
+#ifdef SENSOR_NCS_PIN
+    /* [关键] S205 刚上电默认是 3-Wire，必须拉低 NCS (P10) 才能接收指令。
+       纯两线工程未配 NCS 时跳过本段，避免引用未定义宏。 */
+    OM_GPIO0->OUTENSET = (1u << SENSOR_NCS_PIN);   /* 设为输出 */
+    OM_GPIO0->DATAOUTCLR = (1u << SENSOR_NCS_PIN); /* 拉低片选 */
+#endif
+
+    sensor_write(0x06, 0x84); /* 唤醒传感器 */
+    delayus(35000);           /* 等待传感器启动 */
+
     for(i=0; i<3; i++)
     {
         j = sensor_read(0x00);
@@ -320,8 +330,15 @@ void sensor_type_check(void)
         || (iSENSOR_TYPE_S205 == sensor_type))
     {
         sensor_write(0x09, 0xC3);
+        sensor_write(0x26, 0x30); /* 写入 2-Wire 模式，Pin1 设为无功能 */
         sensor_write(0x19, (sensor_read(0x19)|0x04));
         sensor_write(0x09, 0x00);
+
+#ifdef SENSOR_NCS_PIN
+        /* 成功切到 2-Wire，释放 NCS 引脚悬空，以后不需要了 */
+        OM_GPIO0->DATAOUTSET = (1u << SENSOR_NCS_PIN);
+        OM_GPIO0->OUTENCLR = (1u << SENSOR_NCS_PIN); /* 设为输入高阻态 */
+#endif
     }
 
     sensor_dat_format();

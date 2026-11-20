@@ -27,6 +27,7 @@
 #define iLED_CFG_CHAR_OK        7
 #define iLED_CFG_OFF            8
 #define iLED_CFG_IDLE           9
+#define iLED_CFG_REPORT_CHANGE  10
 
 #define iPWM_R                  0x01
 #define iPWM_G                  0x02

@@ -29,6 +29,7 @@
 #define IND_PURPLE  0x05
 #define IND_CYAN    0x06
 #define IND_WHITE   0x07
+#define IND_DPI     0x08
 
 #define ALWAYS_ON       0xFFFF
 
@@ -45,6 +46,8 @@
 #define IND_TIMES_ONE           1
 #define IND_DPI_THREE           3
 
+extern bool ind_mode;
+
 typedef struct{
     uint8_t  ind_color;
     uint16_t ind_times;
@@ -55,6 +58,11 @@ typedef struct{
 extern void clear_ind_flag();
 extern void ind_sleep();
 extern void ind_config(const ind_val_t* set_val);
+extern bool bmanual_pair;
+extern uint32_t mode_led_flash_time;
+extern uint8_t  mode_led_flash_state;
+extern void ind_on_2s_then_off(uint8_t color);
+extern void dpi_config(uint8_t dpi_grade);
 extern void mode_led_hint();
 
 #endif

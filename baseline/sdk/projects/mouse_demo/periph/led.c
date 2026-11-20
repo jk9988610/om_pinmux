@@ -20,15 +20,15 @@
 #include "flash.h"
 #include "flash_process.h"
 #include "usb_cfg_info.h"
-
+#include "key_io.h"
 //-----------------------------------------------------------------------------;
 // 常量定义区
 //
 #define iLED_RED                (0<<4)      // 红
 #define iLED_GREEN              (1<<4)      // 绿
 #define iLED_BULE               (2<<4)      // 蓝
-#define iLED_YELLOW             (3<<4)      // 紫
-#define iLED_PURPLE             (4<<4)      // 橙
+#define iLED_PURPLE             (3<<4)      // 紫
+#define iLED_YELLOW             (4<<4)      // 橙
 #define iLED_CYAN               (5<<4)      // 青
 #define iLED_WHITE              (6<<4)      // 白
 
@@ -104,6 +104,23 @@ unsigned char       const   rgb_en_tbl[]={
     iPWM_R|iPWM_G|iPWM_B,
     0x07,
 };
+unsigned char       const   dpi_rgb_en_tbl[]={
+    iPWM_R,
+    iPWM_G,
+    iPWM_B,
+    iPWM_B|iPWM_G,
+    iPWM_R|iPWM_G,
+    iPWM_B|iPWM_R,
+    iPWM_R|iPWM_G|iPWM_B,
+    0x07,
+};
+
+unsigned char       const   report_rgb_en_tbl[]={
+    iLED_RED,
+    iLED_GREEN,
+    iLED_BULE,
+    iLED_PURPLE,
+};
 
 unsigned char const default_hint_led_tbl[] =
 {
@@ -123,6 +140,8 @@ unsigned char const default_hint_led_tbl[] =
     0x82,0x00,mHOLE_TIME(1750,0),0x00,0xFF,0xFF,0xFF,0xFF, // iLED_CFG_CHAR_ING 红色常亮
 //----------------------------------------------
     0x92,0x00,mHOLE_TIME(1750,0),0x00,0xFF,0xFF,0xFF,0xFF, // iLED_CFG_CHAR_OK 绿色常亮
+//----------------------------------------------
+    0x82,0x08,0x22,0x00,0xFF,0xFF,0xFF,0xFF,
 };
 
 //=============================================================================;
@@ -142,7 +161,7 @@ void pwm_init(void)
     OM_PWM->PWMCON = 0x00000000;
 
     OM_PWM->PWMCR0 = 0x0000001C;
-    OM_PWM->PWMCR1 = 0x0000001c;
+    OM_PWM->PWMCR1 = 0x0000001C;
     OM_PWM->PWMDIV = 0x00000001;
     if(iLED_LEV_4 == led_light_lev)
         OM_PWM->PWMPRD = (iPWM_MAX+1);
@@ -158,10 +177,13 @@ void pwm_init(void)
  * @brief PWM 关闭函数
  * 
  */
-void pwm_off()
+ void pwm_off(void)
 {
     OM_PWM->PWMCON = 0x00000000;
-    OM_GPIO0->DATAOUTSET = 0x00000070;
+    OM_GPIO0->DATAOUTCLR =
+        (1u << LED_R_PIN) |
+        (1u << LED_G_PIN) |
+        (1u << LED_B_PIN);
 }
 
 /******************************************************************************
@@ -173,43 +195,33 @@ void pwm_off()
 ******************************************************************************/
 void pwm_write(uint8_t pwm_r, uint8_t pwm_g, uint8_t pwm_b)
 {
-    uint8_t i;
+    uint32_t set_mask = 0;
+    uint32_t rgb_mask =
+        (1u << LED_R_PIN) |
+        (1u << LED_G_PIN) |
+        (1u << LED_B_PIN);
 
-    OM_PWM->PWMCON = 0x00000000;
-    i = 0;
-    OM_GPIO0->DATAOUTSET = 0x00000070;
+    if ((pwm_r != 0) && (rgb_enable & iPWM_R))
+        set_mask |= (1u << LED_R_PIN);
 
-    if((0x00 != pwm_r) && (rgb_enable&iPWM_R))
-    {
-        pwm_2 = pwm_r;
-        i |= (iPWM_2_EN);
-    }
-    else
-    {
-        OM_GPIO0->DATAOUT |= 1<<LED_R_PIN;
-    }
+    if ((pwm_g != 0) && (rgb_enable & iPWM_G))
+        set_mask |= (1u << LED_G_PIN);
 
-    if((0x00 != pwm_g) && (rgb_enable&iPWM_G))
-    {
-        pwm_3 = pwm_g;
-        i |= (iPWM_3_EN);
-    }
-    else
-    {
-        OM_GPIO0->DATAOUT |= 1<<LED_G_PIN;
+    if ((pwm_b != 0) && (rgb_enable & iPWM_B))
+        set_mask |= (1u << LED_B_PIN);
+
+    OM_PWM->PWMCON = 0; //关闭PWM
+
+    /* 修复：如果 R/G/B 全为 0，直接拉高引脚熄灭 */
+    if (pwm_r == 0 && pwm_g == 0 && pwm_b == 0) {
+        OM_GPIO0->DATAOUTSET = rgb_mask;
+        return;
     }
 
-    if((0x00 != pwm_b) && (rgb_enable&iPWM_B))
-    {
-        pwm_4 = pwm_b;
-        i |= iPWM_4_EN;
-    }
-    else
-    {
-        OM_GPIO0->DATAOUT |= 1<<LED_B_PIN;
-    }
-    OM_PWM->PWMCON = i;
+    OM_GPIO0->DATAOUTCLR = rgb_mask; //清除RGB引脚
+    OM_GPIO0->DATAOUTSET = set_mask; //设置RGB引脚
 }
+// }
 
 /*******************************************************************************
 * 函数名称: led_process()
@@ -241,7 +253,7 @@ void logo_cfg(unsigned char const led_cfg_index)
             if(iDEVICE_TYPE_USB == device_type)
                 logo_ctrl |= iLED_WHITE;
             else if(iDEVICE_TYPE_24G == device_type)
-                logo_ctrl |= iLED_RED;
+                logo_ctrl |= iLED_GREEN; /* 硬件要求：2.4G 对应 P05(绿灯) */
             else if(iDEVICE_TYPE_BT0 >= device_type)
                 logo_ctrl |= iLED_GREEN;
             else if(iDEVICE_TYPE_BT1 >= device_type)
@@ -279,6 +291,15 @@ void logo_cfg(unsigned char const led_cfg_index)
         case iLED_CFG_DPI_CHANGE:
             flash_read(iCFG_BANK_ADDR+16+(dpi_grade<<3), 8);
             memcpy(led_dat, flash_fifo, 8);
+            busb_dpi_flag = 1;
+            usb_5v_in_hint = 1;
+            break;
+        case iLED_CFG_REPORT_CHANGE:
+            memcpy(led_dat, default_hint_led_tbl+8*8, 8);
+            if (device_type == iDEVICE_TYPE_24G)
+                logo_ctrl |= report_rgb_en_tbl[report_24g&0x03];
+            else if (device_type == iDEVICE_TYPE_USB)
+                logo_ctrl |= report_rgb_en_tbl[report_usb&0x03];
             busb_dpi_flag = 1;
             usb_5v_in_hint = 1;
             break;
@@ -322,7 +343,7 @@ void logo_cfg(unsigned char const led_cfg_index)
 * 输出参数:
 * 说    明:
 ******************************************************************************/
-void rgb_flash_process(void)
+void rgb_flash_process(void) //RGB闪烁处理
 {
     uint16_t time_temp;
 
@@ -388,151 +409,7 @@ void rgb_flash_process(void)
 * 输出参数:
 * 说    明:
 ******************************************************************************/
-void rgb_process(void)
-{
-    switch(logo_ctrl&iMODE_MASK)
-    {
-        case iLOGO_DILE:
 
-            break;
-        case iLOGO_OFF:
-            OM_GPIO0->DATAOUTSET = PWM_2_PIN|PWM_3_PIN|PWM_4_PIN;
-            OM_PWM->PWMCON = 0x00000000;
-
-            break;
-        case iLOGO_FLASH:
-            rgb_flash_process();
-
-            break;
-        case iLOGO_BREATHE:
-            if(led_speed_lev >logo_hint_time_count)
-            {
-                logo_hint_time_count++;
-                return;
-            }
-            logo_hint_time_count = 0;
-            if(true == blogo_status)
-            {
-                if(pwm_count >= iPWM_MAX)
-                    pwm_value = 0;
-                else
-                    pwm_value = (iPWM_MAX - pwm_count);
-            }
-            else
-            {
-                if(pwm_count >= iPWM_MAX)
-                    pwm_value = iPWM_MAX;
-                else
-                    pwm_value = pwm_count;
-            }
-
-            if(pwm_count >= iPWM_MAX)   // 最亮和最暗的时间加长
-            {
-                pwm_count = 0;
-                blogo_status = !blogo_status;
-
-                if(false == blogo_status)
-                {
-                    if(iRGB_MASK == (logo_ctrl&iRGB_MASK))
-                    {
-                        if(6 <= logo_rgb_index)
-                            logo_rgb_index = 0;
-                        else
-                            logo_rgb_index++;
-                    }
-                    if(0 != breath_times)
-                    {
-                        breath_times--;
-                        if(0 == breath_times)
-                        {
-                            rgb_enable = 0;
-                            pwm_write(0, 0, 0);
-                            bhint_process = false;
-                            logo_cfg(iLED_CFG_IDLE);
-                            return;
-                        }
-                    }
-                }
-            }
-            pwm_count++;
-
-            if(iRGB_MASK != (logo_ctrl&iRGB_MASK))
-                logo_rgb_index = ((logo_ctrl>>4)&0x07);
-            rgb_enable = rgb_en_tbl[logo_rgb_index&0x07];
-
-            pwm_write(pwm_value, pwm_value, pwm_value);
-       
-            break;
-        case iLOGO_NH:
-            if(led_speed_lev >logo_hint_time_count)
-            {
-                logo_hint_time_count++;
-                return;
-            }
-            logo_hint_time_count = 0;
-            if(0 == nhjb_led_index)
-            {
-                r_value = iPWM_NH_MAX;
-                g_value++;
-                b_value = 0;
-                if(iPWM_NH_MAX <= g_value)
-                {
-                    g_value = iPWM_NH_MAX;
-                    nhjb_led_index++;
-                }
-            }
-            else if(1 == nhjb_led_index)
-            {
-                r_value--;
-                g_value = iPWM_NH_MAX;
-                b_value = 0;
-                if(0 == r_value)
-                    nhjb_led_index++;
-            }
-            else if(2 == nhjb_led_index)
-            {
-                r_value = 0;
-                g_value = iPWM_NH_MAX;
-                b_value++;
-                if(iPWM_NH_MAX <= b_value)
-                {
-                    b_value = iPWM_NH_MAX;
-                    nhjb_led_index++;
-                }
-            }
-            else if(3 == nhjb_led_index)
-            {
-                r_value = 0;
-                g_value--;
-                b_value = iPWM_NH_MAX;
-                if(0 == g_value)
-                    nhjb_led_index++;
-            }
-            else if(4 == nhjb_led_index)
-            {
-                r_value++;
-                g_value = 0;
-                b_value = iPWM_NH_MAX;
-                if(iPWM_NH_MAX <= r_value)
-                {
-                    r_value = iPWM_NH_MAX;
-                    nhjb_led_index++;
-                }
-            }
-            else //if(5 == nhjb_led_index)
-            {
-                r_value = iPWM_NH_MAX;
-                g_value = 0;
-                b_value--;
-                if(0 == b_value)
-                    nhjb_led_index = 0;
-            }
-            rgb_enable = 0x07;
-            pwm_write(r_value, g_value, b_value);
-      
-            break;
-    }
-}
 
 /******************************************************************************
 * 函数名称: logo_process
@@ -543,20 +420,38 @@ void rgb_process(void)
 ******************************************************************************/
 void logo_process(void)
 {
+    /* [终极拦截] 电池模式下（2.4G / BLE），灯效完全由 mode_led_hint 接管，
+       底层原厂的 logo_process 一律不准跑，彻底切断底层乱点红灯的可能！ */
+    if (iDEVICE_TYPE_USB != device_type)
+    {
+        OM_PWM->PWMCON = 0;
+        /* P04/P05/P06 由 mode_led_hint 独占，此处不碰 */
+        return;
+    }
+
+    /* USB 模式下，如果 DPI 正在跑快闪，也让路 */
+    if (ind_mode == IND_MODE_FLASH)
+    {
+        return;
+    }
+
     uint8_t i;
+
 
     if(true==bsave_status)
     {
         bsave_status = false;
         flash_save_status();
-        brf_24g_reconnect = 1;
+        if (device_type == iDEVICE_TYPE_24G && (ble_24g_ctrl&bom6239_sync_ok))
+            brf_24g_reconnect = 1;
     } 
 
     if(true==bsave_driver_status)
     {
         bsave_driver_status = false;
         flash_save_driver_status();
-        brf_24g_reconnect = 1;
+        if (device_type == iDEVICE_TYPE_24G && (ble_24g_ctrl&bom6239_sync_ok))
+            brf_24g_reconnect = 1;
     } 
 
     if(true == bhint_process)
@@ -565,23 +460,45 @@ void logo_process(void)
         return;
     }
 
-    if(USB_5V_PIN)      /* 5V插入 */
+    static bool bcharg_hint = 0;
+
+    if(!USB_5V_PIN)     /* 电池供电：P04/P05/P06 由 mode_led_hint 独占 */
     {
+        if(true != bhint_process && ind_mode == IND_MODE_OFF)
+        {
+            OM_PWM->PWMCON = 0;
+            /* 不碰 P04/P05/P06 */
+        }
+    }
+    else if(USB_5V_PIN)      /* 5V插入 */
+    {
+        /* [核心修复] 2.4G射频发射极易导致USB_5V_PIN产生瞬间毛刺高电平。
+           如果当前不是USB模式，说明是电池供电受到了干扰，强行关灯即可，绝不能亮充电红灯！ */
+        if (iDEVICE_TYPE_USB != device_type)
+        {
+            /* 毛刺高电平：不是 USB 模式，P04/P05/P06 不碰 */
+            return;
+        }
+
+        bcharg_hint = true;
+        OM_PWM->PWMCON = 0x00000000;
+        /* P04/P05/P06 由 mode_led_hint 独占，充电只控 P00（S205 复用 low 灯） */
+#ifdef LED_LOW_PIN
         if(BAT_CHG_OK)
-        {
-            OM_PWM->PWMCON = 0x00000000;
-            gpio_clear(LED_G_PIN);
-            gpio_set(LED_R_PIN);
-            gpio_set(LED_B_PIN);
-        }
+            led_chg_off();          /* low 灯灭 = 充电完成 */
         else
-        {
-            OM_PWM->PWMCON = 0x00000000;
-            gpio_clear(LED_R_PIN);
-            gpio_set(LED_G_PIN);
-            gpio_set(LED_B_PIN);
-        }
+            led_chg_on();           /* low 灯亮 = 充电中 */
+#endif
         return;
+    }
+    else
+    {
+        if (bcharg_hint)
+        {
+            bcharg_hint = false;
+            pwm_off();
+        }
+        
     }
 
     if(iDEVICE_TYPE_USB == device_type)
@@ -595,72 +512,53 @@ void logo_process(void)
             return;
     }
 
-    if(true == bhint_process)
-    {                                           // 提示处理
-        rgb_flash_process();
-        return;
-    }
+    // if(true == bhint_process)
+    // {                                           // 提示处理
+    //     rgb_flash_process();
+    //     return;
+    // }
+    // rgb_enable = dpi_rgb_en_tbl[dpi_grade];
+    // pwm_write(iPWM_MAX,iPWM_MAX,iPWM_MAX);
 
-    if( (false == bled_bright_en) ||  (adv_cfg_value&(1<<5)))
-    {
-        gpio_set(LED_R_PIN);
-        gpio_set(LED_G_PIN);
-        gpio_set(LED_B_PIN);
-        OM_PWM->PWMCON = 0x00000000;
-        return;
-    }
-
-    if(led_mode != led_mode_bak)
-    {
-        led_mode_bak = led_mode;
-        pwm_init();
-        switch(led_mode&iMODE_MASK)
-        {         
-            case iLOGO_OFF:                     // 关闭
-                logo_ctrl = iLOGO_OFF;
-                r_value = 0;
-                g_value = 0;
-                b_value = 0;
-
-                break;
-            default:
-                i = (iCFG_LED_PARA_ADDR+((led_mode-2)<<3));
-                flash_read(iCFG_BANK_ADDR+i, 8);
-                memcpy(led_dat, flash_fifo, 8);
-                r_value >>= 2;
-                g_value >>= 2;
-                b_value >>= 2;
-
-                if((0xFF == logo_ctrl)
-                    || (iLOGO_MAX < (logo_ctrl&0x0F)))
-                    logo_ctrl = iLOGO_OFF;      // 无效模式，自动切换到关灯
-
-                logo_ctrl &= 0x8F;
-                logo_ctrl |= ((rgb_ctrl&0x07)<<4);
-                break;
-        }
-    }
-
-    if(iLED_LEV_MIN == led_light_lev)
-    {
-        OM_GPIO0->DATAOUTSET = PWM_2_PIN|PWM_3_PIN|PWM_4_PIN;
-        OM_PWM->PWMCON = 0x00000000;
-        return;
-    }
-
-    if(iLOGO_FLASH == (logo_ctrl&iMODE_MASK))
-    {
-        flash_on_time = hold_on_time;
-        flash_off_time = hold_off_time;
-
-        for(uint8_t i=0; i<led_speed_lev; i++)
-        {
-            flash_on_time += flash_on_time;
-            flash_off_time += flash_off_time;
-        }
-    }
-    rgb_process();
 }
 
 
+void sys_deep_sleep_process()
+{
+    if (USB_5V_PIN)
+    {
+        while (1)
+        {
+            if(BAT_CHG_OK)
+            {
+                OM_PWM->PWMCON = 0x00000000;
+#ifdef LED_LOW_PIN
+                led_chg_off();   /* low 灯灭 = 充电完成（S205 充电灯复用 low 灯） */
+#endif
+            }
+            else
+            {
+                OM_PWM->PWMCON = 0x00000000;
+#ifdef LED_LOW_PIN
+                led_chg_on();    /* low 灯亮 = 充电中 */
+#endif
+            }
+            drv_wdt_keep_alive(OM_WDT);
+            delayms(1);
+            key_io_scan();
+            if (key_status)
+            {
+                NVIC_SystemReset();
+            }
 
+            if (!USB_5V_PIN)
+            {
+                break;
+            }
+            
+            
+        }
+        
+    }
+    
+}
