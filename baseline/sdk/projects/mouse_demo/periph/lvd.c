@@ -335,7 +335,10 @@ __RAM_CODE void bat_check(void)
         {
             if(false == blvd_hint_flag)
             {
+#if !BOARD_LED_INDICATOR_ONLY
+                /* hint_only：低压指示由 mode_led_hint 独占，底层 PWM 不点 */
                 logo_cfg(iLED_CFG_LVD);
+#endif
             }
         }
     }
@@ -344,8 +347,11 @@ __RAM_CODE void bat_check(void)
         if(false == bidle_chg_flag)
         {
             if(!is_5v_in())
-            {   
+            {
+#if !BOARD_LED_INDICATOR_ONLY
+                /* hint_only：IDLE 指示由 mode_led_hint 独占，底层 PWM 不点 */
                 logo_cfg(iLED_CFG_IDLE);
+#endif
             }
         }
     }

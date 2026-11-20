@@ -154,6 +154,8 @@ void rf_sync_ok_process(void)
         ble_24g_ctrl &= ~bom6239_sync_ing;
     }
 
+#if !BOARD_LED_INDICATOR_ONLY
+    /* hint_only：2.4G 连接成功不闪 RGB，只让 mode_led_hint 管模式灯（S205 [no-24g-rgb]） */
     if(!brf_24g_reconnect)      /* 操作FLASH导致的回连，不指示 */
     {
         ind_val_t ind_val = {
@@ -164,6 +166,7 @@ void rf_sync_ok_process(void)
         };
         ind_config(&ind_val);
     }
+#endif
     brf_24g_reconnect = 0;
 
     if(OM_PMU->SW_RSVD3 == iMODE_24G_RESET_VAL)     /* 24G模式下复位之后回连，先发设备信息通知驱动 */

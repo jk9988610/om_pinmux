@@ -350,7 +350,10 @@ void app_ble_evt_dispatch(uint32_t events)
 
                 if(ble_24g_ctrl&bom6239_conning)
                 {
+#if !BOARD_LED_INDICATOR_ONLY
+                    /* hint_only：连接灯由 mode_led_hint 独占，底层 PWM 不点 */
                     logo_cfg(iLED_CFG_CONNECT_OK);
+#endif
                     ble_24g_ctrl &= ~bom6239_conning;
                     ble_24g_ctrl |= bom6239_conn_ok;
 					if(false == bradio_receive)
@@ -358,6 +361,8 @@ void app_ble_evt_dispatch(uint32_t events)
 
                     reset_connect &= ~(uint8_t)(1<<device_type);
                 }
+#if !BOARD_LED_INDICATOR_ONLY
+                /* hint_only：BLE 重连 RGB 闪灯由 mode_led_hint 独占，整块不编译 */
                 ind_val_t ind_val = {
                     .ind_color = IND_GREEN,
                     .ind_times = IND_TIMES_ONE,
@@ -367,6 +372,7 @@ void app_ble_evt_dispatch(uint32_t events)
                 if(bt_index != iDEVICE_TYPE_BT0)
                     ind_val.ind_color = IND_BLUE;
                 ind_config(&ind_val);
+#endif
             }
         }
         if(connect_start_time) { /* work around intel bluetooth bug */

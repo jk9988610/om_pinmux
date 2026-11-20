@@ -109,7 +109,10 @@ void sleep_process(void)
                     rf_ctrl_reg &= ~(brf_sync_time|brf_sync_status);
                     led_bt0_off();
                     led_bt1_off();
+#if !BOARD_LED_INDICATOR_ONLY
+                    /* hint_only：P24(2.4G灯) 由 mode_led_hint 独占，这里不 toggle（S205 [no-dongle-led]） */
                     gpio_toggle(LED_MODE_24G_PIN);
+#endif
                     if(5 > no_dongle_time_count)
                     {
                         for(i=0; i<100; i++)

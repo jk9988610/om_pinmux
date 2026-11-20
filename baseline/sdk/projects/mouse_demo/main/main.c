@@ -271,7 +271,10 @@ soft_reset_process:
         bmode_swtich_valid = false;
         rtc_init();
 		b24g_nromal = false;
+#if !BOARD_LED_INDICATOR_ONLY
+        /* 底层 PWM 开机点灯；hint_only 策略（S205）下由 mode_led_hint 独占，不跑 */
         logo_cfg(iLED_CFG_POWER_ON);
+#endif
         ind_sleep();
         if(iDEVICE_TYPE_USB == device_type)                         /* USB模式 */
         {
