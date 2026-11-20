@@ -1326,6 +1326,7 @@ function renderSuccess() {
   $("main").innerHTML = '<div class="success"><div class="check">✓</div><h3>工程已生成</h3>' +
     '<p>配置已写入 SDK 副本。建议用 Keil 打开工程编译，预期 0 Error / 0 Warning。</p>' +
     '<div class="kv"><span class="k">写入文件</span><span class="v">' + (r.changed || 0) + ' 个</span>' +
+    '<span class="k">固件版本</span><span class="v">' + (r.version != null ? "V" + r.version + "（iREAL_VERSION_ID / startup 已同步）" : "—") + '</span>' +
     '<span class="k">事务备份</span><span class="v">' + esc(manifest) + '</span>' +
     '<span class="k">回滚命令</span><span class="v">python -m omcfg rollback --manifest &lt;manifest.json&gt;</span>' +
     '<span class="k">工程目录</span><span class="v">' + esc(S.sdk) + '</span>' +

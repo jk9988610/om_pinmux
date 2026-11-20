@@ -673,6 +673,41 @@ def project_id(config: dict[str, Any]) -> dict[str, str]:
     }
 
 
+def set_project_id_version_text(text: str, version: int) -> str:
+    """改写 project.id.version 标量（保留行尾注释）；project.id 段不存在则原样返回。
+
+    version 必须是正整数——它是固件版本真相源，生成时由 version 模块 +1 后写回。
+    """
+    if not isinstance(version, int) or isinstance(version, bool) or version < 0:
+        return text
+    lines = text.split("\n")
+    try:
+        start, stop, _child = _block_lines(lines, "project")
+    except ValueError:
+        return text
+    id_start = next(
+        (
+            index
+            for index in range(start + 1, stop)
+            if lines[index].lstrip().startswith("id:") and not lines[index].lstrip().startswith("#")
+        ),
+        None,
+    )
+    if id_start is None:
+        return text
+    id_indent = len(lines[id_start]) - len(lines[id_start].lstrip())
+    id_stop = stop
+    for index in range(id_start + 1, stop):
+        line = lines[index]
+        if not line.strip():
+            continue
+        if len(line) - len(line.lstrip()) <= id_indent:
+            id_stop = index
+            break
+    result = _set_scalar(lines, id_start, id_stop, "version", str(version))
+    return "\n".join(result or lines)
+
+
 def features(config: dict[str, Any], pins: dict[str, dict[str, str]] | None = None) -> dict[str, bool]:
     pins = pins or pin_entries(config)
     b = board(config)

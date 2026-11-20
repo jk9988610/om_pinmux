@@ -19,6 +19,7 @@ from . import (
     plugins,
     rules,
     validate,
+    version as version_mod,
 )
 from .generate import generator
 from .targets import sdk
@@ -836,10 +837,17 @@ class Api:
             config = model.load_config(model.default_config_path(root))
             report = validate.validate_config(config)
             _add_warning(root, config, report)
-            result = _payload(root, config, report)
             if not report.ok:
+                result = _payload(root, config, report)
                 result["error"] = "校验未通过，拒绝写入"
                 return result
+            # 固件版本号：真相源 .omcfg 的 project.id.version，每次写盘 +1。
+            # 必须在 build_outputs 之前递增，让 user_config.h 的 iREAL_VERSION_ID 同步；
+            # .omcfg / startup 的写入与生成文件进同一事务，整体可回滚。
+            transaction = FileTransaction.create(root, "omcfg_gui_apply")
+            new_version, _version_writes = version_mod.bump(root, config, transaction)
+            config["project"].setdefault("id", {})["version"] = new_version
+            result = _payload(root, config, report)
             outputs = [item for item in generator.build_outputs(config, root) if item.changed]
             # 板型契约源码（key_io / sleep）必须与 user_config.h 同步改写：
             # 双脚模式下骨架 key_io.c 写死的 MODE_BLE_24G_PIN 需要改成双模式判断，
@@ -855,7 +863,6 @@ class Api:
             }
             periph = root / "projects/mouse_demo/periph"
             planned = biz_sync.plan_board_contracts(str(periph), feat)
-            transaction = FileTransaction.create(root, "omcfg_gui_apply")
             for item in outputs:
                 transaction.write_bytes(item.path, item.render(), "GUI 按标记块写入")
             for path, new_text in planned:
@@ -864,10 +871,11 @@ class Api:
             # BLE 广播名：project.ble_names 是真相源，生成阶段同步到 mouse_hw.c /
             # ex2_app_mouse.c（走 newproject 的精确改写器，支持事务、幂等）。
             identity_rewrites = newproject.rewrite_identity(root, config, tx=transaction)
-            total = len(outputs) + len(planned) + len(identity_rewrites)
+            total = len(outputs) + len(planned) + len(identity_rewrites) + 2  # .omcfg + startup
             result["manifest"] = str(transaction.commit()) if total else ""
             result["changed"] = total
-            result["message"] = f"已写入 {total} 个文件" if total else "没有文件变化"
+            result["version"] = new_version
+            result["message"] = f"已写入 {total} 个文件；固件版本 → {new_version}"
             return result
         except Exception as exc:
             return _error(str(exc), "确认工程已初始化、文件未被占用")
