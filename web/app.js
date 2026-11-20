@@ -39,7 +39,7 @@ var S = {
   pluginState: { plugins: [], enabled: [] },
   material: { categories: [], selected: {}, params: {}, effects: {} },
   board: {}, boardChoice: {}, health: null,
-  form: { name: "", id: "", customer: "BYC", version: "1", out: "" },
+  form: { name: "", id: "", customer: "BYC", ble: "", version: "1", out: "" },
   assignments: {}, removedRoles: {}, protectedRoles: {},
   selectedRole: null, selectedGroup: null, focusPin: null, roleQuery: "",
   diff: null, previewed: false, applied: false, applyResult: null,
@@ -215,7 +215,13 @@ async function loadWorkspace(sdk) {
 async function refreshHealth() {
   if (!S.sdk) return;
   var st = await call("blank_status", S.sdk);
-  if (st && st.ok) { S.health = st; S.board = st.board || S.board; }
+  if (st && st.ok) {
+    S.health = st; S.board = st.board || S.board;
+    // 工程身份回显：缓存里没填蓝牙名时，用工程当前值（第一个广播名）填表单。
+    var ident = st.identity || {};
+    if (ident.ble_names && ident.ble_names.length && !S.form.ble) S.form.ble = ident.ble_names[0];
+    if (ident.customer) S.form.customer = ident.customer;
+  }
 }
 
 async function initOptions() {
@@ -268,6 +274,7 @@ function loadFormCache() {
     S.form.name = s.name || "";
     S.form.id = s.id || "";
     S.form.customer = s.customer || "BYC";
+    S.form.ble = s.ble || "";
     S.form.version = s.version || "1";
     S.form.out = s.out || "";
   } catch (e) {}
@@ -496,17 +503,29 @@ function viewIdentity() {
   return '<div class="form-grid">' +
     field("项目名", "name", "MyMouse", "用于目录名与工程标识", false) +
     field("项目号", "id", "0x0457（留空=1）", "十六进制或十进制", false) +
-    field("客户名", "customer", "BYC", "", false) +
+    field("客户名", "customer", "BYC", "写进 iCONSUMER_NAME", false) +
+    field("蓝牙名", "ble", "留空=自动生成，如 S205-BLE", "BLE 广播名；创建/应用后写进 mouse_name（≤28 字符）", false) +
     field("版本", "version", "1", "", false) +
     '<div class="field full"><label>输出根目录</label><div class="input-row">' +
     '<input id="f-out" value="' + esc(S.form.out) + '" placeholder="E:\\work" oninput="syncForm()">' +
     '<button class="btn" onclick="browseOut()">浏览…</button></div>' +
     '<div class="fh">工程建在 &lt;输出根目录&gt;\\&lt;项目名&gt;，目标目录必须不存在</div></div></div>' +
     '<div class="info-strip"><div class="i">i</div><p><b>空白起步是刻意设计</b>：创建后已配 0 个脚、缺若干必需脚，这是正常状态。后续每配一个角色，健康卡的完成度就会上涨 —— 你随时知道还差多少。</p></div>' +
-    (S.sdk ? '<div class="info-strip"><div class="i">✓</div><p>工程已创建：<span class="mono">' + esc(S.sdk) + '</span>。返回修改名字不会重建工程；若要换名字请关闭后重新新建。</p></div>' : "");
+    (S.sdk ? '<div class="info-strip"><div class="i">✓</div><p>工程已创建：<span class="mono">' + esc(S.sdk) + '</span>。改客户名/蓝牙名后点「应用身份」写进工程与源码；项目名/目录不随这里变化。</p>' +
+      '<button class="btn sm" onclick="applyIdentity()">应用身份（客户名 / 蓝牙名）</button></div>' : "");
+}
+async function applyIdentity() {
+  if (!S.sdk) { toast("请先创建或打开工程", true); return; }
+  syncForm();
+  var r = await call("blank_set_identity", S.sdk, {
+    customer: S.form.customer || "BYC",
+    ble_names: S.form.ble ? [S.form.ble.trim()] : null
+  });
+  if (!r || !r.ok) { toast("身份保存失败：" + ((r && r.error) || "未知"), true); return; }
+  toast("身份已保存；BLE 广播名已同步到源码" + (r.ble_names && r.ble_names.length ? "（" + r.ble_names.join(" / ") + "）" : ""));
 }
 function syncForm() {
-  ["name","id","customer","version","out"].forEach(function(k) {
+  ["name","id","customer","ble","version","out"].forEach(function(k) {
     var el = $("f-" + k);
     if (el) S.form[k] = el.value;
   });
@@ -646,15 +665,22 @@ function viewBoard() {
   var leds24 = (S.caps.board_enums.mode_24g_led || ["R","G","B"]).map(function(v) {
     return [v, { R:"红灯 R（KC536）", G:"绿灯 G（S205）", B:"蓝灯 B" }[v] || v, ""];
   });
+  var indicators = (S.caps.board_enums.led_indicator || ["full","hint_only"]).map(function(v) {
+    return [v, { full:"原版灯效", hint_only:"仅指示灯" }[v] || v, ""];
+  });
   var modeEffect = d.mode_pins === "dual" ? "当前：MODE_24G / MODE_BLE 成对必需；拨杆三段（2.4G / BAT / BT）"
     : d.mode_pins === "single" ? "当前：MODE_BLE_24G 单脚必需"
     : d.mode_pins === "wired" ? "当前：有线模式，不额外要求模式脚"
     : "选中后角色出现在约束栏，必需项计入「缺必需」。";
   var led24Effect = "当前 2.4G 指示灯复用 " + (d.mode_24g_led || "R") + " 灯（LED_MODE_" + (d.mode_24g_led || "R") + "_PIN）；" +
     "由硬件决定，KC536 是红灯、S205 是 P05 绿灯。BT1 固定复用 G、BT0 固定复用 B。";
+  var indicatorEffect = d.led_indicator === "hint_only"
+    ? "当前：仅指示灯 —— mode_led_hint 独占模式灯，底层 PWM 点灯（开机/连接/低电闪灯）编译期排除，不串扰"
+    : "当前：原版灯效 —— 保留全部底层点灯调用（KC536 默认）。若出现切换瞬间串灯，选「仅指示灯」";
   return opt("模式脚", "按原理图实际接法选；双脚=三段拨杆（2.4G/BAT/BT），只影响哪些模式角色必需", "mode_pins", modes, modeEffect) +
     opt("2.4G 指示灯", "2.4G 模式亮哪只物理模式灯，由原理图决定；工具不替你选", "mode_24g_led", leds24, led24Effect) +
-    opt("指示灯", "模式指示灯方案：三色 LED / 灯带 / 无。当前模板只做指示灯，不跑呼吸灯效", "logo", logos, "生成代码用 mode_led_hint 独占指示灯；logo_process 在电池模式直接让路，不产生呼吸灯。RGB 模式下 LED_R/G/B 三脚必须保留。") +
+    opt("指示灯", "模式指示灯方案：三色 LED / 灯带 / 无", "logo", logos, "RGB 模式下 LED_R/G/B 三脚必须保留。具体是否跑底层灯效由下面的「指示灯策略」决定。") +
+    opt("指示灯策略", "原版灯效 vs 仅指示灯；只改生成语义，不改脚位", "led_indicator", indicators, indicatorEffect) +
     opt("滚轮编码器", "硬件 pinmux 组合；P24/P25 请选软件 GPIO 后到配脚步骤自行指定", "wheel", wheels, "WHEEL_A/B 必须成对配置；P24/P25 是合法脚，工具不替你选。") +
     viewPolaritySection() +
     '<div class="info-strip"><div class="i">i</div><p>板型选项<b>不直接改脚位</b>，只改「哪些角色必需」与生成语义。脚位请在你自己的工程里按原理图逐项指定，工具不会替你决定某只脚给谁用。</p></div>';
@@ -704,7 +730,8 @@ function setBoardChoice(key, value) {
   (async function() {
     var r = await call("blank_set_board", S.sdk, {
       mode_pins: S.boardChoice.mode_pins, logo: S.boardChoice.logo, wheel: S.boardChoice.wheel,
-      mode_24g_led: S.boardChoice.mode_24g_led || "R"
+      mode_24g_led: S.boardChoice.mode_24g_led || "R",
+      led_indicator: S.boardChoice.led_indicator || "full"
     });
     if (!r || !r.ok) {
       S.boardChoice[key] = old; render();
@@ -1185,7 +1212,7 @@ async function createBlank() {
   var name = S.form.name.trim(), out = normalizeDir(S.form.out), id = parseId(S.form.id);
   if (!name || !out || id === null) { toast("请补全项目名、输出目录与项目号", true); return false; }
   var target = out + "\\" + name;
-  var r = await call("blank_new", name, target, S.form.customer || "BYC", parseInt(S.form.version, 10) || 1, id);
+  var r = await call("blank_new", name, target, S.form.customer || "BYC", parseInt(S.form.version, 10) || 1, id, S.form.ble || null);
   if (!r || !r.ok) { toast("创建失败：" + ((r && r.error) || "未知") + (r && r.hint ? "；" + r.hint : ""), true); return false; }
   S.sdk = r.sdk; S.blankMode = true;
   await loadWorkspace(S.sdk);
