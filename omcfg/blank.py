@@ -41,6 +41,7 @@ def default_board() -> dict[str, Any]:
         "logo": "rgb",
         "led_polarity": "active_low",
         "mode_24g_led": "R",
+        "led_indicator": "full",
         "sensor": {"bus": "sdio_3wire", "dir_clock": 6},
         "wheel": "ENCODER_PINMUX_SEL_IO_20_21",
     }

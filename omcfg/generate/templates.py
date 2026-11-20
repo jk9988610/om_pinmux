@@ -208,6 +208,12 @@ def render_pins(config: dict, pins: dict[str, dict[str, str]]) -> str:
     lines.append("")
     lines.append("//* 当前UART仅调试用 */")
     lines.append(f"#define {pad('UART_PIN', 24)}({model.uart_pin(config)})")
+    # 指示灯策略：hint_only 时定义守卫宏，编译期排除底层 logo_cfg/ind_config/gpio_toggle
+    # 点灯调用，只留 mode_led_hint 独占。full（默认 KC536）不输出任何行 → 字节一致。
+    if model.led_indicator(config) == "hint_only":
+        lines.append("")
+        lines.append("//* 指示灯策略：只用 mode_led_hint 独占（S205），底层点灯调用被排除 */")
+        lines.append(f"#define {pad('BOARD_LED_INDICATOR_ONLY', 26)}1")
     return "\n".join(lines)
 
 

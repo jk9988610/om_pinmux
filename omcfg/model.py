@@ -210,6 +210,10 @@ DIR_CLOCK_ENUM = {0, 3, 6, 9}
 # 2.4G 指示灯复用哪只物理模式灯（R/G/B）：由硬件决定，默认 R 保 KC536 字节一致，
 # S205 真机是 G（P05 绿灯）。别名脚极性跟随被指定的主灯。
 MODE_24G_LED_ENUM = {"R", "G", "B"}
+# 指示灯策略：KC536 骨架有两套点灯机制（底层 logo_cfg/ind_config 用 PWM 直接点灯，
+# 与 mode_led_hint 的 GPIO 状态机打架）。hint_only 在编译期排除底层点灯调用，
+# 只留 mode_led_hint 独占模式灯（S205 需求）；full 保留原版全部调用（KC536 默认，字节一致）。
+LED_INDICATOR_ENUM = {"full", "hint_only"}
 # 滚轮编码器硬件 pinmux；P24/P25 走 SOFT_GPIO 由用户按原理图自由配脚。
 WHEEL_ENUM = {
     "ENCODER_PINMUX_SEL_IO_00_01",
@@ -450,6 +454,67 @@ def set_board_value_text(text: str, key: str, value: str) -> str:
     return "\n".join(result or lines)
 
 
+def _drop_block_list_items(
+    lines: list[str], key: str, start: int, stop: int
+) -> tuple[list[str], int]:
+    """删除 block list 形式的 `key:` 后面那些缩进更深的 '- ' 项，返回 (新行, 新 stop)。
+
+    YAML 里 ble_names 有两种写法：行内 `[a, b]` 或块列表：
+        ble_names:
+          - Draft Bt1
+          - Draft Bt2
+    _set_scalar 把 `ble_names:` 改成行内列表时若不删掉旧的 '- ' 项，残留项会
+    破坏缩进结构，load_config_text 解析失败。标量字段（customer）无后续列表项，
+    本函数对其无副作用。
+    """
+    target = next(
+        (
+            index
+            for index in range(start + 1, stop)
+            if lines[index].lstrip().startswith(f"{key}:")
+            and not lines[index].lstrip().startswith("#")
+        ),
+        None,
+    )
+    if target is None:
+        return lines, stop
+    after = lines[target].split(":", 1)[1].strip()
+    if after and not after.startswith("#"):
+        return lines, stop  # 已有行内值，不是块列表
+    base_indent = len(lines[target]) - len(lines[target].lstrip())
+    drop: set[int] = set()
+    for index in range(target + 1, stop):
+        line = lines[index]
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        indent = len(line) - len(line.lstrip())
+        stripped = line.lstrip()
+        # YAML 允许块列表的 '- ' 与父键同缩进（omcfg 的 dump_config 就是 2/2）。
+        if indent >= base_indent and stripped.startswith("- "):
+            drop.add(index)
+        elif indent <= base_indent:
+            break  # 同级的新键（如 id:）或更深的非列表内容，停止
+        else:
+            break
+    if not drop:
+        return lines, stop
+    return [line for i, line in enumerate(lines) if i not in drop], stop - len(drop)
+
+
+def set_project_field_text(text: str, key: str, value: str) -> str:
+    """改写 project 段的标量/列表字段（customer / ble_names），保留行尾注释。
+    ble_names 传入已格式化的 YAML 列表字面量，如 '["S205-BLE"]'。
+    原值是块列表时先清掉旧 '- ' 项，避免残留破坏 YAML 结构。"""
+    lines = text.split("\n")
+    try:
+        start, stop, _child = _block_lines(lines, "project")
+    except ValueError:
+        return text
+    lines, stop = _drop_block_list_items(lines, key, start, stop)
+    result = _set_scalar(lines, start, stop, key, value)
+    return "\n".join(result or lines)
+
+
 def set_polarity_value_text(text: str, role: str, value: str) -> str:
     """在文本配置里设置逐脚极性（保留注释/排版）。
 
@@ -548,6 +613,13 @@ def mode_24g_led(config: dict[str, Any]) -> str:
     """2.4G 指示灯复用的物理模式灯：R/G/B，缺省 R（KC536 基线字节不变）。"""
     value = str(board(config).get("mode_24g_led") or "R").upper()
     return value if value in MODE_24G_LED_ENUM else "R"
+
+
+def led_indicator(config: dict[str, Any]) -> str:
+    """指示灯策略：full=原版两套点灯机制；hint_only=只留 mode_led_hint。
+    缺省 full 保证 KC536 基线字节不变。"""
+    value = str(board(config).get("led_indicator") or "full").lower()
+    return value if value in LED_INDICATOR_ENUM else "full"
 
 
 def mode_24g_main_role(config: dict[str, Any]) -> str:

@@ -861,7 +861,10 @@ class Api:
             for path, new_text in planned:
                 # 保留源码原编码（read 时按 utf-8 解码，写回同编码），避免 BOM/换行被改写。
                 transaction.write_text(path, new_text, encoding="utf-8", newline="\n")
-            total = len(outputs) + len(planned)
+            # BLE 广播名：project.ble_names 是真相源，生成阶段同步到 mouse_hw.c /
+            # ex2_app_mouse.c（走 newproject 的精确改写器，支持事务、幂等）。
+            identity_rewrites = newproject.rewrite_identity(root, config, tx=transaction)
+            total = len(outputs) + len(planned) + len(identity_rewrites)
             result["manifest"] = str(transaction.commit()) if total else ""
             result["changed"] = total
             result["message"] = f"已写入 {total} 个文件" if total else "没有文件变化"
@@ -890,6 +893,7 @@ class Api:
                         "polarity": sorted(model.POLARITY_ENUM),
                         "wheel": sorted(model.WHEEL_ENUM),
                         "mode_24g_led": sorted(model.MODE_24G_LED_ENUM),
+                        "led_indicator": sorted(model.LED_INDICATOR_ENUM),
                     },
                     "board_defaults": board,
                     "plugins": plugins.available_plugins(),
@@ -905,8 +909,10 @@ class Api:
         customer: str = "BYC",
         version: int = 1,
         id_low: int | None = None,
+        ble_name: str | None = None,
     ) -> dict:
-        """从内置 KC536 骨架建一个引脚为空的草稿工程，目标目录必须不存在。"""
+        """从内置 KC536 骨架建一个引脚为空的草稿工程，目标目录必须不存在。
+        ble_name 给定则覆盖默认 BLE 广播名（否则生成 <项目名> Bt1/Bt2）。"""
         try:
             name = (name or "").strip()
             problem = baseline.name_problem(name)
@@ -922,6 +928,9 @@ class Api:
             source, _ = baseline.ensure_ready()
             config = blank.empty_config(name, customer=customer or "BYC", version=int(version or 1))
             config["project"]["id"]["low"] = f"0x{low:04X}"
+            ble = (ble_name or "").strip()
+            if ble:
+                config["project"]["ble_names"] = [ble]
             payload = (model.dump_config(config) + "\n").encode("utf-8")
 
             transaction = FileTransaction.create(dest, "omcfg_blank_new")
@@ -968,6 +977,10 @@ class Api:
                     "ok": True,
                     "sdk": str(root),
                     "board": board,
+                    "identity": {
+                        "customer": model.project(config).get("customer", ""),
+                        "ble_names": model.ble_names(config),
+                    },
                     "polarity_map": model.polarity_map(config),
                     "polarity_roles": [
                         {
@@ -1199,6 +1212,68 @@ class Api:
         except Exception as exc:
             return _error(str(exc), "确认工程已初始化")
 
+    def blank_set_identity(self, sdk_path: str, updates: dict | None = None) -> dict:
+        """设置工程身份：customer（客户名）与 ble_names（BLE 广播名列表）。
+        ble_names 改动时同步改写 mouse_hw.c / ex2_app_mouse.c 的广播名（幂等）。"""
+        try:
+            root = sdk.resolve_sdk(sdk_path)
+            config_path = model.default_config_path(root)
+            source = sdk.read_source(config_path)
+            text = source.text
+            updates = updates or {}
+            allowed = {"customer", "ble_names"}
+            for key in updates:
+                if key not in allowed:
+                    return _error(f"不支持的身份字段: {key}", f"允许 {sorted(allowed)}")
+
+            customer = updates.get("customer")
+            if customer is not None:
+                customer = str(customer).strip()
+                if not customer:
+                    return _error("customer 不能为空", "例如 BYC / APP")
+
+            raw_names = updates.get("ble_names")
+            names: list[str] | None = None
+            if raw_names is not None:
+                if isinstance(raw_names, str):
+                    names = [n.strip() for n in raw_names.split(",") if n.strip()]
+                elif isinstance(raw_names, list):
+                    names = [str(n).strip() for n in raw_names if str(n).strip()]
+                if not names:
+                    return _error("ble_names 至少需要一个广播名", "例如 S205-BLE 或 BT1,BT2")
+                for n in names:
+                    if len(n) > 28:
+                        return _error(f"BLE 广播名超过 28 字符会被截断: {n}", "MOUSE_NAME_MAX_LEN=29")
+
+            if customer is not None:
+                text = model.set_project_field_text(text, "customer", customer)
+            if names is not None:
+                literal = "[" + ", ".join(f'"{n}"' for n in names) + "]"
+                text = model.set_project_field_text(text, "ble_names", literal)
+
+            if text != source.text:
+                config = model.load_config_text(text)
+                sdk.ensure_encodable(text, source.encoding)
+                transaction = FileTransaction.create(root, "omcfg_blank_identity")
+                transaction.write_bytes(
+                    config_path,
+                    sdk.SourceFile(config_path, text, source.encoding, source.newline, source.bom).render(),
+                    "GUI 设置工程身份",
+                )
+                if names is not None:
+                    newproject.rewrite_identity(root, config, tx=transaction)
+                transaction.commit()
+            else:
+                config = model.load_config_text(text)
+            return {
+                "ok": True,
+                "customer": model.project(config).get("customer", ""),
+                "ble_names": model.ble_names(config),
+                "message": "工程身份已保存；BLE 广播名已同步到源码（如有改动）",
+            }
+        except Exception as exc:
+            return _error(str(exc), "确认工程已初始化、源码文件未被占用")
+
     def blank_set_board(self, sdk_path: str, updates: dict | None = None) -> dict:
         """设置空白草稿的板型选项（mode_pins/logo/wheel 等），保留行尾注释。"""
         try:
@@ -1209,7 +1284,7 @@ class Api:
             allowed = {
                 "mode_pins", "logo", "wheel", "led_polarity",
                 "switch_segments", "ble_channels", "ledc_rgb_number",
-                "sensor.dir_clock", "mode_24g_led",
+                "sensor.dir_clock", "mode_24g_led", "led_indicator",
             }
             for key, value in (updates or {}).items():
                 if key not in allowed:
@@ -1222,6 +1297,14 @@ class Api:
                             f"允许 {sorted(model.MODE_24G_LED_ENUM)}",
                         )
                     value = led
+                if key == "led_indicator":
+                    indicator = str(value).lower()
+                    if indicator not in model.LED_INDICATOR_ENUM:
+                        return _error(
+                            f"led_indicator 仅支持 {sorted(model.LED_INDICATOR_ENUM)}: {value}",
+                            f"允许 {sorted(model.LED_INDICATOR_ENUM)}",
+                        )
+                    value = indicator
                 if key == "sensor.dir_clock":
                     try:
                         clock = int(value)
