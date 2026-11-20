@@ -1,0 +1,79 @@
+{
+  "schema": "om6239-material-catalog/v1",
+  "generated_at": "2026-11-20T11:50:14+08:00",
+  "generated_from": "scripts/scan_projects.py over E:/M_2026 + E:/history",
+  "note": "物料型号 -> 角色/约束/板型默认。关键物料需选型号，普通物料用统计默认。此库供 P2 GUI 选料步骤驱动角色集合与插件开关。",
+  "params_default": {
+    "rgb_polarity_default": "active_high",
+    "rgb_polarity_distribution": {
+      "active_low": 39,
+      "active_high": 48
+    },
+    "rgb_count_default": 6,
+    "rgb_count_distribution": {
+      "6": 2,
+      "10": 1,
+      "7": 1,
+      "5": 1
+    },
+    "ledc_enabled_ratio": 0.233,
+    "sensor_wire_default": 2,
+    "sensor_wire_distribution": {
+      "2": 18,
+      "4": 12
+    },
+    "pair_key_present_ratio": 0.6,
+    "encoder_pin_distribution": {
+      "P21": 9,
+      "P20": 9,
+      "P01": 13,
+      "P00": 13,
+      "P25": 5,
+      "P24": 5,
+      "P06": 3,
+      "P05": 3
+    }
+  },
+  "materials": {
+    "S205": {
+      "category": "sensor",
+      "wire": 4,
+      "wire_distribution": {
+        "4": 1
+      },
+      "din_pin_default": "P12",
+      "roles": [
+        "SENSOR_SDIO_PIN",
+        "SENSOR_SCLK_PIN",
+        "SENSOR_NCS_PIN",
+        "SENSOR_MOSI_PIN",
+        "SENSOR_MISO_PIN"
+      ],
+      "note": "四线展开 SPI 四脚；两线只用 SDIO，影响 DPI 表与中断脚"
+    },
+    "3528 ARGB": {
+      "category": "led_strip",
+      "plugin": "ledc",
+      "project_count": 7,
+      "roles": [
+        "LEDC_PIN",
+        "LEDC_CTRL_PIN"
+      ],
+      "note": "选此型号等价于启用 LEDC 插件；不装灯带则无 LEDC 需求"
+    },
+    "4056H": {
+      "category": "charger",
+      "project_count": 7,
+      "roles": [
+        "BAT_CHG_PIN"
+      ],
+      "note": "充电管理型号决定充电检测脚与充电指示逻辑"
+    },
+    "__rgb__": {
+      "category": "rgb",
+      "count_default": 6,
+      "polarity_default": "active_high",
+      "note": "数量与极性（低电平点亮=另一端接 VCC）由原理图判断，选料后可覆盖默认值"
+    }
+  }
+}
