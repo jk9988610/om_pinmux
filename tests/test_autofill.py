@@ -118,6 +118,56 @@ def test_api_discover_parse_and_background_run(tmp_path: Path) -> None:
     assert st["lines"], "应产生实时日志"
 
 
+def test_unique_project_dir_no_overwrite(tmp_path: Path) -> None:
+    """同名输出不覆盖：追加 (1)/(2) 序号，原目录原样保留。"""
+    first = autofill.unique_project_dir(tmp_path, "Mouse")
+    assert first.name == "Mouse"
+    first.mkdir()
+    (first / "keep.txt").write_text("原始产物", encoding="utf-8")
+    second = autofill.unique_project_dir(tmp_path, "Mouse")
+    assert second.name == "Mouse(1)"
+    assert not second.exists()  # 只分配路径，不删不改
+    second.mkdir()
+    third = autofill.unique_project_dir(tmp_path, "Mouse")
+    assert third.name == "Mouse(2)"
+    assert (first / "keep.txt").read_text(encoding="utf-8") == "原始产物"
+
+
+def test_detect_led_effect_from_source(tmp_path: Path) -> None:
+    """灯效类型看源 led.c 实现，而非有无 LEDC 脚。"""
+    periph = tmp_path / "projects/mouse_demo/periph"
+    periph.mkdir(parents=True)
+    led = periph / "led.c"
+
+    # 灯带：logo_cfg/pwm_write 空 → ledc
+    led.write_text("void pwm_write(uint8_t r, uint8_t g, uint8_t b) {}\n"
+                   "void logo_cfg(unsigned char i) {}\n", encoding="utf-8")
+    assert autofill._detect_led_effect(tmp_path)[0] == "ledc"
+    # 三色灯：函数体内有点灯实现 → rgb（即便工程也有 LEDC 脚）
+    led.write_text("void pwm_write(uint8_t r, uint8_t g, uint8_t b) {\n"
+                   "  OM_GPIO0->DATAOUTCLR = 0x70;\n}\n"
+                   "void logo_cfg(unsigned char i) { }\n", encoding="utf-8")
+    assert autofill._detect_led_effect(tmp_path)[0] == "rgb"
+    # 嵌套花括号也要完整提取（S205 的 pwm_write 有 if{}）
+    led.write_text("void pwm_write(uint8_t r) {\n"
+                   "  if (r) { OM_PWM->PWMCON = 0; }\n}\n", encoding="utf-8")
+    assert autofill._detect_led_effect(tmp_path)[0] == "rgb"
+
+
+@pytest.mark.skipif(not Path(
+    "E:/M_2026/524_LJ-V08/software/trunk/SE71M_0524_LJ-V08_V1_20261103"
+    "/projects/mouse_demo/periph/user_config.h").is_file(), reason="无 LJ-A08 工程")
+def test_ledc_pins_but_rgb_effect() -> None:
+    """LJ-A08：有 LEDC 脚但灯效用三色灯，不能一刀切判成灯带。"""
+    header = Path(
+        "E:/M_2026/524_LJ-V08/software/trunk/SE71M_0524_LJ-V08_V1_20261103"
+        "/projects/mouse_demo/periph/user_config.h")
+    req = autofill.parse(header)
+    assert req["has_ledc"], "该工程确实定义了 LEDC 脚"
+    assert req["logo"] == "rgb", "但灯效走三色灯"
+    assert autofill.board_updates(req)["logo"] == "rgb"
+
+
 def test_visual_entry_wired() -> None:
     """启动页有自动填表入口，且前端逻辑/样式存在。"""
     html = (ROOT / "web/index.html").read_text(encoding="utf-8")

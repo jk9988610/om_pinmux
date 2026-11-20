@@ -1447,8 +1447,9 @@ async function afSelect(idx) {
     ["工程", q.name + "  (0x" + Number(q.id_low || 0).toString(16).toUpperCase() + ")  v" + q.version + "  · " + q.style + " 风格"],
     ["客户 / BLE", q.customer + " / " + (q.ble_name || "自动生成")],
     ["脚位 / 极性", q.pin_count + " 脚 · " + q.polarity_count + " 只灯极性"],
-    ["模式", (q.mode_dual ? "双脚三段" : "单脚") + (q.has_key_c0 ? " · 矩阵键 KEY_C0" : "") + (q.has_ledc ? " · LEDC 灯带" : "")],
+    ["模式", (q.mode_dual ? "双脚三段" : "单脚") + (q.has_key_c0 ? " · 矩阵键 KEY_C0" : "") + (q.has_ledc ? " · 有LEDC脚" : "")],
     ["滚轮", q.wheel + " · 方向 CLOCK_" + q.dir_clock],
+    ["灯效", (q.logo_label || q.logo || "-") + (q.led_effect_reason ? " · " + q.led_effect_reason : "")],
     ["指示灯", q.led_indicator + " · 2.4G灯 " + q.mode_24g_led],
     ["选料", sel],
   ];

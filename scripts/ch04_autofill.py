@@ -29,7 +29,6 @@ from __future__ import annotations
 import argparse
 import os
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -40,6 +39,7 @@ sys.path.insert(0, str(REPO))
 
 from omcfg import derive  # noqa: E402
 from omcfg.api import Api  # noqa: E402
+from omcfg.autofill import unique_project_dir  # noqa: E402
 
 DEFAULT_PROJECT = (
     Path("E:/M_2026/M_2026_T/457_CH04/SE71M_0457_CH04_V4_20260829")
@@ -233,9 +233,9 @@ def main() -> int:
     line(f"  选料: {req['selections']}  参数: {req['params']}{req['ledc_note']}\n")
 
     base = Path(args.out).resolve() if args.out else Path(tempfile.gettempdir()) / "ch04_autofill"
-    sdk = base / args.name
-    if sdk.exists():
-        shutil.rmtree(sdk)
+    sdk = unique_project_dir(base, args.name)
+    if sdk.name != args.name:
+        line(f"同名目录已存在，改写到 {sdk.name}（不覆盖原产物）")
     api = Api()
 
     try:
@@ -295,7 +295,7 @@ def main() -> int:
     if not uv4.is_file():
         line(f"\n⚠ 未找到 Keil UV4（{uv4}），跳过编译；可用 OMCFG_UV4 指定路径")
         return 0
-    log = base / (args.name + "_build.log")
+    log = base / (sdk.name + "_build.log")
     line("\nKeil 全量重编...")
     subprocess.run(
         [str(uv4), "-r", str(proj), "-o", str(log)],

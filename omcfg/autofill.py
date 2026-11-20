@@ -48,6 +48,61 @@ def _noop(msg: str) -> None:
     pass
 
 
+def unique_project_dir(base: Path | str, name: str) -> Path:
+    """在输出根目录里分配一个不存在的工程目录，绝不覆盖已有产物。
+
+    同名时追加序号：name → name(1) → name(2) …。既有目录原样保留，
+    便于反复测试同一工程时对比每次生成结果。
+    """
+    root = Path(base).expanduser().resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    stem = (name or "MyMouse").strip() or "MyMouse"
+    candidate = root / stem
+    if not candidate.exists():
+        return candidate
+    index = 1
+    while True:
+        candidate = root / f"{stem}({index})"
+        if not candidate.exists():
+            return candidate
+        index += 1
+
+
+def _detect_led_effect(root: Path) -> tuple[str, str]:
+    """从源工程 led.c 判断灯效真正走 LEDC 灯带还是三色灯。
+
+    事实依据：灯带工程（CH04/HTS092/BM2017）把底层 logo_cfg/pwm_write 留空，
+    灯效交给 LEDC 驱动；三色灯工程（S205/KC536/LJ-A08）在这两个函数里用
+    PWM/GPIO 点灯。LJ-A08 虽定义了 LEDC 脚，但灯效仍走三色灯，不能一刀切。
+
+    返回 (logo, reason)：logo 为 ledc / rgb / 空（无事实，回退到脚位判断）。
+    """
+    led = root / "projects/mouse_demo/periph/led.c"
+    if not led.is_file():
+        return "", "源工程无 led.c，回退脚位判断"
+    text = led.read_text(encoding="utf-8", errors="replace")
+    text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+    text = re.sub(r"//[^\n]*", "", text)
+    body = ""
+    for fn in ("logo_cfg", "pwm_write"):
+        match = re.search(rf"\b{fn}\s*\([^)]*\)\s*\{{", text)
+        if not match:
+            continue
+        depth, i = 1, match.end()
+        while i < len(text) and depth:
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+            i += 1
+        body += text[match.end():i - 1]
+    if re.search(r"OM_PWM|OM_GPIO|gpio_|PWMPRD|PWMCON|DATAOUT|memcpy", body):
+        return "rgb", "源 led.c 的 logo_cfg/pwm_write 含三色灯点灯实现"
+    if "logo_cfg" in text or "pwm_write" in text:
+        return "ledc", "源 led.c 的 logo_cfg/pwm_write 为空，灯效走 LEDC 灯带"
+    return "", "源 led.c 无灯效函数，回退脚位判断"
+
+
 def parse(header_path: Path | str) -> dict[str, Any]:
     """只读解析 user_config.h（及同工程 mouse_hw.c / mode_24g），返回硬件需求。
 
@@ -139,6 +194,16 @@ def parse(header_path: Path | str) -> dict[str, Any]:
     has_ledc = "LEDC_PIN" in pins
     mode_dual = "MODE_24G_PIN" in pins and "MODE_BLE_PIN" in pins
 
+    # 灯效类型（LOGO 用灯带还是三色灯）：以源工程 led.c 实现为事实。
+    # 有 LEDC 脚 ≠ 灯效用灯带：LJ-A08 有 LEDC 脚但 logo_cfg 走三色灯。
+    # 反过来 CH04/HTS092/BM2017 虽同时有 RGB 脚，logo_cfg 为空，灯效走灯带。
+    led_effect, led_effect_reason = _detect_led_effect(root)
+    # 没有 LEDC 脚就不可能是灯带（DIN 脚不存在）：MC329 的 led.c 空但灯效走 rgb.c。
+    if led_effect == "ledc" and not has_ledc:
+        led_effect, led_effect_reason = "", "led.c 空但无 LEDC 脚，回退脚位判断"
+    if not led_effect:
+        led_effect = "ledc" if has_ledc else ("rgb" if "LED_MODE_R_PIN" in pins else "none")
+
     # 滚轮：优先采用硬件 pinmux 宏；24_25 与无宏统一用 SOFT_GPIO（脚位仍按原理图）。
     wheel_macro = defs.get("WHEEL_IO_SELECT", "")
     if wheel_macro in WHEEL_PINMUX:
@@ -188,6 +253,8 @@ def parse(header_path: Path | str) -> dict[str, Any]:
         "dir_clock": dir_clock,
         "mode_24g_led": mode_24g_led,
         "led_indicator": led_indicator,
+        "logo": led_effect,
+        "led_effect_reason": led_effect_reason,
         "selections": selections,
         "params": params,
         "ledc_note": ledc_note,
@@ -198,7 +265,8 @@ def parse(header_path: Path | str) -> dict[str, Any]:
 def board_updates(req: dict[str, Any]) -> dict[str, Any]:
     """把解析结果映射成 blank_set_board 的选项（allowed 字段全集）。"""
     pins = req["pins"]
-    logo = "ledc" if "LEDC_PIN" in pins else ("rgb" if "LED_MODE_R_PIN" in pins else "none")
+    # 灯效类型来自源工程 led.c 事实解析，不再用"有没有 LEDC 脚"一刀切。
+    logo = req.get("logo") or ("ledc" if "LEDC_PIN" in pins else ("rgb" if "LED_MODE_R_PIN" in pins else "none"))
     return {
         "mode_pins": "dual" if req["mode_dual"] else "single",
         "logo": logo,
@@ -251,17 +319,16 @@ def run(
             f"{'矩阵键 KEY_C0' if req['has_key_c0'] else '独立键'} · 滚轮 {req['wheel']} · "
             f"方向 CLOCK_{req['dir_clock']} · 2.4G灯 {req['mode_24g_led']} · 风格 {req['style']}"
         )
+        line(f"  灯效: {'LEDC 灯带' if req['logo'] == 'ledc' else ('三色灯' if req['logo'] == 'rgb' else '无')}"
+             f"（{req['led_effect_reason']}）")
         line(f"  身份: 客户 {req['customer']} · BLE {req['ble_name'] or '(自动生成)'}")
         line(f"  选料: {req['selections']}  参数: {req['params']}"
              + (f"  {req['ledc_note']}" if req["ledc_note"] else "") + "\n")
 
         base = Path(out_root).expanduser().resolve()
-        base.mkdir(parents=True, exist_ok=True)
         proj_name = (name or req["name"]).strip() or "MyMouse"
-        sdk = base / proj_name
-        if sdk.exists():
-            import shutil
-            shutil.rmtree(sdk)
+        sdk = unique_project_dir(base, proj_name)
+        line(f"输出目录: {sdk.name}（同名不覆盖，自动追加序号）")
         api = Api()
 
         line("开始自动填表:")
@@ -299,7 +366,7 @@ def run(
             line(f"\n⚠ 未找到 Keil UV4（{uv4}），跳过编译；可用 OMCFG_UV4 指定路径")
             return {"ok": True, "project": str(sdk), "keil": False, "lines": lines,
                     "version": req["version"], "warning": "Keil 未找到，跳过编译"}
-        log_path = base / (proj_name + "_build.log")
+        log_path = base / (sdk.name + "_build.log")
         line("\nKeil 全量重编...")
         subprocess.run(
             [str(uv4), "-r", str(proj), "-o", str(log_path)],

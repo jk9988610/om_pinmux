@@ -1459,7 +1459,7 @@ class Api:
                 k: req[k] for k in (
                     "header", "project_root", "name", "id_low", "version", "customer",
                     "ble_name", "style", "wheel", "dir_clock", "mode_24g_led",
-                    "led_indicator", "selections", "params", "ledc_note",
+                    "led_indicator", "logo", "led_effect_reason", "selections", "params", "ledc_note",
                 )
             }
             preview["pin_count"] = len(req["pins"])
@@ -1467,6 +1467,9 @@ class Api:
             preview["mode_dual"] = req["mode_dual"]
             preview["has_key_c0"] = req["has_key_c0"]
             preview["has_ledc"] = req["has_ledc"]
+            preview["logo_label"] = {"ledc": "LEDC 灯带", "rgb": "三色灯", "none": "无灯效"}.get(
+                req.get("logo"), req.get("logo") or "-"
+            )
             return {"ok": True, "req": preview}
         except Exception as exc:
             return _error(str(exc), "确认 user_config.h 路径正确")
