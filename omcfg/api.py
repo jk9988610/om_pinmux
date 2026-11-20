@@ -1178,7 +1178,9 @@ class Api:
                 for role, value in base_cfg.get("pins", {}).items()
             }
 
-            required = set(blank.missing_roles(config, root))
+            # 一键填充保持严格：logo=ledc 时也按 keep_roles 填 LED_R/G/B，
+            # 保证之后取消灯带插件回到 RGB 时不会缺脚。
+            required = set(blank.missing_roles(config, root, include_ledc_rgb=True))
             # 当前已分配的角色也纳入：整体的基线方案要保证同脚唯一，需要一起重写。
             already = set(model.pin_entries(config))
             rewrite = {role for role in (required | already) if role in base_pins}

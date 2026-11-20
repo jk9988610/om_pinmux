@@ -179,11 +179,13 @@ void pwm_init(void)
  */
  void pwm_off(void)
 {
+#if BOARD_LOGO_RGB
     OM_PWM->PWMCON = 0x00000000;
     OM_GPIO0->DATAOUTCLR =
         (1u << LED_R_PIN) |
         (1u << LED_G_PIN) |
         (1u << LED_B_PIN);
+#endif
 }
 
 /******************************************************************************
@@ -195,6 +197,7 @@ void pwm_init(void)
 ******************************************************************************/
 void pwm_write(uint8_t pwm_r, uint8_t pwm_g, uint8_t pwm_b)
 {
+#if BOARD_LOGO_RGB
     uint32_t set_mask = 0;
     uint32_t rgb_mask =
         (1u << LED_R_PIN) |
@@ -220,6 +223,7 @@ void pwm_write(uint8_t pwm_r, uint8_t pwm_g, uint8_t pwm_b)
 
     OM_GPIO0->DATAOUTCLR = rgb_mask; //清除RGB引脚
     OM_GPIO0->DATAOUTSET = set_mask; //设置RGB引脚
+#endif
 }
 // }
 

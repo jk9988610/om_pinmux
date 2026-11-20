@@ -6,11 +6,11 @@
   "created": "2026-11-18",
   "state": "已初始化并生成（OMCFG 标记块 + board_features.h）；由 omcfg 依据工程现状推导配置并复核",
   "file_count": 203,
-  "size_bytes": 9181089,
-  "tree_sha256": "c91bb8ca6446c9d2c135c79cc0ea66e2f06d784c721906d3e0e31efb2d124aeb",
+  "size_bytes": 9181141,
+  "tree_sha256": "786f317dd19043d08534e9b058747c1187712882df1a23fd1f529a98d3d674f5",
   "config_sha256": "45072112cfec22bbe0705ce160fc662e08c1411b8dc57d570bd1f8319014df0b",
   "source_tree_sha256": "77cade5a08e55e5aefa2c9d2fcf945754e78e322b23df28a0cd337f1e39ab4f3",
   "source_file_count": 201,
   "license": "sdk/LICENSE.md (OM-SLA01)",
-  "notes": "清理后的 KC536 SDK 基线：无 out/_build/.git/uvguix/日志/.omcfg_bak；引脚忠于源码现状（single 模式、RGB、滚轮 ENCODER_20_21、28 脚）；已初始化并生成。原 CH04 基线备份于仓库外 om_pinmux_baseline_backup_ch04_20261118_100842。来源工程无 git 提交。更新方式见 docs/PLAN-INTERNAL-SDK.md 3.1。 2026-11-20: sensor.c/sensor_type_check.c 纳入 S205 传感器适配（上电唤醒+3/2Wire 切换、完整 DPI 表、bdpi_mul、全方向分支）。 2026-11-20: led.c/key_io.c/mode_ind.c(.h) 纳入 S205 指示灯/按键适配（DPI长按对码、三段拨杆、2.4G对码快闪、logo_process让路不跑呼吸灯）。 2026-11-20: 指示灯策略可配置——模板底层点灯调用加 #if !BOARD_LED_INDICATOR_ONLY 守护（hint_only 只留 mode_led_hint，full 保 KC536）。 2026-11-20: 修复 BLE 广播态漏网——ex2_app_mouse.c 两处 ind_config 也纳入守护，否则 IND_GREEN 常亮占住 P05 掩盖蓝牙灯 P06（S205 原件此处本就无 ind_config）。 2026-11-20: 固件版本号能力——startup 向量表版本字初始 0x04000201（对应 version=1），生成写盘时 +1 并同步 iREAL_VERSION_ID。 2026-11-20: 来源 SDK 漂移检测——META 记录 source_tree_sha256/source_file_count（与基线同一产物过滤口径），scripts/check_sdk_drift.py 在 SDK 变化时主动告警。"
+  "notes": "清理后的 KC536 SDK 基线：无 out/_build/.git/uvguix/日志/.omcfg_bak；引脚忠于源码现状（single 模式、RGB、滚轮 ENCODER_20_21、28 脚）；已初始化并生成。原 CH04 基线备份于仓库外 om_pinmux_baseline_backup_ch04_20261118_100842。来源工程无 git 提交。更新方式见 docs/PLAN-INTERNAL-SDK.md 3.1。 2026-11-20: sensor.c/sensor_type_check.c 纳入 S205 传感器适配（上电唤醒+3/2Wire 切换、完整 DPI 表、bdpi_mul、全方向分支）。 2026-11-20: led.c/key_io.c/mode_ind.c(.h) 纳入 S205 指示灯/按键适配（DPI长按对码、三段拨杆、2.4G对码快闪、logo_process让路不跑呼吸灯）。 2026-11-20: 指示灯策略可配置——模板底层点灯调用加 #if !BOARD_LED_INDICATOR_ONLY 守护（hint_only 只留 mode_led_hint，full 保 KC536）。 2026-11-20: 修复 BLE 广播态漏网——ex2_app_mouse.c 两处 ind_config 也纳入守护，否则 IND_GREEN 常亮占住 P05 掩盖蓝牙灯 P06（S205 原件此处本就无 ind_config）。 2026-11-20: 固件版本号能力——startup 向量表版本字初始 0x04000201（对应 version=1），生成写盘时 +1 并同步 iREAL_VERSION_ID。 2026-11-20: 来源 SDK 漂移检测——META 记录 source_tree_sha256/source_file_count（与基线同一产物过滤口径），scripts/check_sdk_drift.py 在 SDK 变化时主动告警。 2026-11-20: CH04 灯带工程兼容——led.c 的 pwm_off/pwm_write 函数体加 #if BOARD_LOGO_RGB 守护（LOGO=LEDC 时编译为空，避免引用不存在的 LED_R/G/B 宏），KC536 下 BOARD_LOGO_RGB=1 原行为不变。"
 }

@@ -679,7 +679,7 @@ function viewBoard() {
     : "当前：原版灯效 —— 保留全部底层点灯调用（KC536 默认）。若出现切换瞬间串灯，选「仅指示灯」";
   return opt("模式脚", "按原理图实际接法选；双脚=三段拨杆（2.4G/BAT/BT），只影响哪些模式角色必需", "mode_pins", modes, modeEffect) +
     opt("2.4G 指示灯", "2.4G 模式亮哪只物理模式灯，由原理图决定；工具不替你选", "mode_24g_led", leds24, led24Effect) +
-    opt("指示灯", "模式指示灯方案：三色 LED / 灯带 / 无", "logo", logos, "RGB 模式下 LED_R/G/B 三脚必须保留。具体是否跑底层灯效由下面的「指示灯策略」决定。") +
+    opt("指示灯", "模式指示灯方案：三色 LED / 灯带 / 无", "logo", logos, "RGB 模式要求 LED_R/G/B 三脚；灯带模式走 LEDC，底层 RGB 点灯编译期排除，不再要求这三脚。具体灯效由下面的「指示灯策略」决定。") +
     opt("指示灯策略", "原版灯效 vs 仅指示灯；只改生成语义，不改脚位", "led_indicator", indicators, indicatorEffect) +
     opt("滚轮编码器", "硬件 pinmux 组合；P24/P25 请选软件 GPIO 后到配脚步骤自行指定", "wheel", wheels, "WHEEL_A/B 必须成对配置；P24/P25 是合法脚，工具不替你选。") +
     viewPolaritySection() +

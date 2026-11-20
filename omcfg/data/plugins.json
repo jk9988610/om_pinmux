@@ -24,7 +24,7 @@
       "uvprojx_group": "periph",
       "source": "omcfg/templates/ledc",
       "depends_on": [],
-      "note": "DIN(LEDC_PIN) 仅 P01/P05 两个合法脚，与模式灯 B/P01、RGB G/P05 冲突；勾选时把 LED_MODE_B 腾到 P36。KC536 的 led.c/user_config.c 无条件引用 LED_R/G/B，灯带模式下保留这三个脚并由生成器继续输出宏。模板 ledc.h 自带 GPIO_SET/CLEAR 大小写兼容。"
+      "note": "DIN(LEDC_PIN) 仅 P01/P05 两个合法脚，与模式灯 B/P01、RGB G/P05 冲突；勾选时把 LED_MODE_B 腾到 P36。KC536 的 led.c/user_config.c 无条件引用 LED_R/G/B，灯带模式下保留这三个脚并由生成器继续输出宏（保证取消插件回到 RGB 时仍可生成）；led.c 的 pwm_off/pwm_write 已用 #if BOARD_LOGO_RGB 守护，灯带工程不配这三脚也不会编译失败，缺脚判定按 logo 放宽（见 blank.build_required_roles）。模板 ledc.h 自带 GPIO_SET/CLEAR 大小写兼容。"
     }
   }
 }

@@ -149,6 +149,18 @@ def build_required_roles(
 
         removed = _materials.removed_roles(config)
         roles = [role for role in roles if role not in removed]
+        # 矩阵键板型（KEY_C0）：生成阶段 biz_sync._patch_key_io_c 会把 key_io_scan
+        # 整段替换为只用 R0/R1/R2 的矩阵扫描，骨架里无条件展开的 R3/R4/R7
+        # （KEY_B/KEY_P/KEY_DPI）会被移除。填表判定必须与此对齐，否则 CH04
+        # 这类"有矩阵列、无独立 B/P/DPI 键"的工程被误报缺脚。
+        # 仅当 config 明确配了 KEY_C0_PIN 且这三个角色未配置时移除；
+        # S205/CH04 之外（无 KEY_C0）保持原判定不变。
+        pins_now = model.pin_entries(config)
+        if "KEY_C0_PIN" in pins_now:
+            roles = [
+                role for role in roles
+                if role not in ("KEY_B_PIN", "KEY_P_PIN", "KEY_DPI_PIN") or role in pins_now
+            ]
     if sdk_path is None:
         return roles
     from . import rules
@@ -159,16 +171,30 @@ def build_required_roles(
     return [role for role in roles if role in active]
 
 
-def missing_roles(config: dict[str, Any], sdk_path: Path | str | None = None) -> list[str]:
+def missing_roles(
+    config: dict[str, Any],
+    sdk_path: Path | str | None = None,
+    include_ledc_rgb: bool = False,
+) -> list[str]:
     """当前 board 选项下缺哪些必需角色。
 
     = validate 按板型推导的必需角色 ∪ 当前工程源码真正引用的 build_required 角色。
+
+    logo=ledc 时，led.c 的 pwm_off/pwm_write 已按 #if BOARD_LOGO_RGB 守护，
+    LED_R/G/B 不再参与编译，默认从缺脚里排除（CH04 灯带工程本就没有这三脚）。
+    一键推荐填充传 include_ledc_rgb=True 保持严格：仍按 keep_roles 填上三脚，
+    这样取消灯带插件回到 RGB 时不会突然缺脚。
     """
     pins = model.pin_entries(config)
     required = list(validate.required_roles(config, pins))
     for role in build_required_roles(sdk_path, config):
         if role not in required:
             required.append(role)
+    if not include_ledc_rgb and model.board(config).get("logo") == "ledc":
+        required = [
+            role for role in required
+            if role not in ("LED_R_PIN", "LED_G_PIN", "LED_B_PIN") or role in pins
+        ]
     return [role for role in required if role not in pins]
 
 
