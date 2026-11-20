@@ -1437,3 +1437,53 @@ class Api:
             return result
         except Exception as exc:
             return _error(str(exc), "确认工程已初始化")
+
+    # ---- 自动填表（可视化入口）：从已有工程解析硬件事实，一键重建 ----
+    def autofill_discover(self, root: str) -> dict:
+        """扫描目录下所有可填表工程（含 projects/mouse_demo/user_config.h）。"""
+        from . import autofill
+
+        try:
+            items = autofill.discover(Path(root).expanduser())
+            return {"ok": True, "projects": items, "count": len(items)}
+        except Exception as exc:
+            return _error(str(exc), "确认目录存在且可读")
+
+    def autofill_parse(self, header: str) -> dict:
+        """只读解析单个工程，返回硬件需求预览（不写盘）。"""
+        from . import autofill
+
+        try:
+            req = autofill.parse(Path(header).expanduser())
+            preview = {
+                k: req[k] for k in (
+                    "header", "project_root", "name", "id_low", "version", "customer",
+                    "ble_name", "style", "wheel", "dir_clock", "mode_24g_led",
+                    "led_indicator", "selections", "params", "ledc_note",
+                )
+            }
+            preview["pin_count"] = len(req["pins"])
+            preview["polarity_count"] = len(req["polarity"])
+            preview["mode_dual"] = req["mode_dual"]
+            preview["has_key_c0"] = req["has_key_c0"]
+            preview["has_ledc"] = req["has_ledc"]
+            return {"ok": True, "req": preview}
+        except Exception as exc:
+            return _error(str(exc), "确认 user_config.h 路径正确")
+
+    def autofill_start(self, header: str, out: str, name: str = "", keil: bool = True) -> dict:
+        """后台启动自动填表；用 autofill_status 轮询日志与结果。"""
+        from . import autofill
+
+        try:
+            return autofill.start_job(
+                Path(header).expanduser(), Path(out).expanduser(), name=name, keil=bool(keil)
+            )
+        except Exception as exc:
+            return _error(str(exc), "确认参数正确")
+
+    def autofill_status(self) -> dict:
+        """返回填表任务当前状态（running / lines / result / error）。"""
+        from . import autofill
+
+        return autofill.job_status()

@@ -374,3 +374,30 @@ pre.diff .syn-num { color:#d19a66; }
   .path-grid, .form-grid { grid-template-columns:1fr; }
   .tri { grid-template-columns:1fr; grid-template-areas:"a" "b" "c"; }
 }
+
+/* ==================== 自动填表 ==================== */
+#autofill { min-height:100vh; display:flex; flex-direction:column; }
+.af-wrap { flex:1; max-width:1080px; width:100%; margin:0 auto; padding:24px 28px 40px; }
+.af-head h2 { margin:0 0 6px; font-size:20px; }
+.af-head p { margin:0 0 20px; }
+.af-label { display:inline-block; min-width:64px; font-weight:600; color:var(--text-2); }
+.af-input { flex:1; min-width:200px; padding:8px 10px; border:1px solid var(--line-2); border-radius:6px; background:var(--surface); }
+.af-src, .af-run { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:12px 14px; background:var(--surface); border:1px solid var(--line); border-radius:10px; margin-bottom:14px; box-shadow:var(--shadow); }
+.af-check { display:inline-flex; align-items:center; gap:6px; color:var(--text-2); }
+.af-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; }
+.af-panel { background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:14px; box-shadow:var(--shadow); min-height:260px; }
+.af-panel h4, .af-log-wrap h4 { margin:0 0 12px; }
+.af-list { display:flex; flex-direction:column; gap:6px; max-height:320px; overflow:auto; }
+.af-proj { text-align:left; padding:9px 11px; border:1px solid var(--line-2); border-radius:7px; background:var(--surface-2); }
+.af-proj:hover { border-color:var(--brand); }
+.af-proj.sel { border-color:var(--brand); background:var(--brand-weak); }
+.af-proj .t { font-weight:600; display:flex; align-items:center; gap:8px; }
+.af-proj .s { font-size:11px; color:var(--text-2); margin-top:3px; }
+.af-proj .err { color:var(--err); }
+.af-style { font-size:10px; padding:1px 6px; border-radius:4px; background:var(--brand-weak); color:var(--brand); font-weight:600; }
+.af-prev { display:grid; grid-template-columns:auto 1fr; gap:4px 12px; font-size:12px; }
+.af-prev .k { color:var(--text-2); }
+.af-prev .v { font-family:Consolas,"Cascadia Mono",monospace; overflow-wrap:anywhere; }
+.af-log-wrap { background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:14px; box-shadow:var(--shadow); }
+.af-log { margin:0; min-height:180px; max-height:360px; overflow:auto; background:var(--surface-2); border:1px solid var(--line); border-radius:7px; padding:12px; font:12px/1.6 Consolas,"Cascadia Mono",monospace; white-space:pre-wrap; overflow-wrap:anywhere; }
+@media (max-width:820px) { .af-grid { grid-template-columns:1fr; } }

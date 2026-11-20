@@ -43,6 +43,17 @@
         </ul>
         <div class="path-cta"><span>选择 SDK 目录</span><span>→</span></div>
       </button>
+      <button class="path-card" id="path-autofill" onclick="openAutofill()">
+        <div class="path-ico">↻</div>
+        <h3>从已有工程自动填表</h3>
+        <p>选一个目录，列出里面的真实工程（S205/CH04 自动识别），一键解析脚位并重建出可编译工程。反复测试不用再敲指令。</p>
+        <ul class="path-feats">
+          <li>扫描目录 → 选工程 → 看解析预览</li>
+          <li>脚位/极性/型号全来自原工程事实</li>
+          <li>实时日志 + Keil 真编译验收</li>
+        </ul>
+        <div class="path-cta"><span>选择来源目录</span><span>→</span></div>
+      </button>
     </div>
     <div class="recent">
       <h4>最近工程</h4>
@@ -89,6 +100,50 @@
       <button class="btn primary big" id="btn-next" onclick="nextStep()">下一步 →</button>
     </div>
   </footer>
+</div>
+
+<!-- ==================== 自动填表 ==================== -->
+<div id="autofill" class="hidden">
+  <header class="topbar">
+    <div class="logo">OM</div>
+    <div class="brand-txt">OM6239 <span>自动填表</span></div>
+    <div class="spacer"></div>
+    <button class="btn sm ghost" onclick="toggleTheme()" title="切换深浅主题">◐</button>
+    <button class="btn sm ghost" onclick="closeAutofill()" title="返回启动页">✕ 关闭</button>
+  </header>
+  <div class="af-wrap">
+    <div class="af-head">
+      <h2>从已有工程自动填表</h2>
+      <p class="muted">选择一个来源目录，工具会列出其中的真实工程；选中后只读解析硬件事实，一键重建出可编译工程。脚位、极性、型号全来自原工程的 user_config.h，不套推荐配置。</p>
+    </div>
+    <div class="af-src">
+      <label class="af-label">来源目录</label>
+      <input id="af-root" class="af-input mono" spellcheck="false" placeholder="例如 E:\M_2026\M_2026_T\457_CH04">
+      <button class="btn" onclick="afBrowseRoot()">浏览…</button>
+      <button class="btn primary" onclick="afScan()">扫描工程</button>
+    </div>
+    <div class="af-grid">
+      <section class="af-panel">
+        <h4>① 选择工程 <span class="tiny" id="af-count"></span></h4>
+        <div id="af-projects" class="af-list"><p class="muted">先扫描一个目录</p></div>
+      </section>
+      <section class="af-panel">
+        <h4>② 解析预览 <span class="tiny">只读，不写盘</span></h4>
+        <div id="af-preview" class="af-preview"><p class="muted">选中工程后显示硬件事实</p></div>
+      </section>
+    </div>
+    <div class="af-run">
+      <label class="af-label">输出目录</label>
+      <input id="af-out" class="af-input mono" spellcheck="false" placeholder="例如 D:\autofill_out">
+      <button class="btn" onclick="afBrowseOut()">浏览…</button>
+      <label class="af-check"><input type="checkbox" id="af-keil" checked> Keil 真编译验收</label>
+      <button class="btn primary big" id="af-start" onclick="afStart()">开始自动填表 →</button>
+    </div>
+    <div class="af-log-wrap">
+      <h4>③ 执行日志</h4>
+      <pre id="af-log" class="af-log">等待开始…</pre>
+    </div>
+  </div>
 </div>
 
 <div id="toast" role="status" aria-live="polite"></div>

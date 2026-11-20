@@ -1378,3 +1378,110 @@ function init() {
 }
 window.addEventListener("pywebviewready", init);
 document.addEventListener("DOMContentLoaded", init);
+
+/* ==================== 自动填表（可视化） ==================== */
+var AF = { projects: [], selected: "", timer: null, running: false };
+function openAutofill() {
+  $("start").classList.add("hidden");
+  $("workbench").classList.add("hidden");
+  $("autofill").classList.remove("hidden");
+  var last = "";
+  try { last = localStorage.getItem("omcfg.autofill.root") || ""; } catch (e) {}
+  if (last && $("af-root")) $("af-root").value = last;
+  var out = "";
+  try { out = localStorage.getItem("omcfg.autofill.out") || ""; } catch (e) {}
+  if (out && $("af-out")) $("af-out").value = out;
+}
+function closeAutofill() {
+  if (AF.running) { toast("任务进行中，请等完成再退出", true); return; }
+  $("autofill").classList.add("hidden");
+  $("start").classList.remove("hidden");
+  renderRecent();
+}
+async function afBrowseRoot() {
+  var folder = await call("choose_folder", $("af-root").value.trim());
+  if (folder) $("af-root").value = folder;
+}
+async function afBrowseOut() {
+  var folder = await call("choose_folder", $("af-out").value.trim());
+  if (folder) $("af-out").value = folder;
+}
+async function afScan() {
+  var root = $("af-root").value.trim();
+  if (!root) { toast("请先选择来源目录", true); return; }
+  try { localStorage.setItem("omcfg.autofill.root", root); } catch (e) {}
+  var r = await call("autofill_discover", root);
+  if (!r || !r.ok) { toast((r && r.error) || "扫描失败", true); return; }
+  AF.projects = r.projects || [];
+  AF.selected = "";
+  $("af-count").textContent = "共 " + (r.count || 0) + " 个";
+  renderAfProjects();
+  $("af-preview").innerHTML = '<p class="muted">选中工程后显示硬件事实</p>';
+}
+function renderAfProjects() {
+  var box = $("af-projects");
+  if (!AF.projects.length) { box.innerHTML = '<p class="muted">该目录下没有找到可填表工程（需含 projects/mouse_demo/periph/user_config.h）</p>'; return; }
+  var html = "";
+  for (var i = 0; i < AF.projects.length; i++) {
+    var p = AF.projects[i];
+    var err = p.error ? '<span class="err">· ' + esc(p.error) + '</span>' : "";
+    var cls = "af-proj" + (AF.selected === p.header ? " sel" : "");
+    html += '<button class="' + cls + '" onclick="afSelect(' + i + ')">' +
+      '<div class="t">' + esc(p.name) +
+      (p.style ? ' <span class="af-style">' + esc(p.style) + '</span>' : '') + '</div>' +
+      '<div class="s">' + esc(p.project_name || '') + ' · 0x' + Number(p.id_low || 0).toString(16).toUpperCase() +
+      ' · v' + esc(p.version || '?') + ' · ' + (p.pin_count || 0) + ' 脚' + err + '</div></button>';
+  }
+  box.innerHTML = html;
+}
+async function afSelect(idx) {
+  var p = AF.projects[idx];
+  if (!p) return;
+  AF.selected = p.header;
+  renderAfProjects();
+  var r = await call("autofill_parse", p.header);
+  if (!r || !r.ok) { $("af-preview").innerHTML = '<p class="err">' + esc((r && r.error) || "解析失败") + '</p>'; return; }
+  var q = r.req;
+  var sel = Object.keys(q.selections || {}).map(function(k) { return k + "=" + q.selections[k]; }).join(" · ") || "（无）";
+  var rows = [
+    ["工程", q.name + "  (0x" + Number(q.id_low || 0).toString(16).toUpperCase() + ")  v" + q.version + "  · " + q.style + " 风格"],
+    ["客户 / BLE", q.customer + " / " + (q.ble_name || "自动生成")],
+    ["脚位 / 极性", q.pin_count + " 脚 · " + q.polarity_count + " 只灯极性"],
+    ["模式", (q.mode_dual ? "双脚三段" : "单脚") + (q.has_key_c0 ? " · 矩阵键 KEY_C0" : "") + (q.has_ledc ? " · LEDC 灯带" : "")],
+    ["滚轮", q.wheel + " · 方向 CLOCK_" + q.dir_clock],
+    ["指示灯", q.led_indicator + " · 2.4G灯 " + q.mode_24g_led],
+    ["选料", sel],
+  ];
+  var html = '<div class="af-prev">';
+  for (var i = 0; i < rows.length; i++) html += '<span class="k">' + esc(rows[i][0]) + '</span><span class="v">' + esc(rows[i][1]) + '</span>';
+  html += '</div><p class="tiny" style="margin-top:10px">来源：' + esc(q.header) + '</p>';
+  $("af-preview").innerHTML = html;
+}
+async function afStart() {
+  if (!AF.selected) { toast("请先选择一个工程", true); return; }
+  if (AF.running) { toast("任务已在进行中", true); return; }
+  var out = $("af-out").value.trim();
+  if (!out) { toast("请选择输出目录", true); return; }
+  try { localStorage.setItem("omcfg.autofill.out", out); } catch (e) {}
+  var keil = $("af-keil").checked;
+  var r = await call("autofill_start", AF.selected, out, "", keil);
+  if (!r || !r.ok) { toast((r && r.error) || "启动失败", true); return; }
+  AF.running = true;
+  $("af-start").disabled = true;
+  $("af-log").textContent = "任务已启动…\n";
+  AF.timer = setInterval(afPoll, 700);
+}
+async function afPoll() {
+  var st = await call("autofill_status");
+  if (!st) return;
+  $("af-log").textContent = (st.lines || []).join("\n") + (st.running ? "\n…" : "");
+  var log = $("af-log");
+  log.scrollTop = log.scrollHeight;
+  if (!st.running) {
+    clearInterval(AF.timer); AF.timer = null; AF.running = false;
+    $("af-start").disabled = false;
+    var res = st.result || {};
+    if (res.ok) toast("自动填表完成" + (res.keil ? " · Keil 0 Error/0 Warning" : ""));
+    else toast((res.error || st.error || "失败"), true);
+  }
+}
