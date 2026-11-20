@@ -6,9 +6,9 @@
   "created": "2026-11-18",
   "state": "已初始化并生成（OMCFG 标记块 + board_features.h）；由 omcfg 依据工程现状推导配置并复核",
   "file_count": 203,
-  "size_bytes": 9160925,
-  "tree_sha256": "bbe2f4a3f6086010dd4ac4d9333f36e1bd301a70892c79b583d2df90e3c88c6b",
+  "size_bytes": 9179790,
+  "tree_sha256": "243378532ce9521a7b90fdfb1445e4cb378858cd8ec94aed773f5f3f4fd0c935",
   "config_sha256": "45072112cfec22bbe0705ce160fc662e08c1411b8dc57d570bd1f8319014df0b",
   "license": "sdk/LICENSE.md (OM-SLA01)",
-  "notes": "清理后的 KC536 SDK 基线：无 out/_build/.git/uvguix/日志/.omcfg_bak；引脚忠于源码现状（single 模式、RGB、滚轮 ENCODER_20_21、28 脚）；已初始化并生成。原 CH04 基线备份于仓库外 om_pinmux_baseline_backup_ch04_20261118_100842。来源工程无 git 提交。更新方式见 docs/PLAN-INTERNAL-SDK.md 3.1。"
+  "notes": "清理后的 KC536 SDK 基线：无 out/_build/.git/uvguix/日志/.omcfg_bak；引脚忠于源码现状（single 模式、RGB、滚轮 ENCODER_20_21、28 脚）；已初始化并生成。原 CH04 基线备份于仓库外 om_pinmux_baseline_backup_ch04_20261118_100842。来源工程无 git 提交。更新方式见 docs/PLAN-INTERNAL-SDK.md 3.1。 2026-11-20: sensor.c/sensor_type_check.c 纳入 S205 传感器适配（上电唤醒+3/2Wire 切换、完整 DPI 表、bdpi_mul、全方向分支）。 2026-11-20: led.c/key_io.c/mode_ind.c(.h) 纳入 S205 指示灯/按键适配（DPI长按对码、三段拨杆、2.4G对码快闪、logo_process让路不跑呼吸灯）。"
 }

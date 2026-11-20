@@ -7,8 +7,9 @@ var $ = function(id) { return document.getElementById(id); };
 var STEPS = {
   new: [
     { t: "项目身份", d: "给工程一个名字和落点" },
-    { t: "板型选项", d: "决定哪些角色是必需的" },
-    { t: "功能插件", d: "按需勾选，随时可拔除" },
+    { t: "选料", d: "按原理图选中物料，未选不推导" },
+    { t: "板型选项", d: "由物料推导，可微调" },
+    { t: "功能插件", d: "由物料联动，随时可拔除" },
     { t: "引脚分配", d: "需求组 · 约束栏 · 脚位图" },
     { t: "校验与预览", d: "确认无误，再看改动" },
     { t: "生成应用", d: "写盘并交付可编译工程" }
@@ -36,10 +37,11 @@ var S = {
   options: null, config: null, pinmap: null, issues: [],
   caps: { roles: {}, demand_groups: [], board_enums: {}, board_defaults: {} },
   pluginState: { plugins: [], enabled: [] },
+  material: { categories: [], selected: {}, params: {}, effects: {} },
   board: {}, boardChoice: {}, health: null,
   form: { name: "", id: "", customer: "BYC", version: "1", out: "" },
   assignments: {}, removedRoles: {}, protectedRoles: {},
-  selectedRole: null, selectedGroup: null, focusPin: null,
+  selectedRole: null, selectedGroup: null, focusPin: null, roleQuery: "",
   diff: null, previewed: false, applied: false, applyResult: null,
   confirming: false, applying: false, recent: [],
   busy: false, dirty: false, lastConfig: ""
@@ -102,37 +104,52 @@ function tierOf(n) {
 }
 function operations() { return STEPS[S.route] || []; }
 
-/* 健康视图：优先用后端 blank_status，未就绪时从已加载数据推导 */
+/* 健康视图（前后端联动的核心）：
+   - 「哪些角色必需」由后端按当前板型/选料/插件/源码硬依赖动态推导（S.health.required）。
+   - 「哪些角色已配」必须按本地 S.assignments 实时算：配脚改动在写盘前只存在前端，
+     后端 blank_status 是上一次落盘的快照，若直接读它的 assigned/missing，用户点了
+     必需脚后健康卡与门禁仍停在旧值——这正是「前端不同步、下一步点不动」的根因。 */
 function healthView() {
-  if (S.health && S.health.ok) {
-    return {
-      assigned: S.health.assigned || 0,
-      total: S.health.total_roles || 0,
-      missingCount: (S.health.missing || []).length,
-      missingDetail: S.health.missing_detail || [],
-      conflicts: (S.health.conflicts || []).length,
-      errors: S.health.validate_errors || 0,
-      warnings: S.health.validate_warnings || 0,
-      complete: !!S.health.complete
-    };
-  }
+  var h = (S.health && S.health.ok) ? S.health : null;
   var roles = S.caps.roles || {};
   var assignedRoles = {};
   for (var pin in S.assignments) if (S.assignments[pin]) assignedRoles[S.assignments[pin]] = pin;
+  var assigned = Object.keys(assignedRoles).length;
+
+  // 必需集合：后端动态推导优先；状态未加载时才退回静态标记（不能用 v1 过滤掉真实网络）。
+  var required = h && Array.isArray(h.required) ? h.required : (function() {
+    var out = [];
+    for (var mac in roles) if ((roles[mac] || {}).required) out.push(mac);
+    return out;
+  })();
+  var missingDetail = h && Array.isArray(h.missing_detail) ? h.missing_detail : [];
   var missing = [];
-  var total = 0, assigned = 0;
-  for (var mac in roles) {
-    var m = roles[mac] || {};
-    if (m.v1 === false) continue;
-    total++;
-    if (assignedRoles[mac]) assigned++;
-    else if (m.required) missing.push({ role: mac, suggested: m.suggested_pin || "" });
-  }
-  var errors = (S.issues || []).filter(function(i) { return i.level === "error"; }).length;
+  required.forEach(function(mac) {
+    if (!assignedRoles[mac]) {
+      var hint = null;
+      for (var i = 0; i < missingDetail.length; i++) if (missingDetail[i].role === mac) hint = missingDetail[i];
+      missing.push({
+        role: mac,
+        suggested: (hint && hint.suggested) || (roles[mac] || {}).suggested_pin || ""
+      });
+    }
+  });
+
+  var errors = h ? (h.validate_errors || 0)
+    : (S.issues || []).filter(function(i) { return i.level === "error"; }).length;
+  var warnings = h ? (h.validate_warnings || 0) : Math.max(0, (S.issues || []).length - errors);
+  var conflicts = h ? ((h.conflicts || []).length) : 0;
   return {
-    assigned: assigned, total: total, missingCount: missing.length, missingDetail: missing,
-    conflicts: 0, errors: errors, warnings: (S.issues || []).length - errors,
-    complete: missing.length === 0 && errors === 0
+    assigned: assigned,
+    total: h ? (h.total_roles || 0) : Object.keys(roles).length,
+    requiredCount: required.length,
+    missingCount: missing.length,
+    missingDetail: missing,
+    conflicts: conflicts,
+    errors: errors,
+    warnings: warnings,
+    // 与门禁 gate() 同判据：必需脚齐 + 无冲突。校验错误留给校验步骤展示，不在这里卡进度。
+    complete: missing.length === 0 && conflicts === 0
   };
 }
 
@@ -182,6 +199,15 @@ async function loadWorkspace(sdk) {
     S.health = st && st.ok ? st : null;
     if (S.health && S.health.board) S.board = S.health.board;
   }
+  if (api() && typeof api().material_status === "function") {
+    var ms = await call("material_status", S.sdk);
+    if (ms && ms.ok) {
+      S.material.categories = ms.categories || S.material.categories;
+      S.material.selected = ms.selected || {};
+      S.material.params = ms.params || {};
+      S.material.effects = ms.effects || {};
+    }
+  }
   S.dirty = false;
   return true;
 }
@@ -200,6 +226,7 @@ async function initOptions() {
   S.caps.board_enums = o.board_enums || S.caps.board_enums;
   S.caps.board_defaults = o.board_defaults || S.caps.board_defaults;
   S.boardChoice = Object.assign({}, S.caps.board_defaults || {});
+  if (o.material_categories) S.material.categories = o.material_categories;
   loadFormCache();
 }
 
@@ -244,6 +271,11 @@ function loadFormCache() {
     S.form.version = s.version || "1";
     S.form.out = s.out || "";
   } catch (e) {}
+  // 缓存回填后输入框的值与按钮判定都依赖 S.form，
+  // 这里同步一次渲染，避免「框里有值但下一步按钮灰着」。
+  if (S.route === "new" && S.step === 1 && $("f-out")) {
+    renderMain(); renderAction();
+  }
 }
 function saveFormCache() {
   try { localStorage.setItem(FORM_KEY, JSON.stringify(S.form)); } catch (e) {}
@@ -280,7 +312,7 @@ function renderStepper() {
   }
   $("step-list").innerHTML = h;
   $("side-foot").innerHTML = S.route === "new"
-    ? "主线：身份 → 板型 → 插件 → 配脚 → 校验 → 生成。<br>可随时回退到已完成步骤。"
+    ? "主线：身份 → 选料 → 板型 → 插件 → 配脚 → 校验 → 生成。<br>可随时回退到已完成步骤。"
     : "主线：打开 → 调整 → 预览 → 应用。<br>严格校验模式，保存前检查冲突。";
 }
 function renderAside() {
@@ -292,7 +324,7 @@ function renderAside() {
     '<circle cx="37" cy="37" r="32" fill="none" stroke="var(--line)" stroke-width="7"/>' +
     '<circle cx="37" cy="37" r="32" fill="none" stroke="' + color + '" stroke-width="7" stroke-linecap="round" stroke-dasharray="' + c.toFixed(1) + '" stroke-dashoffset="' + off.toFixed(1) + '"/>' +
     '</svg><div class="pct">' + (h.total ? Math.round(h.assigned / h.total * 100) : 0) + '%</div></div>' +
-    '<div class="ring-lbl"><b>已配 ' + h.assigned + ' / ' + h.total + '</b>共 ' + countRequired() + ' 个必需角色<br>' + (h.complete ? "配置已完整" : "继续补齐即可生成") + '</div></div>';
+    '<div class="ring-lbl"><b>已配 ' + h.assigned + ' / ' + h.total + '</b>共 ' + h.requiredCount + ' 个必需角色<br>' + (h.complete ? "配置已完整" : "继续补齐即可生成") + '</div></div>';
   s += '<div class="hrow link" onclick="jumpToPin()"><span class="k">已配脚</span><span class="v">' + h.assigned + ' / ' + h.total + '</span></div>';
   s += '<div class="hrow link" onclick="jumpToPin()"><span class="k">缺必需</span><span class="v ' + (h.missingCount ? "warn" : "ok") + '">' + h.missingCount + '</span></div>';
   s += '<div class="hrow"><span class="k">脚位冲突</span><span class="v ' + (h.conflicts ? "err" : "ok") + '">' + h.conflicts + '</span></div>';
@@ -315,17 +347,15 @@ function renderAside() {
   s += '<div class="help-box"><h5>' + esc(help[0]) + '</h5><p>' + esc(help[1]) + '</p></div>';
   $("aside").innerHTML = s;
 }
-function countRequired() {
-  var n = 0;
-  for (var mac in S.caps.roles) { var m = S.caps.roles[mac] || {}; if (m.v1 !== false && m.required) n++; }
-  return n;
-}
+// 必需角色数跟随后端动态推导（板型/选料/插件），不再读 options.json 静态标记。
+function countRequired() { return healthView().requiredCount; }
 function helpForStep() {
   if (S.route === "new") {
     return [
       ["这一步在做什么", "给新工程一个身份与落点。工具会从内置 KC536 干净骨架复制一份，此时引脚全空 —— 这是正常状态。"],
-      ["为什么先选板型", "板型决定哪些角色成为「必需」。例如双脚模式要求 MODE_24G/BLE 成对配置；RGB 灯效要求 LED_R/G/B 留脚。"],
-      ["插件是可选的", "不勾选也能继续。勾选即注入文件、解锁角色、腾让冲突脚；取消会对称撤销。"],
+      ["为什么先选料", "软件工程师拿到的是硬件画好的原理图，引脚归谁用由硬件决定。光电/灯带/充电按实物选型号；RGB 数量、拨杆段数、蓝牙通道按原理图填。所有项默认未指定，不选就不推导任何角色。"],
+      ["板型由物料推导", "选料后板型已设好初值，这里只做微调。例如四线传感器要求 SPI 四脚；双脚模式要求 MODE_24G/BLE 成对。"],
+      ["插件由物料联动", "灯带型号=WS2812 会自动启用 LEDC 插件。也可手动勾选或拔除；勾选即注入文件、解锁角色、腾让冲突脚。"],
       ["三个视图，同一批角色", "需求组按功能分组，约束栏按合法脚数分档，脚位图按物理位置摆放。选中其一，另外两处同步高亮。点「? 帮助」看完整说明。"],
       ["预览不写盘", "diff 只展示「如果应用会变成什么样」。确认后才进入下一步真正写入，且可用 manifest 回滚。"],
       ["最后一步", "确认摘要后写盘。写入走事务：先备份再落盘，失败自动回滚。"]
@@ -345,12 +375,12 @@ function gate() {
       if (!S.form.out.trim()) return "请填写「输出根目录」后才能继续";
       if (parseId(S.form.id) === null) return "项目号格式不对（0x0457 或十进制）";
     }
-    if (S.step === 4) {
+    if (S.step === 5) {
       var h = healthView();
       if (h.conflicts) return "存在 " + h.conflicts + " 处脚位冲突，请先在脚位图化解";
       if (h.missingCount) return "还差 " + h.missingCount + " 个必需脚，补齐后才能进入校验";
     }
-    if (S.step === 5 && !S.previewed) return "请先点「生成预览」查看将变更的文件";
+    if (S.step === 6 && !S.previewed) return "请先点「生成预览」查看将变更的文件";
   } else {
     if (S.step === 1) {
       if (!S.sdk.trim()) return "请先填写或选择 SDK 根目录";
@@ -368,8 +398,11 @@ function gate() {
 function renderAction() {
   var st = operations(), g = gate(), last = S.step === st.length;
   $("btn-prev").disabled = S.step === 1;
-  $("btn-save").disabled = !(S.sdk && (S.route === "new" ? S.step >= 4 : S.step === 2));
-  var labelsNew = ["下一步：设置板型 →", "下一步：选择插件 →", "下一步：分配引脚 →", "下一步：校验与预览 →", "下一步：生成应用 →", "生成工程（写盘）"];
+  $("btn-save").disabled = !(S.sdk && (S.route === "new" ? S.step >= 5 : S.step === 2));
+  var labelsNew = [
+    "下一步：选料 →", "下一步：设置板型 →", "下一步：选择插件 →",
+    "下一步：分配引脚 →", "下一步：校验与预览 →", "下一步：生成应用 →", "生成工程（写盘）"
+  ];
   var labelsOpen = ["下一步：检查与调整 →", "下一步：预览 diff →", "下一步：应用 →", "应用改动（写盘）"];
   var btn = $("btn-next");
   btn.onclick = nextStep;
@@ -389,11 +422,12 @@ function renderMain() {
   var body = "";
   if (S.route === "new") {
     if (S.step === 1) body = viewIdentity();
-    else if (S.step === 2) body = viewBoard();
-    else if (S.step === 3) body = viewPlugin();
-    else if (S.step === 4) body = viewPins();
-    else if (S.step === 5) body = viewValidate();
-    else if (S.step === 6) body = viewApply();
+    else if (S.step === 2) body = viewMaterial();
+    else if (S.step === 3) body = viewBoard();
+    else if (S.step === 4) body = viewPlugin();
+    else if (S.step === 5) body = viewPins();
+    else if (S.step === 6) body = viewValidate();
+    else if (S.step === 7) body = viewApply();
   } else {
     if (S.step === 1) body = viewOpenSdk();
     else if (S.step === 2) body = viewPins();
@@ -407,8 +441,9 @@ function renderMain() {
 function stageDesc() {
   var d = S.route === "new" ? [
     "给工程一个名字与输出位置，工具会从 KC536 干净骨架复制一份空白工程。",
-    "板型是「需求清单的来源」：不同的模式/灯效/滚轮选项决定哪些角色必须配脚。",
-    "按需启用功能插件。勾选即注入文件、解锁角色、腾让冲突脚；不勾选也能继续。",
+    "按原理图选物料：关键器件（光电/灯带/充电）选型号，数量与段数自己填。默认都是未指定，只有选中的才会推导角色与插件。",
+    "板型由选料推导初值，可按原理图微调。不同的模式/灯效/滚轮选项决定哪些角色必须配脚。",
+    "插件由选料联动（灯带→LEDC），也可手动勾选或拔除。勾选即注入文件、解锁角色、腾让冲突脚。",
     "用三种视图配同一批角色。先选需求组或角色，再在脚位图点绿格分配；改动会即时反映到右侧健康卡。",
     "确认没有错误，再查看「如果应用会改动什么」。预览阶段不会写入任何文件。",
     "最后一步写入生成文件。可回滚，写完后建议用 Keil 编译验证。"
@@ -482,7 +517,111 @@ function syncForm() {
 async function browseOut() {
   if (!api()) { toast("pywebview 未就绪", true); return; }
   var folder = await call("choose_folder", S.form.out);
-  if (folder) { S.form.out = folder; var el = $("f-out"); if (el) el.value = folder; saveFormCache(); }
+  if (!folder) return;
+  var el = $("f-out");
+  if (el) el.value = folder;
+  // 走 syncForm 统一回写 S.form / 缓存 / 顶部与底部按钮；
+  // 只改 input.value 不会触发 oninput，底部「下一步」按钮会一直保持禁用。
+  syncForm();
+}
+
+/* ---- 选料步骤：只记录用户显式选择；统计只是内部资料，不进入界面 ---- */
+function matOptionButtons(c) {
+  var sel = S.material.selected || {};
+  var cur = sel[c.id];
+  var h = '<div class="mat-opts">';
+  (c.options || []).forEach(function(o) {
+    var on = o.id === cur;
+    h += '<button class="mat-opt ' + (on ? "on" : "") + '" onclick="pickMaterial(\'' + esc(c.id) + '\',\'' + esc(o.id) + '\')">' +
+      '<span class="mo-dot"></span><span>' + esc(o.display_name) + '</span></button>';
+  });
+  h += '</div>';
+  if (cur) {
+    h += '<button class="mat-clear" onclick="pickMaterial(\'' + esc(c.id) + '\',\'\')">清除选择（不改其它物料）</button>';
+  }
+  return h;
+}
+function matParamControl(p) {
+  var par = S.material.params || {};
+  var val = par[p.id];
+  var fn = 'setMaterialParam(\'' + esc(p.id) + '\',this.value)';
+  // 整数：完全自由填写，只用 min/max 兜住明显非法值，不限制成几个统计取值。
+  if (p.type === "int") {
+    var min = p.min === undefined ? 1 : p.min;
+    var max = p.max === undefined ? 64 : p.max;
+    return '<div class="mat-param"><label>' + esc(p.display_name) + '</label>' +
+      '<input class="mat-num" type="number" min="' + esc(min) + '" max="' + esc(max) + '" ' +
+      'placeholder="按原理图填写" value="' + (val === undefined ? "" : esc(val)) + '" onchange="' + fn + '">' +
+      '<small>可填 ' + esc(min) + '~' + esc(max) + ' 任意整数，留空表示沿用工程值</small></div>';
+  }
+  var labels = p.labels || {};
+  var h = '<div class="mat-param"><label>' + esc(p.display_name) + '</label><select onchange="' + fn + '">' +
+    '<option value=""' + (val === undefined ? " selected" : "") + '>未指定（沿用工程值）</option>';
+  (p.allowed || []).forEach(function(a) {
+    var label = labels[String(a)] || String(a);
+    h += '<option value="' + esc(a) + '"' + (String(a) === String(val) ? " selected" : "") + '>' + esc(label) + '</option>';
+  });
+  return h + '</select></div>';
+}
+function viewMaterial() {
+  var cats = S.material.categories || [];
+  if (!cats.length) {
+    return '<div class="info-strip"><div class="i">i</div><p>未读取到物料目录。请确认后端 <span class="mono">omcfg/data/material_catalog.json</span> 存在。</p></div>';
+  }
+  var s = '<div class="concept"><b>按原理图选物料，工具只推导你显式选中的东西</b>：' +
+    '<div class="chain"><span>选中物料型号</span><i>推导</i><span>对应需求角色 + 插件</span><i>再到</i><span>脚位图自行配脚</span></div>' +
+    '所有分类默认「未指定」，不选就不会新增或移除任何角色；统计资料不会变成你的配置。</div>';
+
+  var keyCats = cats.filter(function(c) { return c.key; });
+  var paramCats = cats.filter(function(c) { return !c.key; });
+
+  s += '<div class="mat-section-h">关键物料 · 按实物选型号</div><div class="mat-grid">';
+  keyCats.forEach(function(c) {
+    s += '<div class="mat-card"><div class="mat-head"><b>' + esc(c.display_name) + '</b><span class="tag info">关键</span></div>' +
+      '<p class="mat-note">' + esc(c.note || "") + '</p>' + matOptionButtons(c) + '</div>';
+  });
+  s += '</div>';
+
+  s += '<div class="mat-section-h">其余参数 · 按原理图填写</div><div class="mat-grid">';
+  paramCats.forEach(function(c) {
+    s += '<div class="mat-card"><div class="mat-head"><b>' + esc(c.display_name) + '</b><span class="tag neutral">按需</span></div>' +
+      '<p class="mat-note">' + esc(c.note || "") + '</p>';
+    if ((c.options || []).length) {
+      s += matOptionButtons(c);
+    } else {
+      (c.params || []).forEach(function(p) { s += matParamControl(p); });
+    }
+    s += '</div>';
+  });
+  s += '</div>';
+
+  s += '<div class="info-strip"><div class="i">i</div><p>选料写入 <span class="mono">project.materials</span>，只影响你选中的项：例如选 <b>S203 四线</b> 才出现 SPI 四脚，选 <b>WS2812 灯带</b> 才启用 LEDC 插件。' +
+    '<b>每只灯/按键的极性不在这里</b>：它由原理图接法决定，请在「板型选项」步骤按 R/G/B 逐只选择，选料不会自动改。</p></div>';
+  return s;
+}
+async function pickMaterial(catId, optionId) {
+  if (!S.sdk) { toast("请先完成项目身份", true); return; }
+  await applyMaterialSelection(
+    Object.assign({}, S.material.selected, (function() { var o = {}; o[catId] = optionId; return o; })()),
+    S.material.params
+  );
+}
+async function setMaterialParam(paramId, value) {
+  if (!S.sdk) { toast("请先完成项目身份", true); return; }
+  var p = Object.assign({}, S.material.params);
+  if (value === "" || value === null) delete p[paramId];
+  else p[paramId] = value;
+  await applyMaterialSelection(S.material.selected, p);
+}
+async function applyMaterialSelection(selected, params) {
+  var r = await call("material_apply", S.sdk, selected, params);
+  if (!r || !r.ok) { toast("选料应用失败：" + ((r && r.error) || "未知"), true); return; }
+  await loadWorkspace(S.sdk);
+  if (r.effects) S.material.effects = r.effects;
+  // 选料改了 board，同步板型页的选择初值。
+  if (S.health && S.health.board) S.boardChoice = Object.assign({}, S.health.board);
+  render();
+  toast(r.message || "选料已应用");
 }
 
 function viewBoard() {
@@ -501,13 +640,61 @@ function viewBoard() {
   var logos = (S.caps.board_enums.logo || ["rgb","ledc","none"]).map(function(v) {
     return [v, { rgb:"RGB 三色灯", ledc:"灯带", none:"无灯效" }[v] || v, v];
   });
-  var wheels = (S.caps.board_enums["sensor.bus"] ? ["ENCODER_PINMUX_SEL_IO_00_01","ENCODER_PINMUX_SEL_IO_20_21","SOFT_GPIO"] : ["ENCODER_PINMUX_SEL_IO_00_01","ENCODER_PINMUX_SEL_IO_20_21","SOFT_GPIO"]).map(function(v) {
-    return [v, { ENCODER_PINMUX_SEL_IO_00_01:"编码器 P00/P01", ENCODER_PINMUX_SEL_IO_20_21:"编码器 P20/P21", SOFT_GPIO:"软件 GPIO" }[v] || v, v];
+  var wheels = (S.caps.board_enums.wheel || ["ENCODER_PINMUX_SEL_IO_00_01","ENCODER_PINMUX_SEL_IO_20_21","SOFT_GPIO"]).map(function(v) {
+    return [v, { ENCODER_PINMUX_SEL_IO_00_01:"编码器 P00/P01", ENCODER_PINMUX_SEL_IO_20_21:"编码器 P20/P21", SOFT_GPIO:"软件 GPIO（可配 P24/P25）" }[v] || v, v];
   });
-  return opt("模式脚", "决定 MODE_24G / MODE_BLE 是否为必需脚", "mode_pins", modes, "选中后角色出现在约束栏，必需项计入「缺必需」。") +
-    opt("灯效", "决定 LED_R/G/B 或灯带角色是否出现", "logo", logos, "KC536 源码无条件引用 LED_R/G/B，RGB 模式下这三只脚必须保留。") +
-    opt("滚轮", "决定 WHEEL_A/B 的合法脚对", "wheel", wheels, "WHEEL_A/B 必须成对配置，归到「中约束」。") +
-    '<div class="info-strip"><div class="i">i</div><p>板型选项<b>不直接改脚位</b>，只改「哪些角色必需」。想整体套用 KC536 协调方案，可在下一步点「一键按推荐配置」（可选，不是主线）。</p></div>';
+  var leds24 = (S.caps.board_enums.mode_24g_led || ["R","G","B"]).map(function(v) {
+    return [v, { R:"红灯 R（KC536）", G:"绿灯 G（S205）", B:"蓝灯 B" }[v] || v, ""];
+  });
+  var modeEffect = d.mode_pins === "dual" ? "当前：MODE_24G / MODE_BLE 成对必需；拨杆三段（2.4G / BAT / BT）"
+    : d.mode_pins === "single" ? "当前：MODE_BLE_24G 单脚必需"
+    : d.mode_pins === "wired" ? "当前：有线模式，不额外要求模式脚"
+    : "选中后角色出现在约束栏，必需项计入「缺必需」。";
+  var led24Effect = "当前 2.4G 指示灯复用 " + (d.mode_24g_led || "R") + " 灯（LED_MODE_" + (d.mode_24g_led || "R") + "_PIN）；" +
+    "由硬件决定，KC536 是红灯、S205 是 P05 绿灯。BT1 固定复用 G、BT0 固定复用 B。";
+  return opt("模式脚", "按原理图实际接法选；双脚=三段拨杆（2.4G/BAT/BT），只影响哪些模式角色必需", "mode_pins", modes, modeEffect) +
+    opt("2.4G 指示灯", "2.4G 模式亮哪只物理模式灯，由原理图决定；工具不替你选", "mode_24g_led", leds24, led24Effect) +
+    opt("指示灯", "模式指示灯方案：三色 LED / 灯带 / 无。当前模板只做指示灯，不跑呼吸灯效", "logo", logos, "生成代码用 mode_led_hint 独占指示灯；logo_process 在电池模式直接让路，不产生呼吸灯。RGB 模式下 LED_R/G/B 三脚必须保留。") +
+    opt("滚轮编码器", "硬件 pinmux 组合；P24/P25 请选软件 GPIO 后到配脚步骤自行指定", "wheel", wheels, "WHEEL_A/B 必须成对配置；P24/P25 是合法脚，工具不替你选。") +
+    viewPolaritySection() +
+    '<div class="info-strip"><div class="i">i</div><p>板型选项<b>不直接改脚位</b>，只改「哪些角色必需」与生成语义。脚位请在你自己的工程里按原理图逐项指定，工具不会替你决定某只脚给谁用。</p></div>';
+}
+
+/* 逐脚极性：极性是每只灯/每个按键各自的电气属性，不是全板一个值。
+   列表按当前已配脚动态生成（板上有几只就列几行），名字带 R/G/B，
+   完全由工程师按原理图逐只指定；工具不按数量或统计统一分配。 */
+function viewPolaritySection() {
+  var roles = (S.health && S.health.polarity_roles) || [];
+  var pmap = (S.health && S.health.polarity_map) || {};
+  var h = '<div class="opt-card pol-card"><h4>逐脚极性</h4>' +
+    '<p class="sub">按原理图逐只指定，板上有几只就列几行；不统一、不自动分配</p>';
+  if (!roles.length) {
+    h += '<div class="pol-empty">当前还没有任何已配脚的灯 / 按键。请先在「配脚」步骤分配脚位，这里会按实际脚位列出极性。</div>';
+  } else {
+    roles.forEach(function(r) {
+      var cur = r.effective || pmap[r.role] || "active_low";
+      var hi = cur === "active_high";
+      var kindLabel = r.led ? "点亮" : "有效";
+      h += '<div class="pol-row"><div class="pol-meta"><b>' + esc(r.display) + '</b>' +
+        '<span class="mono">' + esc(r.role) + '</span><span class="tag neutral">' + esc(r.pin) + '</span></div>' +
+        '<div class="seg pol-seg">' +
+          '<button class="' + (!hi ? "on" : "") + '" onclick="setPolarity(\'' + r.role + '\',\'active_low\')">' +
+            '低电平' + kindLabel + '<small>另一端接 VCC / 上拉</small></button>' +
+          '<button class="' + (hi ? "on" : "") + '" onclick="setPolarity(\'' + r.role + '\',\'active_high\')">' +
+            '高电平' + kindLabel + '<small>另一端接地 / 下拉</small></button>' +
+        '</div></div>';
+    });
+  }
+  h += '<div class="effect">↳ 极性写进每只脚，生成时各用各的；改数量不会动这里</div></div>';
+  return h;
+}
+async function setPolarity(role, value) {
+  if (!S.sdk) { toast("请先完成项目身份", true); return; }
+  var r = await call("blank_set_polarity", S.sdk, (function() { var o = {}; o[role] = value; return o; })());
+  if (!r || !r.ok) { toast("极性保存失败：" + ((r && r.error) || "未知"), true); return; }
+  await refreshHealth();
+  renderMain();
+  toast(role + " → " + (value === "active_high" ? "高电平有效" : "低电平有效"));
 }
 function setBoardChoice(key, value) {
   if (!S.sdk) { toast("请先完成项目身份", true); return; }
@@ -516,15 +703,17 @@ function setBoardChoice(key, value) {
   renderMain();
   (async function() {
     var r = await call("blank_set_board", S.sdk, {
-      mode_pins: S.boardChoice.mode_pins, logo: S.boardChoice.logo, wheel: S.boardChoice.wheel
+      mode_pins: S.boardChoice.mode_pins, logo: S.boardChoice.logo, wheel: S.boardChoice.wheel,
+      mode_24g_led: S.boardChoice.mode_24g_led || "R"
     });
     if (!r || !r.ok) {
-      S.boardChoice[key] = old; renderMain();
+      S.boardChoice[key] = old; render();
       toast("板型保存失败：" + ((r && r.error) || "未知"), true);
       return;
     }
     await refreshHealth();
-    renderAside();
+    // 板型改了「哪些角色必需」，约束栏/需求组的必需标签也必须重渲染，不能只刷健康卡。
+    render();
     toast("板型已更新：" + (r.message || ""));
   })();
 }
@@ -571,12 +760,11 @@ function viewPins() {
     '选中其一，另外两处同步高亮。<button class="btn sm ghost ml-6" onclick="showHelp()">? 详细</button></div>';
   h += '<div class="ctxbar">' + (S.selectedRole
       ? '<span>当前正在配：<b>' + esc(roleName(S.selectedRole)) + '</b></span><span class="tag info mono">' + esc(S.selectedRole) + '</span>' +
-        '<span class="muted">合法 ' + (roleMeta(S.selectedRole).allowed_pins || []).length + ' 脚 · 推荐 ' + esc(roleMeta(S.selectedRole).suggested_pin || "—") + '</span>'
+        '<span class="muted">合法 ' + (roleMeta(S.selectedRole).allowed_pins || []).length + ' 脚 · 请在右栏按原理图选一只脚</span>'
       : (S.selectedGroup ? '<span>已选需求组：<b>' + esc(groupName(S.selectedGroup)) + '</b></span><span class="muted">中栏已筛出该组角色，右栏高亮其合法脚</span>'
-        : '<span><b>尚未选择角色</b></span><span class="muted">先在左侧点需求组，或在中栏点一个角色</span>')) +
+        : '<span><b>尚未选择角色</b></span><span class="muted">在中栏点一个角色，再到右栏按原理图选脚</span>')) +
     '<span class="spacer"></span>' +
     '<button class="btn sm" onclick="savePins()">保存到工程</button>' +
-    (S.blankMode ? '<button class="btn sm" onclick="fillRecommended()">一键按推荐配置（可选）</button>' : '') +
     (S.selectedRole || S.selectedGroup ? '<button class="btn sm ghost" onclick="clearSel()">清除选择</button>' : '') + '</div>';
   h += '<div class="tri">' + colGroups() + colRoles() + colMatrix() + '</div>';
   return h;
@@ -590,8 +778,9 @@ function groupName(id) {
 function groupMacs(g) {
   var out = [];
   (g.roles || []).forEach(function(rid) {
-    var mac = findMacByRoleId(rid);
-    if (mac) out.push(mac);
+    // 组里既可以写 role_id（如 wheel.a），也可以直接写宏名（如 USB_5V，它没有 role_id）。
+    var mac = S.caps.roles[rid] ? rid : findMacByRoleId(rid);
+    if (mac && out.indexOf(mac) < 0) out.push(mac);
   });
   return out;
 }
@@ -611,7 +800,8 @@ function colGroups() {
   (S.caps.demand_groups || []).forEach(function(g) {
     var plug = findPluginByGroup(g.id);
     var plugOn = plug && enabled.indexOf(plug.id) >= 0;
-    var macs = groupMacs(g).filter(function(m) { return !!S.caps.roles[m] && roleMeta(m).v1 !== false; });
+    // 不再按 v1 过滤：需求组必须覆盖全部真实需求，v1 只用于统计趋势。
+    var macs = groupMacs(g).filter(function(m) { return !!S.caps.roles[m] && (roleMeta(m).allowed_pins || []).length > 0; });
     var done = macs.filter(function(m) { return !!pinOfRole(m); }).length;
     var cls = "grp" + (S.selectedGroup === g.id ? " on" : "") + (plug && !plugOn ? " plug-off" : "");
     s += '<div class="' + cls + '" role="button" tabindex="0" onclick="selGroup(\'' + g.id + '\')">' +
@@ -631,40 +821,85 @@ function pinOfRole(mac) {
   for (var pin in S.assignments) if (S.assignments[pin] === mac) return pin;
   return null;
 }
+// 原理图上的网络名可能写成宏名(LED_R_PIN)、显示名(业务灯 R)或 role_id(led.r)，
+// 搜索把三者与别名都算进去，工程师不必猜工具内部叫什么。
+function roleMatches(mac, meta, q) {
+  if (!q) return true;
+  var hay = [mac, meta.display_name || "", meta.role_id || ""]
+    .concat(meta.aliases || []).join(" ").toLowerCase();
+  return hay.indexOf(q) >= 0;
+}
+function onRoleQuery(v) {
+  S.roleQuery = String(v || "").trim().toLowerCase();
+  renderMain();
+  var el = $("role-search");
+  if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+}
+function clearRoleQuery() {
+  S.roleQuery = "";
+  renderMain();
+}
+// 「必需」标签必须跟随当前板型/选料/插件推导，而不是 options.json 的静态标记。
+// 静态标记里 MODE_BLE_24G_PIN（单脚）为 true，选了双脚后仍显示必需，自相矛盾。
+function isRequiredRole(mac) {
+  var req = S.health && S.health.required;
+  if (Array.isArray(req)) return req.indexOf(mac) >= 0;
+  return !!(roleMeta(mac).required);  // 状态未加载时退回静态值
+}
 function colRoles() {
-  var visible = [];
+  var q = S.roleQuery || "";
+  var all = [];
   for (var mac in S.caps.roles) {
     var m = S.caps.roles[mac] || {};
-    if (m.v1 === false) continue;
-    var allowed = m.allowed_pins || [];
-    if (!allowed.length) continue;
-    visible.push(mac);
+    // 不再按 v1 过滤：v1=false 的角色同样是原理图上的真实网络（LED_R、SENSOR_MOSI 等）。
+    if (!(m.allowed_pins || []).length) continue;
+    all.push(mac);
   }
-  if (S.selectedGroup) {
+  var visible;
+  if (q) {
+    // 搜索时跨全部角色，不受需求组筛选限制
+    visible = all.filter(function(m) { return roleMatches(m, roleMeta(m), q); });
+  } else if (S.selectedGroup) {
     var g = null;
     (S.caps.demand_groups || []).forEach(function(x) { if (x.id === S.selectedGroup) g = x; });
-    if (g) {
-      var macs = groupMacs(g);
-      visible = visible.filter(function(m) { return macs.indexOf(m) >= 0; });
-    }
+    var macs = g ? groupMacs(g) : [];
+    visible = all.filter(function(m) { return macs.indexOf(m) >= 0; });
+  } else {
+    visible = all;
   }
+
   var buckets = {};
   TIERS.forEach(function(t) { buckets[t] = []; });
   visible.forEach(function(m) { buckets[tierOf((roleMeta(m).allowed_pins || []).length)].push(m); });
-  var s = '<div class="tri-col"><div class="tri-h"><b>② 约束栏</b><span>按合法脚数 · ' + (S.selectedGroup ? "已筛选" : "全量 " + visible.length) + '</span></div><div class="tri-b">';
+
+  var scope = q ? ("搜索「" + esc(S.roleQuery) + "」· " + visible.length + " 命中")
+    : (S.selectedGroup ? "需求组筛选 · " + visible.length : "全部角色 " + visible.length);
+  var s = '<div class="tri-col"><div class="tri-h"><b>② 约束栏</b><span>' + scope + '</span></div>' +
+    '<div class="role-search-wrap">' +
+      '<input id="role-search" class="role-search" type="search" placeholder="搜原理图网络名：LED_R / SENSOR_MOSI / led.r" ' +
+        'value="' + esc(S.roleQuery) + '" oninput="onRoleQuery(this.value)">' +
+      (q ? '<button class="role-search-clear" onclick="clearRoleQuery()" title="清除搜索">×</button>' : '') +
+    '</div>' +
+    '<div class="role-scope-bar">' +
+      '<button class="chip ' + (!S.selectedGroup && !q ? "on" : "") + '" onclick="selGroup(null)">全部角色</button>' +
+      (S.caps.demand_groups || []).map(function(g) {
+        return '<button class="chip ' + (S.selectedGroup === g.id && !q ? "on" : "") + '" onclick="selGroup(\'' + g.id + '\')">' + esc(g.display_name) + '</button>';
+      }).join("") +
+    '</div>' +
+    '<div class="tri-b">';
   TIERS.forEach(function(t) {
     if (!buckets[t].length) return;
     s += '<div class="tier-h">' + esc(t) + ' · ' + buckets[t].length + '</div>';
     buckets[t].sort().forEach(function(m) {
       var meta = roleMeta(m), ap = pinOfRole(m), n = (meta.allowed_pins || []).length;
       s += '<button class="role ' + (S.selectedRole === m ? "on" : "") + '" onclick="selRole(\'' + m + '\')">' +
-        '<div class="r1"><b>' + esc(meta.display_name || m) + '</b>' + (meta.required ? '<span class="tag err">必需</span>' : '') + '</div>' +
-        '<span class="mac">' + esc(m) + '</span><div class="r2">' +
+        '<div class="r1"><b>' + esc(meta.display_name || m) + '</b>' + (isRequiredRole(m) ? '<span class="tag err">必需</span>' : '') + '</div>' +
+        '<span class="mac">' + esc(m) + (meta.role_id ? ' · ' + esc(meta.role_id) : '') + '</span><div class="r2">' +
         (ap ? '<span class="tag ok">已配 ' + esc(ap) + '</span>' : '<span class="tag neutral">未配</span>') +
-        '<span>' + n + ' 脚</span>' + (meta.suggested_pin ? '<span>推荐 ' + esc(meta.suggested_pin) + '</span>' : '') + '</div></button>';
+        '<span>' + n + ' 脚可选</span></div></button>';
     });
   });
-  if (!visible.length) s += '<div class="matrix-note">无 v1 角色，请检查 role_capabilities 返回。</div>';
+  if (!visible.length) s += '<div class="matrix-note">没有匹配的角色。试试宏名（LED_R_PIN）或显示名，或点「全部角色」。</div>';
   return s + '</div></div>';
 }
 function activeRoles() {
@@ -733,7 +968,12 @@ function shortName(mac) {
   var n = roleName(mac);
   return n.length > 6 ? n.slice(0, 6) : n;
 }
-function selGroup(id) { S.selectedGroup = id; S.selectedRole = null; renderMain(); }
+function selGroup(id) {
+  S.selectedGroup = id || null;
+  S.selectedRole = null;
+  S.roleQuery = "";
+  renderMain();
+}
 function selRole(mac) { S.selectedRole = mac; renderMain(); }
 function clearSel() { S.selectedRole = null; S.selectedGroup = null; renderMain(); }
 function onPinClick(pin) {
@@ -759,7 +999,7 @@ function onPinClick(pin) {
   render();
 }
 function jumpToPin() {
-  var target = S.route === "new" ? 4 : 2;
+  var target = S.route === "new" ? 5 : 2;
   if (target <= S.maxDone + 1) { S.step = target; render(); }
   else toast("请先完成前面的步骤");
 }
@@ -844,9 +1084,11 @@ function viewValidate() {
     s += '<div class="empty-ok">✓ 0 error · 0 warning · 必需脚齐全、无冲突，可以进入预览</div>';
   } else {
     (h.missingDetail || []).forEach(function(m) {
+      var meta = S.caps.roles[m.role] || {};
+      var allowed = meta.allowed_pins || [];
       s += '<div class="issue err"><div class="ic">!</div><div class="tx"><b>缺必需角色：' + esc(m.role ? roleName(m.role) : m.role) + '</b>' +
-        '<p><span class="mono">' + esc(m.role) + '</span> · 推荐 ' + esc(m.suggested || "—") + '。这个角色未分配脚位，生成会被阻断。</p></div>' +
-        '<button class="btn sm" onclick="fixRole(\'' + m.role + '\',\'' + esc(m.suggested || "") + '\')">去修复 →</button></div>';
+        '<p><span class="mono">' + esc(m.role) + '</span> · 合法脚 ' + allowed.length + ' 个，请按原理图选一只。这个角色未分配脚位，生成会被阻断。</p></div>' +
+        '<button class="btn sm" onclick="fixRole(\'' + m.role + '\')">去修复 →</button></div>';
     });
     if (h.conflicts) s += '<div class="issue err"><div class="ic">!</div><div class="tx"><b>存在 ' + h.conflicts + ' 处脚位冲突</b><p>同一只脚被分配给多个角色，已在脚位图用黄色标出。</p></div><button class="btn sm" onclick="fixConflict()">去修复 →</button></div>';
     if (h.errors) s += '<div class="issue err"><div class="ic">!</div><div class="tx"><b>' + h.errors + ' 条校验错误</b><p>由后端校验器给出，定位到首个关联角色后修复。</p></div><button class="btn sm" onclick="fixIssue()">去修复 →</button></div>';
@@ -862,7 +1104,7 @@ function viewPreview() {
     (S.previewed ? '<span class="tag ok">✓ 已预览</span>' : '<span class="muted tiny">预览后才可进入应用</span>') + '</div>' + diffBlock();
 }
 function fixRole(mac, pin) {
-  var target = S.route === "new" ? 4 : 2;
+  var target = S.route === "new" ? 5 : 2;
   S.step = target;
   S.maxDone = Math.max(S.maxDone, target - 1);
   S.selectedRole = mac || null; S.selectedGroup = null;
@@ -929,10 +1171,20 @@ async function doApply() {
 }
 
 /* ==================== 步骤流转 ==================== */
+// Windows 路径归一：把重复的 / 与 \ 折叠成单个 \，保留 UNC 的 \\ 前缀，去掉尾部斜杠。
+// 这样手输 D:\work 与 D:\\work 会得到同一个目标路径，避免「必须写两个反斜杠」的错觉。
+function normalizeDir(p) {
+  var s = String(p == null ? "" : p).trim();
+  if (!s) return "";
+  var unc = /^[\\/]{2}[^\\/]/.test(s);
+  s = s.replace(/[\\/]+/g, "\\");
+  if (unc) s = "\\" + s;
+  return s.replace(/\\+$/, "");
+}
 async function createBlank() {
-  var name = S.form.name.trim(), out = S.form.out.trim(), id = parseId(S.form.id);
+  var name = S.form.name.trim(), out = normalizeDir(S.form.out), id = parseId(S.form.id);
   if (!name || !out || id === null) { toast("请补全项目名、输出目录与项目号", true); return false; }
-  var target = out.replace(/[\\/]+$/, "") + "\\" + name;
+  var target = out + "\\" + name;
   var r = await call("blank_new", name, target, S.form.customer || "BYC", parseInt(S.form.version, 10) || 1, id);
   if (!r || !r.ok) { toast("创建失败：" + ((r && r.error) || "未知") + (r && r.hint ? "；" + r.hint : ""), true); return false; }
   S.sdk = r.sdk; S.blankMode = true;
@@ -971,8 +1223,8 @@ async function nextStep() {
     if (last) { await doApply(); return; }
     if (S.route === "new") {
       if (S.step === 1 && !S.sdk) { if (!(await createBlank())) return; }
-      if (S.step === 4) await savePins();
-      if (S.step === 5) S.previewed = false;
+      if (S.step === 5) await savePins();
+      if (S.step === 6) S.previewed = false;
     } else {
       if (S.step === 2) await savePins();
       if (S.step === 3) S.previewed = false;

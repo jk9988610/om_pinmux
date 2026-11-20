@@ -91,6 +91,8 @@ def _required_roles(config: dict, pins: dict) -> list[str]:
         required += ["MODE_24G_PIN", "MODE_BLE_PIN"]
     elif b.get("mode_pins") == "single":
         required += ["MODE_BLE_24G_PIN"]
+    elif b.get("mode_pins") == "wired":
+        required += ["MODE_WIRED_PIN"]
     if b.get("logo") == "rgb":
         required += ["LED_R_PIN", "LED_G_PIN", "LED_B_PIN"]
     if model.sensor(config).get("bus") == "spi_4wire":
@@ -115,6 +117,18 @@ def _required_roles(config: dict, pins: dict) -> list[str]:
             for role in pair:
                 if role not in required:
                     required.append(role)
+
+    # 选料契约：物料型号叠加必需角色（如四线传感器 SPI 脚、灯带 DIN），
+    # 并支持明确移除（充电管理=none 去 BAT_CHG_PIN、无 mode 键去 KEY_PAIR_PIN）。
+    # 没有 project.materials 的旧工程返回空，行为不变。
+    from . import materials as _materials
+
+    for role in _materials.required_roles(config):
+        if role not in required:
+            required.append(role)
+    for role in _materials.removed_roles(config):
+        if role in required:
+            required.remove(role)
     return required
 
 
@@ -190,6 +204,10 @@ def validate_config(config: dict, chip: dict | None = None) -> Report:
             report.add_error("board.ledc_rgb_number", "必须是 1..64 的整数")
     if b.get("led_polarity") not in model.POLARITY_ENUM:
         report.add_error("board.led_polarity", f"只允许 {sorted(model.POLARITY_ENUM)}")
+    if b.get("switch_segments") is not None and _as_int(b.get("switch_segments")) not in (2, 3):
+        report.add_error("board.switch_segments", "只允许 2 或 3（拨杆两段/三段）")
+    if b.get("ble_channels") is not None and _as_int(b.get("ble_channels")) not in (1, 2):
+        report.add_error("board.ble_channels", "只允许 1 或 2（蓝牙通道数）")
     wheel = str(b.get("wheel") or "")
     if not wheel:
         report.add_error("board.wheel", "必须指定编码器宏或 SOFT_GPIO")

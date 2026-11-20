@@ -716,6 +716,34 @@ def _patch_key_io_c(text: str, feat: dict) -> tuple[str, list[str]]:
         if n:
             text = new
             notes.append("scan_mode_swtich: 双模式脚 → MODE_BLE_24G")
+        else:
+            # S205 三档拨杆结构（uint8_t ble_low / g24_low + if/else 链）：
+            # 单脚工程没配 MODE_BLE_PIN/MODE_24G_PIN，必须改回单脚 MODE_BLE_24G。
+            pat3 = re.compile(
+                r"[ \t]*uint8_t\s+ble_low\s*=[\s\S]*?"
+                r"默认 2\.4G[\s\S]*?\}",
+                re.M,
+            )
+            single3 = (
+                "    /* PinMux sync: 单模式脚 MODE_BLE_24G */\n"
+                "    if(MODE_BLE_CHECK == gpio_read(MODE_BLE_24G_PIN))\n"
+                "    {\n"
+                "        if(bt_index == 0)\n"
+                "            device_temp = iDEVICE_TYPE_BT0;\n"
+                "        else if(bt_index == 1)\n"
+                "            device_temp = iDEVICE_TYPE_BT1;\n"
+                "        else\n"
+                "            device_temp = iDEVICE_TYPE_BT2;\n"
+                "    }\n"
+                "    else\n"
+                "    {\n"
+                "        device_temp = iDEVICE_TYPE_24G;\n"
+                "    }"
+            )
+            new, n3 = pat3.subn(single3, text, count=1)
+            if n3:
+                text = new
+                notes.append("scan_mode_swtich: S205 三档拨杆 → 单脚 MODE_BLE_24G")
 
     return text, notes
 
@@ -889,6 +917,33 @@ def _sync_logo_ledc(periph: str, feat: dict, bak_dir: str) -> tuple[list[dict], 
                 }
             )
     return actions, written
+
+
+def plan_board_contracts(periph: str, feat: dict) -> list[tuple[str, str]]:
+    """只计算不写盘：返回按板型需要改写的源码 [(绝对路径, 新内容)]。
+
+    供生成管线把源码改写纳入同一个 FileTransaction，保证回滚一致。
+    仅覆盖 key_io.h / key_io.c 两份 generator 不生成的板型契约源码；
+    user_config.c 的 GPIO 表与 sleep 段由 generator.build_outputs 按当前 pins 生成，
+    不在这里改写（否则会用旧骨架文本覆盖生成结果）。
+    LEDC 文件注入由 plugins 链路单独负责，不在这里重复。
+    """
+    planned: list[tuple[str, str]] = []
+    targets = [
+        (os.path.join(periph, "key_io.h"), _patch_key_io_h),
+        (os.path.join(periph, "key_io.c"), _patch_key_io_c),
+    ]
+    for path, patcher in targets:
+        if not os.path.isfile(path):
+            continue
+        try:
+            old = open(path, encoding="utf-8", errors="replace").read()
+        except OSError:
+            continue
+        new, _notes = patcher(old, feat)
+        if new != old:
+            planned.append((path, new))
+    return planned
 
 
 def sync_board_contracts(periph: str, feat: dict, bak_dir: str) -> dict:

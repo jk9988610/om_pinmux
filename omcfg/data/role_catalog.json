@@ -257,14 +257,14 @@
     },
     {
       "id": "key.pair",
-      "display_name": "对码键（已下线趋势）",
+      "display_name": "对码键（独立 PAIR 脚，按需）",
       "tier": "core",
       "aliases": {
         "*": "KEY_PAIR_PIN"
       },
       "optional": true,
       "deprecated": false,
-      "note": "近3月15次，末次2026-11-02；495注释PAIR是个案非趋势",
+      "note": "是否用独立对码脚由原理图决定：S205 无独立对码键，长按 DPI 2 秒对码；有独立 PAIR 脚的工程才配此项。工具不推荐、不默认。",
       "v1": true
     },
     {
@@ -695,7 +695,7 @@
     "new_short_lived": "id_min >= 0x0300 但 id_max <= 0x0378，新出现又快速消失",
     "declining": "老设计，id_max 早于最新项目，新项目不用了"
   },
-  "v1_policy": "初期只显示 v1=true 的 26 个角色（近3月活跃>=13）；extended 折叠不显示",
+  "v1_policy": "全部角色在需求组与约束栏均可见；v1 仅用于统计趋势，不再用于隐藏角色",
   "demand_groups": [
     {
       "id": "ledc.strip",
@@ -707,33 +707,37 @@
       "required": [
         "ledc.din"
       ],
-      "note": "DIN 有芯片约束(4 脚)，CTRL 自由(24 脚)"
+      "note": "DIN 有芯片约束(4 脚)，CTRL 自由(24 脚)；勾选启用 LEDC 插件"
     },
     {
       "id": "wheel",
-      "display_name": "滚轮",
+      "display_name": "滚轮编码器",
       "roles": [
         "wheel.a",
-        "wheel.b"
+        "wheel.b",
+        "h_encoder.a",
+        "h_encoder.b"
       ],
       "required": [
         "wheel.a",
         "wheel.b"
       ],
-      "note": "A/B 必须成对，各 8 脚"
+      "note": "滚轮/光编码器 A/B 必须成对。合法脚含 P00/P01/P05/P06/P20/P21/P24/P25；P24/P25 走 SOFT_GPIO，按原理图自行分配，工具不预设。光编码器别名 H_ENCODER_A/B 与滚轮同源。",
+      "pin_groups": {
+        "hardware_pinmux": ["P00", "P01", "P20", "P21"],
+        "soft_gpio": ["P05", "P06", "P24", "P25"]
+      }
     },
     {
       "id": "mode.switch",
       "display_name": "模式开关",
       "roles": [
         "mode.24g",
-        "mode.ble"
+        "mode.ble",
+        "mode.switch",
+        "mode.wired"
       ],
-      "required": [
-        "mode.24g",
-        "mode.ble"
-      ],
-      "note": "双脚模式，缺一不可"
+      "note": "双脚模式与单脚/有线模式，按原理图实际接法选"
     },
     {
       "id": "key.main",
@@ -749,6 +753,116 @@
         "key.r2"
       ],
       "note": "三键基础组合，各 24 脚无芯片约束"
+    },
+    {
+      "id": "key.function",
+      "display_name": "功能按键",
+      "roles": [
+        "key.dpi",
+        "key.p",
+        "key.b",
+        "key.pair",
+        "key.c0",
+        "key.fire",
+        "key.left",
+        "key.mid",
+        "key.right"
+      ],
+      "note": "DPI / P / B / 对码(mode) / 矩阵列 / 连发 / 左右中键"
+    },
+    {
+      "id": "sensor.optical",
+      "display_name": "光电传感器",
+      "roles": [
+        "sensor.sclk",
+        "sensor.sdio",
+        "sensor.motion",
+        "sensor.ncs",
+        "sensor.miso",
+        "sensor.mosi"
+      ],
+      "note": "三线/四线 SPI 与中断；两线或四线由物料型号决定"
+    },
+    {
+      "id": "flash",
+      "display_name": "Flash 存储",
+      "roles": [
+        "flash.cs",
+        "flash.miso",
+        "flash.mosi",
+        "flash.sclk"
+      ],
+      "note": "SPI Flash 四线"
+    },
+    {
+      "id": "usb",
+      "display_name": "USB 接口",
+      "roles": [
+        "usb.dn",
+        "usb.dp",
+        "usb.5v_check",
+        "USB_5V"
+      ],
+      "note": "D-/D+ 与 5V 检测；USB_5V 为电源网络宏"
+    },
+    {
+      "id": "power",
+      "display_name": "电源与充电",
+      "roles": [
+        "lvd",
+        "bat_chg",
+        "power.on"
+      ],
+      "note": "低压检测 / 充电检测 / 开机检测"
+    },
+    {
+      "id": "led.mode",
+      "display_name": "模式指示灯",
+      "roles": [
+        "mode_led.r",
+        "mode_led.g",
+        "mode_led.b",
+        "mode_led.24g_old",
+        "mode_led.bt0_old",
+        "mode_led.bt1_old",
+        "led.cd"
+      ],
+      "note": "RGB 模式灯与旧版 24G/BT 指示灯、充电/模式双色灯"
+    },
+    {
+      "id": "led.status",
+      "display_name": "业务灯与状态灯",
+      "roles": [
+        "led.r",
+        "led.g",
+        "led.b",
+        "led.low",
+        "led.chg",
+        "led.c0",
+        "led.c1",
+        "led.c2",
+        "led.c3",
+        "rgb",
+        "rgb.on",
+        "logo.ctrl"
+      ],
+      "note": "RGB 三色灯/低电/充电/独立 LED/LOGO 灯；高低电平由另一端接地或接 VCC 判断"
+    },
+    {
+      "id": "oled",
+      "display_name": "OLED 屏",
+      "roles": [
+        "oled.power"
+      ],
+      "note": "OLED 屏电源控制"
+    },
+    {
+      "id": "uart",
+      "display_name": "串口调试",
+      "roles": [
+        "uart.digital"
+      ],
+      "note": "数字 UART 调试口"
     }
   ]
 }

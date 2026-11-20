@@ -1,0 +1,172 @@
+{
+  "schema": "om6239-material-catalog/v3",
+  "note": "用户选料清单，只描述「选了什么会怎样」。统计资料仅存于 material_scan.json / docs/MATERIAL-STATS.md 供内部参考，不作为默认值、不进入用户契约。所有分类默认未选择；只有用户显式选中的型号才产生角色、板型、插件与参数副作用。",
+  "categories": [
+    {
+      "id": "sensor",
+      "display_name": "光电传感器",
+      "key": true,
+      "note": "按实物焊接型号选。两线只用 SDIO；四线展开 SCLK/MOSI/MISO/NCS。程序运行时按 PID 探测型号，这里选的是板子上的实物。不选则不改动任何角色。",
+      "options": [
+        {
+          "id": "S205",
+          "display_name": "S205（两线）",
+          "effects": {
+            "board": {"sensor.bus": "sdio_3wire"},
+            "required_roles": ["SENSOR_SDIO_PIN"],
+            "params": {"sensor_wire": 2, "sensor_model": "S205"}
+          }
+        },
+        {
+          "id": "S203",
+          "display_name": "S203（四线 SPI）",
+          "effects": {
+            "board": {"sensor.bus": "spi_4wire"},
+            "required_roles": ["SENSOR_MOSI_PIN", "SENSOR_MISO_PIN", "SENSOR_NCS_PIN"],
+            "params": {"sensor_wire": 4, "sensor_model": "S203"}
+          }
+        },
+        {
+          "id": "KA8",
+          "display_name": "KA8（两线）",
+          "effects": {
+            "board": {"sensor.bus": "sdio_3wire"},
+            "required_roles": ["SENSOR_SDIO_PIN"],
+            "params": {"sensor_wire": 2, "sensor_model": "KA8"}
+          }
+        },
+        {
+          "id": "MX8650A",
+          "display_name": "MX8650A（两线）",
+          "effects": {
+            "board": {"sensor.bus": "sdio_3wire"},
+            "required_roles": ["SENSOR_SDIO_PIN"],
+            "params": {"sensor_wire": 2, "sensor_model": "MX8650A"}
+          }
+        }
+      ]
+    },
+    {
+      "id": "led_strip",
+      "display_name": "灯带",
+      "key": true,
+      "note": "按原理图是否有 WS2812/3528 ARGB 选。装灯带等价于启用 LEDC 插件并解锁 DIN/CTRL 角色；不装则不产生灯带角色。不选则不改动插件与角色。",
+      "options": [
+        {
+          "id": "WS2812",
+          "display_name": "WS2812 / 3528 ARGB",
+          "effects": {
+            "plugin": {"id": "ledc", "enable": true},
+            "board": {"logo": "ledc"},
+            "required_roles": ["LEDC_PIN"]
+          }
+        },
+        {
+          "id": "none",
+          "display_name": "不装灯带",
+          "effects": {
+            "plugin": {"id": "ledc", "enable": false},
+            "board": {"logo": "rgb"},
+            "required_roles": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "charger",
+      "display_name": "充电管理",
+      "key": true,
+      "note": "按实物充电管理芯片选。4056H 需要充电检测脚；无充电管理则移除该角色。不选则不改动任何角色。",
+      "options": [
+        {
+          "id": "4056H",
+          "display_name": "4056H",
+          "effects": {
+            "required_roles": ["BAT_CHG_PIN"],
+            "params": {"charger_model": "4056H"}
+          }
+        },
+        {
+          "id": "none",
+          "display_name": "无充电管理",
+          "effects": {
+            "remove_roles": ["BAT_CHG_PIN"],
+            "params": {"charger_model": "none"}
+          }
+        }
+      ]
+    },
+    {
+      "id": "rgb",
+      "display_name": "RGB 指示灯",
+      "key": false,
+      "note": "数量按原理图上的灯珠个数填写，1..64 任意整数。点亮极性由硬件接法决定（另一端接地=高电平点亮，另一端接 VCC=低电平点亮），请在「板型选项」步骤按原理图选择，选料步骤不会替你决定极性。",
+      "params": [
+        {
+          "id": "rgb_count",
+          "display_name": "RGB 灯数量",
+          "type": "int",
+          "min": 1,
+          "max": 64,
+          "board_key": "ledc_rgb_number"
+        }
+      ]
+    },
+    {
+      "id": "mode_switch",
+      "display_name": "模式拨杆",
+      "key": false,
+      "note": "按实物拨杆段数选。两段=开/关；三段=2.4G 档 / BAT 档 / 蓝牙档（从上到下）。未指定时沿用工程已有板型值。",
+      "params": [
+        {
+          "id": "switch_segments",
+          "display_name": "拨杆段数",
+          "type": "enum",
+          "allowed": [2, 3],
+          "board_key": "switch_segments",
+          "labels": {"2": "两段（开/关）", "3": "三段（2.4G/BAT/蓝牙）"}
+        }
+      ]
+    },
+    {
+      "id": "mode_key",
+      "display_name": "Mode 键（程序 pair 键）",
+      "key": false,
+      "note": "实物叫 mode 键，程序里叫 pair 键。有键时解锁 KEY_PAIR_PIN 并计入唤醒掩码；无键时移除该角色并给源码 PAIR 引用加编译保护。不选则不改动任何角色。",
+      "options": [
+        {
+          "id": "present",
+          "display_name": "有 mode 键",
+          "effects": {
+            "required_roles": ["KEY_PAIR_PIN"],
+            "params": {"mode_key": true}
+          }
+        },
+        {
+          "id": "absent",
+          "display_name": "无 mode 键",
+          "effects": {
+            "remove_roles": ["KEY_PAIR_PIN"],
+            "params": {"mode_key": false}
+          }
+        }
+      ]
+    },
+    {
+      "id": "ble",
+      "display_name": "蓝牙",
+      "key": false,
+      "note": "按实物广播通道数选，决定广播名数量（BT0/BT1）。未指定时沿用工程已有板型值。",
+      "params": [
+        {
+          "id": "ble_channels",
+          "display_name": "蓝牙通道数",
+          "type": "enum",
+          "allowed": [1, 2],
+          "board_key": "ble_channels",
+          "labels": {"1": "1 通道（BT0）", "2": "2 通道（BT0/BT1）"}
+        }
+      ]
+    }
+  ]
+}

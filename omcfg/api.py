@@ -8,9 +8,11 @@ from pathlib import Path
 
 from . import (
     baseline,
+    biz_sync,
     blank,
     derive,
     initproject,
+    materials,
     model,
     newproject,
     pinmap,
@@ -839,12 +841,30 @@ class Api:
                 result["error"] = "校验未通过，拒绝写入"
                 return result
             outputs = [item for item in generator.build_outputs(config, root) if item.changed]
+            # 板型契约源码（key_io / sleep）必须与 user_config.h 同步改写：
+            # 双脚模式下骨架 key_io.c 写死的 MODE_BLE_24G_PIN 需要改成双模式判断，
+            # 否则生成头没有该宏 → Keil undeclared identifier。纳入同一事务可整体回滚。
+            pins = model.pin_entries(config)
+            feat = {
+                "has_key_pair": "KEY_PAIR_PIN" in pins,
+                "has_key_c0": "KEY_C0_PIN" in pins,
+                "mode_dual": model.board(config).get("mode_pins") == "dual",
+                "mode_single": model.board(config).get("mode_pins") == "single",
+                "has_dpi_pair": "KEY_DPI_SUB_PIN" in pins and "KEY_DPI_ADD_PIN" in pins,
+                "has_extra_keys": any(r in pins for r in ("KEY_B_PIN", "KEY_P_PIN", "KEY_DPI_PIN")),
+            }
+            periph = root / "projects/mouse_demo/periph"
+            planned = biz_sync.plan_board_contracts(str(periph), feat)
             transaction = FileTransaction.create(root, "omcfg_gui_apply")
             for item in outputs:
                 transaction.write_bytes(item.path, item.render(), "GUI 按标记块写入")
-            result["manifest"] = str(transaction.commit()) if outputs else ""
-            result["changed"] = len(outputs)
-            result["message"] = f"已写入 {len(outputs)} 个文件" if outputs else "没有文件变化"
+            for path, new_text in planned:
+                # 保留源码原编码（read 时按 utf-8 解码，写回同编码），避免 BOM/换行被改写。
+                transaction.write_text(path, new_text, encoding="utf-8", newline="\n")
+            total = len(outputs) + len(planned)
+            result["manifest"] = str(transaction.commit()) if total else ""
+            result["changed"] = total
+            result["message"] = f"已写入 {total} 个文件" if total else "没有文件变化"
             return result
         except Exception as exc:
             return _error(str(exc), "确认工程已初始化、文件未被占用")
@@ -863,15 +883,18 @@ class Api:
                 "ok": True,
                 "roles": caps.get("roles", {}),
                 "demand_groups": caps.get("demand_groups", []),
-                "board_enums": {
-                    "mode_pins": sorted(model.MODE_ENUM),
-                    "logo": sorted(model.LOGO_ENUM),
-                    "sensor.bus": sorted(model.BUS_ENUM),
-                    "polarity": sorted(model.GPIO_INITS),
-                },
-                "board_defaults": board,
-                "plugins": plugins.available_plugins(),
-            }
+                    "board_enums": {
+                        "mode_pins": sorted(model.MODE_ENUM),
+                        "logo": sorted(model.LOGO_ENUM),
+                        "sensor.bus": sorted(model.BUS_ENUM),
+                        "polarity": sorted(model.POLARITY_ENUM),
+                        "wheel": sorted(model.WHEEL_ENUM),
+                        "mode_24g_led": sorted(model.MODE_24G_LED_ENUM),
+                    },
+                    "board_defaults": board,
+                    "plugins": plugins.available_plugins(),
+                    "material_categories": materials.categories(),
+                }
         except Exception as exc:
             return _error(str(exc), "确认 omcfg/data/options.json 存在")
 
@@ -938,12 +961,25 @@ class Api:
             config = model.load_config(path)
             status = blank.summary(config, root)
             board = model.board(config)
+            pin_entries = model.pin_entries(config)
             report = validate.validate_config(config)
             status.update(
                 {
                     "ok": True,
                     "sdk": str(root),
                     "board": board,
+                    "polarity_map": model.polarity_map(config),
+                    "polarity_roles": [
+                        {
+                            "role": role,
+                            "display": display,
+                            "led": is_led,
+                            "pin": pin_entries[role]["pin"],
+                            "effective": model.role_polarity(config, role),
+                        }
+                        for role, display, is_led in model.POLARITY_ROLES
+                        if role in pin_entries
+                    ],
                     "missing_detail": [
                         {
                             "role": role,
@@ -958,6 +994,51 @@ class Api:
             return status
         except Exception as exc:
             return _error(str(exc), "确认 sdk 指向工程根目录")
+
+    def blank_set_polarity(self, sdk_path: str, polarities: dict | None = None) -> dict:
+        """逐脚设置灯/按键极性。只接受当前工程里已配脚的角色，空值恢复默认。
+
+        极性是每只脚自己的电气属性（上拉低有效/下拉高有效、高/低电平点亮），
+        按原理图逐项指定；不按数量、统计或选料批量套用。
+        """
+        try:
+            root = sdk.resolve_sdk(sdk_path)
+            config_path = model.default_config_path(root)
+            source = sdk.read_source(config_path)
+            config = model.load_config_text(source.text)
+            pins = model.pin_entries(config)
+            updates = polarities or {}
+            unknown = sorted(set(updates) - set(model.POLARITY_LED_NAMES) - set(model.POLARITY_KEY_NAMES))
+            if unknown:
+                return _error(f"不支持极性的角色: {', '.join(unknown)}", "极性角色见 model.POLARITY_ROLES")
+            rejected = sorted(role for role in updates if role not in pins)
+            if rejected:
+                return _error(
+                    "这些角色还没配脚，无法设极性: " + ", ".join(rejected),
+                    "请先在配脚步骤把角色分配到脚位",
+                )
+            text = source.text
+            for role, value in updates.items():
+                val = "" if value in (None, "") else str(value)
+                text = model.set_polarity_value_text(text, role, val)
+            if text != source.text:
+                sdk.ensure_encodable(text, source.encoding)
+                transaction = FileTransaction.create(root, "omcfg_blank_polarity")
+                transaction.write_bytes(
+                    config_path,
+                    sdk.SourceFile(config_path, text, source.encoding, source.newline, source.bom).render(),
+                    "GUI 设置逐脚极性",
+                )
+                transaction.commit()
+            new_config = model.load_config_text(text)
+            return {
+                "ok": True,
+                "polarity": model.polarity_map(new_config),
+                "effective": {r: model.role_polarity(new_config, r) for r in updates},
+                "message": "逐脚极性已保存",
+            }
+        except Exception as exc:
+            return _error(str(exc), "确认工程已初始化")
 
     def blank_save(
         self,
@@ -1125,10 +1206,33 @@ class Api:
             config_path = model.default_config_path(root)
             source = sdk.read_source(config_path)
             text = source.text
-            allowed = {"mode_pins", "logo", "wheel", "led_polarity"}
+            allowed = {
+                "mode_pins", "logo", "wheel", "led_polarity",
+                "switch_segments", "ble_channels", "ledc_rgb_number",
+                "sensor.dir_clock", "mode_24g_led",
+            }
             for key, value in (updates or {}).items():
                 if key not in allowed:
                     return _error(f"不支持的板型选项: {key}", f"允许 {sorted(allowed)}")
+                if key == "mode_24g_led":
+                    led = str(value).upper()
+                    if led not in model.MODE_24G_LED_ENUM:
+                        return _error(
+                            f"mode_24g_led 仅支持 {sorted(model.MODE_24G_LED_ENUM)}: {value}",
+                            f"允许 {sorted(model.MODE_24G_LED_ENUM)}",
+                        )
+                    value = led
+                if key == "sensor.dir_clock":
+                    try:
+                        clock = int(value)
+                    except (TypeError, ValueError):
+                        return _error(f"sensor.dir_clock 必须是整数: {value}", f"允许 {sorted(model.DIR_CLOCK_ENUM)}")
+                    if clock not in model.DIR_CLOCK_ENUM:
+                        return _error(
+                            f"sensor.dir_clock 仅支持 {sorted(model.DIR_CLOCK_ENUM)}: {clock}",
+                            f"允许 {sorted(model.DIR_CLOCK_ENUM)}",
+                        )
+                    value = clock
                 text = model.set_board_value_text(text, key, str(value))
             config = model.load_config_text(text)
             if text != source.text:
@@ -1192,6 +1296,50 @@ class Api:
             config = model.load_config(model.default_config_path(root))
             result["status"] = plugins.status(root, config)
             result["roles"] = plugins.visible_roles(config, self.role_capabilities().get("roles", {}))
+            result["build_status"] = blank.summary(config, root)
+            return result
+        except Exception as exc:
+            return _error(str(exc), "确认工程已初始化")
+
+    # ------------------------------------------------------------------
+    # 选料（物料驱动）：只处理用户显式选择；契约驱动角色/插件/板型。
+    # ------------------------------------------------------------------
+    def material_options(self) -> dict:
+        """物料目录：分类、型号、参数（新建向导选料步用；无默认值）。"""
+        try:
+            return {"ok": True, "categories": materials.categories()}
+        except Exception as exc:
+            return _error(str(exc), "确认 omcfg/data/material_catalog.json 存在")
+
+    def material_status(self, sdk_path: str) -> dict:
+        """当前工程选料状态 + 推导副作用。"""
+        try:
+            root = sdk.resolve_sdk(sdk_path)
+            config = model.load_config(model.default_config_path(root))
+            st = materials.status(root, config)
+            config2 = model.load_config(model.default_config_path(root))
+            st["build_status"] = blank.summary(config2, root)
+            return st
+        except Exception as exc:
+            return _error(str(exc), "确认 sdk 指向工程根目录")
+
+    def material_apply(
+        self,
+        sdk_path: str,
+        selected: dict | None = None,
+        params: dict | None = None,
+    ) -> dict:
+        """落盘选料：写 project.materials + 改 board + 切插件 + 腾角色 + 源码保护。"""
+        try:
+            root = sdk.resolve_sdk(sdk_path)
+            result = materials.apply(root, selected, params)
+            if not result.get("ok"):
+                return result
+            config = model.load_config(model.default_config_path(root))
+            result["roles"] = plugins.visible_roles(
+                config, self.role_capabilities().get("roles", {})
+            )
+            result["plugin_state"] = plugins.status(root, config)
             result["build_status"] = blank.summary(config, root)
             return result
         except Exception as exc:

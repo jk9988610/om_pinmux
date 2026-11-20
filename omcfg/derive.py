@@ -15,6 +15,32 @@ PIN_RE = re.compile(r"^[ \t]*#define[ \t]+(?P<role>[A-Z][A-Z0-9_]*)[ \t]+\((?P<p
 DEFINE_RE = re.compile(r"^[ \t]*#define[ \t]+(?P<name>[A-Za-z_][A-Za-z0-9_]*)[ \t]+(?P<value>[^\s/]+)", re.M)
 STRING_RE = re.compile(r'^[ \t]*#define[ \t]+(?P<name>iPROJECT_NAME|iCONSUMER_NAME)[ \t]+"(?P<value>[^"]*)"', re.M)
 LED_ON_RE = re.compile(r"led_r_on\(\)[ \t]*(?:\([ \t]*)?(?P<fn>gpio_set|gpio_clear)\(")
+# 逐只灯的 on 宏：函数名 -> (主极性角色, 宏目标脚)。别名脚跟随主模式灯。
+LED_ON_SPECS = {
+    "led_r_on": ("LED_MODE_R_PIN", "LED_MODE_R_PIN"),
+    "led_g_on": ("LED_MODE_G_PIN", "LED_MODE_G_PIN"),
+    "led_b_on": ("LED_MODE_B_PIN", "LED_MODE_B_PIN"),
+    "led_low_on": ("LED_LOW_PIN", "LED_LOW_PIN"),
+    "led_24g_on": ("LED_MODE_R_PIN", "LED_MODE_24G_PIN"),
+    "led_bt1_on": ("LED_MODE_G_PIN", "LED_MODE_BT1_PIN"),
+    "led_bt0_on": ("LED_MODE_B_PIN", "LED_MODE_BT0_PIN"),
+}
+
+
+def _derive_led_polarities(header: str, baseline: str) -> dict[str, str]:
+    """逐只灯解析极性，只记录与基线不同的脚（相同则沿用全局兼容值）。"""
+    out: dict[str, str] = {}
+    for func, (source_role, macro) in LED_ON_SPECS.items():
+        pat = re.compile(
+            rf"#define\s+{func}\(\)[ \t]*(?:\([ \t]*)?(?P<fn>gpio_set|gpio_clear)\([ \t]*{macro}[ \t]*\)"
+        )
+        match = pat.search(header)
+        if not match:
+            continue
+        polarity = "active_high" if match.group("fn") == "gpio_set" else "active_low"
+        if polarity != baseline:
+            out[source_role] = polarity
+    return out
 DIR_CLOCK_RE = re.compile(r"SENSOR_DIR_DEFINE[ \t]+SENSOR_DIR_CLOCK_(?P<value>0|3|6|9)")
 DPI_INI_RE = re.compile(r"sensor_dpi_ini\s*\[\s*\]\s*=\s*\{([^}]*)\}", re.S)
 DPI_ENTRY_RE = re.compile(r"(\d+)L/200L-1")
@@ -185,6 +211,9 @@ def derive_config(root: Path | str) -> dict:
             "keil_project": sdk.KEIL_PROJECT.as_posix(),
         },
     }
+    per_pin = _derive_led_polarities(header, polarity)
+    if per_pin:
+        config["polarity"] = per_pin
     return config
 
 

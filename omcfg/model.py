@@ -173,7 +173,49 @@ MODE_ENUM = {"single", "dual", "wired"}
 LOGO_ENUM = {"rgb", "ledc", "none"}
 POLARITY_ENUM = {"active_high", "active_low"}
 BUS_ENUM = {"sdio_3wire", "spi_4wire"}
+
+# 逐脚极性：极性是每只灯/每个按键各自的电气属性，不是全板一个值。
+# 命名沿用 user_config.h 里的真实宏（带 R/G/B），工程师按原理图逐只指定，
+# 工具不按数量、不按统计、不按选料替他统一分配。
+# 只列有独立极性语义的脚：模式灯 R/G/B/低电灯各有 led_*_on/off 宏，按键各有
+# 有效电平。业务灯 LED_R/G/B 由业务代码直接操作（工具不生成其 on/off），旧版
+# 24G/BT0/BT1 是 R/G/B 的别名（跟随主灯），都不放进可分配列表，避免界面承诺
+# 一个改了不生效的选项。
+# (宏名, 界面显示名, 是否 LED)
+POLARITY_ROLES: list[tuple[str, str, bool]] = [
+    ("LED_MODE_R_PIN", "模式灯 R", True),
+    ("LED_MODE_G_PIN", "模式灯 G", True),
+    ("LED_MODE_B_PIN", "模式灯 B", True),
+    ("LED_LOW_PIN", "低电指示灯", True),
+    ("KEY_R0_PIN", "按键 R0", False),
+    ("KEY_R1_PIN", "按键 R1", False),
+    ("KEY_R2_PIN", "按键 R2", False),
+    ("KEY_B_PIN", "按键 B", False),
+    ("KEY_P_PIN", "按键 P", False),
+    ("KEY_DPI_PIN", "DPI 键", False),
+    ("KEY_PAIR_PIN", "对码键", False),
+    ("KEY_C0_PIN", "矩阵列 C0", False),
+    ("KEY_DPI_SUB_PIN", "DPI 减键", False),
+    ("KEY_DPI_ADD_PIN", "DPI 加键", False),
+]
+# 旧版模式灯别名：复用 R/G/B 物理脚，极性跟随主灯（生成时用，不给用户单独选）。
+POLARITY_ALIAS_OF = {
+    "LED_MODE_24G_PIN": "LED_MODE_R_PIN",
+    "LED_MODE_BT1_PIN": "LED_MODE_G_PIN",
+    "LED_MODE_BT0_PIN": "LED_MODE_B_PIN",
+}
+POLARITY_LED_NAMES = {name: display for name, display, is_led in POLARITY_ROLES if is_led}
+POLARITY_KEY_NAMES = {name: display for name, display, is_led in POLARITY_ROLES if not is_led}
 DIR_CLOCK_ENUM = {0, 3, 6, 9}
+# 2.4G 指示灯复用哪只物理模式灯（R/G/B）：由硬件决定，默认 R 保 KC536 字节一致，
+# S205 真机是 G（P05 绿灯）。别名脚极性跟随被指定的主灯。
+MODE_24G_LED_ENUM = {"R", "G", "B"}
+# 滚轮编码器硬件 pinmux；P24/P25 走 SOFT_GPIO 由用户按原理图自由配脚。
+WHEEL_ENUM = {
+    "ENCODER_PINMUX_SEL_IO_00_01",
+    "ENCODER_PINMUX_SEL_IO_20_21",
+    "SOFT_GPIO",
+}
 
 
 def load_chip(path: Path | str | None = None) -> dict[str, Any]:
@@ -345,10 +387,8 @@ def add_pin_text(text: str, role: str, pin: str) -> str:
     return "\n".join(lines)
 
 
-def set_board_value_text(text: str, key: str, value: str) -> str:
-    """改写 board 段的标量值（目前只用于 wheel），保留行尾注释。"""
-    lines = text.split("\n")
-    start, stop, child = _block_lines(lines, "board")
+def _set_scalar(lines: list[str], start: int, stop: int, key: str, value: str) -> list[str] | None:
+    """在 [start, stop) 行区间内改写/追加标量键，保留行尾注释；无改动返回 None。"""
     target = next(
         (
             index
@@ -358,8 +398,13 @@ def set_board_value_text(text: str, key: str, value: str) -> str:
         None,
     )
     if target is None:
-        lines.insert(stop, f"{' ' * child}{key}: {value}")
-        return "\n".join(lines)
+        # 子项缩进取区间内首个非空行，缺省用 2 空格。
+        indent = next(
+            (len(lines[i]) - len(lines[i].lstrip()) for i in range(start + 1, stop) if lines[i].strip()),
+            2,
+        )
+        lines.insert(stop, f"{' ' * indent}{key}: {value}")
+        return lines
     line = lines[target]
     prefix, rest = line.split(":", 1)
     tail = ""
@@ -367,6 +412,78 @@ def set_board_value_text(text: str, key: str, value: str) -> str:
         tail = " " + rest.split("#", 1)[1]
         tail = " #" + tail.lstrip()
     lines[target] = f"{prefix}: {value}{tail}"
+    return lines
+
+
+def set_board_value_text(text: str, key: str, value: str) -> str:
+    """改写 board 段的标量值（wheel / sensor.dir_clock 等），保留行尾注释。
+
+    支持点号形式的嵌套键 sensor.dir_clock（对应 board.sensor.dir_clock）：
+    在 board 段的 sensor 子块内改写/追加 dir_clock；sensor 子块不存在时新建。
+    """
+    lines = text.split("\n")
+    start, stop, child = _block_lines(lines, "board")
+    if "." in key:
+        parent, leaf = key.split(".", 1)
+        sensor_start = next(
+            (
+                index
+                for index in range(start + 1, stop)
+                if lines[index].lstrip().startswith(f"{parent}:") and not lines[index].lstrip().startswith("#")
+            ),
+            None,
+        )
+        if sensor_start is None:
+            # 在 board 段末尾新建 sensor 子块。
+            lines[stop:stop] = [f"{' ' * child}{parent}:", f"{' ' * (child + 2)}{leaf}: {value}"]
+            return "\n".join(lines)
+        parent_indent = len(lines[sensor_start]) - len(lines[sensor_start].lstrip())
+        sensor_stop = stop
+        for index in range(sensor_start + 1, stop):
+            line = lines[index]
+            if line.strip() and len(line) - len(line.lstrip()) <= parent_indent:
+                sensor_stop = index
+                break
+        result = _set_scalar(lines, sensor_start, sensor_stop, leaf, value)
+        return "\n".join(result or lines)
+    result = _set_scalar(lines, start, stop, key, value)
+    return "\n".join(result or lines)
+
+
+def set_polarity_value_text(text: str, role: str, value: str) -> str:
+    """在文本配置里设置逐脚极性（保留注释/排版）。
+
+    polarity 段不存在时新建在 board 段之后；值为空则删除该角色的极性行，
+    让该脚回退到兼容默认。值必须是 POLARITY_ENUM，否则原样返回。
+    """
+    if value and value not in POLARITY_ENUM:
+        return text
+    lines = text.split("\n")
+    try:
+        start, stop, child = _block_lines(lines, "polarity")
+    except ValueError:
+        if not value:
+            return text
+        # 在 board 段之后插入新的 polarity 段（保持顶层段顺序紧凑）。
+        try:
+            _bstart, bstop, _bchild = _block_lines(lines, "board")
+        except ValueError:
+            bstop = len(lines)
+        lines[bstop:bstop] = ["polarity:", f"  {role}: {value}"]
+        return "\n".join(lines)
+    target = _role_line(lines, role, start, stop)
+    if value:
+        if target is None:
+            lines.insert(stop, f"{' ' * child}{role}: {value}")
+        else:
+            prefix = lines[target].split(":", 1)[0]
+            lines[target] = f"{prefix}: {value}"
+    elif target is not None:
+        del lines[target]
+        # 删空后整段移除，避免留下解析为 None 的空 polarity 段。
+        start, stop, _child = _block_lines(lines, "polarity")
+        if not any(line.strip() and not line.lstrip().startswith("#") for line in lines[start + 1 : stop]):
+            del lines[start:stop]
     return "\n".join(lines)
 
 
@@ -425,6 +542,16 @@ def board(config: dict[str, Any]) -> dict[str, Any]:
 def project(config: dict[str, Any]) -> dict[str, Any]:
     value = config.get("project") or {}
     return value if isinstance(value, dict) else {}
+
+
+def mode_24g_led(config: dict[str, Any]) -> str:
+    """2.4G 指示灯复用的物理模式灯：R/G/B，缺省 R（KC536 基线字节不变）。"""
+    value = str(board(config).get("mode_24g_led") or "R").upper()
+    return value if value in MODE_24G_LED_ENUM else "R"
+
+
+def mode_24g_main_role(config: dict[str, Any]) -> str:
+    return f"LED_MODE_{mode_24g_led(config)}_PIN"
 
 
 def sensor(config: dict[str, Any]) -> dict[str, Any]:
@@ -487,9 +614,15 @@ def features(config: dict[str, Any], pins: dict[str, dict[str, str]] | None = No
         "BOARD_MODE_SINGLE_PIN": b.get("mode_pins") == "single",
         "BOARD_LOGO_LEDC": b.get("logo") == "ledc",
         "BOARD_LOGO_RGB": b.get("logo") == "rgb",
-        "BOARD_LED_ACTIVE_HIGH": b.get("led_polarity") == "active_high",
-        "BOARD_LED_ACTIVE_LOW": b.get("led_polarity") == "active_low",
+        "BOARD_LED_ACTIVE_HIGH": role_polarity(config, "LED_MODE_R_PIN") == "active_high",
+        "BOARD_LED_ACTIVE_LOW": role_polarity(config, "LED_MODE_R_PIN") == "active_low",
         "BOARD_WHEEL_SOFT_GPIO": b.get("wheel") == "SOFT_GPIO",
+        # 物料参数投影：拨杆段数 / 蓝牙通道 / mode 键 / RGB 数量极性。
+        "BOARD_SWITCH_SEGMENTS_2": switch_segments(config) == 2,
+        "BOARD_SWITCH_SEGMENTS_3": switch_segments(config) == 3,
+        "BOARD_BLE_CHANNELS_1": ble_channels(config) == 1,
+        "BOARD_BLE_CHANNELS_2": ble_channels(config) == 2,
+        "BOARD_HAS_MODE_KEY": mode_key_present(config),
     }
 
 
@@ -520,6 +653,77 @@ def ledc_rgb_number(config: dict[str, Any]) -> int:
         return int(board(config).get("ledc_rgb_number"))
     except (TypeError, ValueError):
         return 6
+
+
+def switch_segments(config: dict[str, Any]) -> int:
+    """模式拨杆段数：2=开/关，3=2.4G/BAT/蓝牙。缺省 3。"""
+    try:
+        return int(board(config).get("switch_segments", 3))
+    except (TypeError, ValueError):
+        return 3
+
+
+def ble_channels(config: dict[str, Any]) -> int:
+    """蓝牙通道数，缺省 2。"""
+    try:
+        return int(board(config).get("ble_channels", 2))
+    except (TypeError, ValueError):
+        return 2
+
+
+def mode_key_present(config: dict[str, Any]) -> bool:
+    """是否有 mode 键（程序 pair 键）：选料显式关闭时以 project.materials 为准。"""
+    store = project(config).get("materials") or {}
+    params = store.get("params") if isinstance(store, dict) else None
+    if isinstance(params, dict) and "mode_key" in params:
+        return bool(params["mode_key"])
+    # 未选料的老工程：以 pin 是否配置为准。
+    return "KEY_PAIR_PIN" in pin_entries(config)
+
+
+def polarity_map(config: dict[str, Any]) -> dict[str, str]:
+    """逐脚极性表，键是 user_config.h 的真实宏名。非法值直接忽略。"""
+    value = config.get("polarity") or {}
+    if not isinstance(value, dict):
+        return {}
+    return {str(k): str(v) for k, v in value.items() if str(v) in POLARITY_ENUM}
+
+
+def role_polarity(config: dict[str, Any], role: str) -> str:
+    """某只灯/按键的极性；没有显式设置时按角色类型回退到兼容默认。
+
+    LED 逐脚默认沿用旧 board.led_polarity（老工程字节不变），按键逐脚默认
+    active_low（上拉、按下为低，与 KC536 基线一致）。一旦工程师在界面为某只脚
+    选过极性，就以 config.polarity 为准，不受全局值/数量/选料影响。
+    """
+    explicit = polarity_map(config).get(role)
+    if explicit in POLARITY_ENUM:
+        return explicit
+    # 旧版别名脚没有独立极性：跟随其主模式灯。
+    # 24G 复用哪只灯由 board.mode_24g_led 决定（KC536=R，S205=G），不能写死 R。
+    main = mode_24g_main_role(config) if role == "LED_MODE_24G_PIN" else POLARITY_ALIAS_OF.get(role)
+    if main:
+        main_explicit = polarity_map(config).get(main)
+        if main_explicit in POLARITY_ENUM:
+            return main_explicit
+        legacy = board(config).get("led_polarity")
+        return legacy if legacy in POLARITY_ENUM else "active_low"
+    if role in POLARITY_LED_NAMES:
+        legacy = board(config).get("led_polarity")
+        if legacy in POLARITY_ENUM:
+            return legacy
+    return "active_low"
+
+
+def active_polarity_roles(
+    config: dict[str, Any], pins: dict[str, dict[str, str]] | None = None
+) -> list[tuple[str, str, bool]]:
+    """当前工程里实际存在（已配脚）的可配极性角色，按 POLARITY_ROLES 顺序。
+
+    没配脚的角色不列出——极性面板“根据数量”生成：板上有几只脚就列几行。
+    """
+    pins = pins if pins is not None else pin_entries(config)
+    return [(name, display, is_led) for name, display, is_led in POLARITY_ROLES if name in pins]
 
 
 def mode_pins(config: dict[str, Any], pins: dict[str, dict[str, str]] | None = None) -> list[str]:

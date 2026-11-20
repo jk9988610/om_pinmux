@@ -135,3 +135,75 @@ def test_e2e_keil_build(tmp_path):
     out = Path(sdk) / "projects/mouse_demo/keil5/out"
     if out.is_dir():
         shutil.rmtree(out, ignore_errors=True)
+
+
+# S205 场景：双脚模式 + 无 mode 键，KC536 骨架 key_io.c 写死单脚 MODE_BLE_24G_PIN，
+# 若 apply() 不把源码契约同步纳入事务，Keil 会报 undeclared identifier。
+S205_PINS = {
+    "KEY_R0_PIN": "P26", "KEY_R1_PIN": "P20", "KEY_R2_PIN": "P21",
+    "KEY_B_PIN": "P27", "KEY_P_PIN": "P34", "KEY_DPI_PIN": "P30",
+    "WHEEL_A_PIN": "P24", "WHEEL_B_PIN": "P25",
+    "SENSOR_NCS_PIN": "P10", "SENSOR_MOTION_PIN": "P07",
+    "SENSOR_SCLK_PIN": "P11", "SENSOR_SDIO_PIN": "P12",
+    "MODE_24G_PIN": "P31", "MODE_BLE_PIN": "P23",
+    "LED_MODE_R_PIN": "P04", "LED_MODE_G_PIN": "P05", "LED_MODE_B_PIN": "P06",
+    "LED_LOW_PIN": "P22", "LED_R_PIN": "P04", "LED_G_PIN": "P05", "LED_B_PIN": "P06",
+    "USB_5V": "P00", "BAT_CHG_PIN": "P01", "LVD_PIN": "P33",
+    "USB_DN_PIN": "P02", "USB_DP_PIN": "P03",
+    "FLASH_CS_PIN": "P17", "FLASH_SCLK_PIN": "P15",
+    "FLASH_MOSI_PIN": "P16", "FLASH_MISO_PIN": "P14",
+}
+S205_POLARITY = {
+    "LED_MODE_R_PIN": "active_low", "LED_MODE_G_PIN": "active_low",
+    "LED_MODE_B_PIN": "active_low", "LED_LOW_PIN": "active_high",
+}
+S205_SELECTIONS = {"sensor": "S205", "led_strip": "none", "charger": "4056H", "mode_key": "absent"}
+S205_PARAMS = {"rgb_count": 3, "switch_segments": 3}
+
+
+def _build_s205(tmp_path, name="S205Dual"):
+    api = Api()
+    sdk = str((tmp_path / name).resolve())
+    assert api.blank_new(name, sdk, id_low=0x0512)["ok"]
+    assert api.material_apply(sdk, S205_SELECTIONS, S205_PARAMS)["ok"]
+    assert api.blank_set_board(
+        sdk,
+        {"mode_pins": "dual", "logo": "rgb", "wheel": "SOFT_GPIO", "switch_segments": 3, "ble_channels": 2},
+    )["ok"]
+    assert api.blank_save(sdk, S205_PINS)["ok"]
+    assert api.blank_set_polarity(sdk, S205_POLARITY)["ok"]
+    st = api.blank_status(sdk)
+    assert st["complete"] and not st["missing"] and not st["conflicts"], st
+    assert api.blank_apply(sdk)["ok"]
+    return sdk
+
+
+def test_dual_mode_rewrites_key_io_source(tmp_path):
+    """双脚+无PAIR：apply() 必须把 key_io.c/h 源码契约同步改写（无需 Keil）。"""
+    sdk = _build_s205(tmp_path)
+    periph = Path(sdk) / "projects/mouse_demo/periph"
+    key_io_c = (periph / "key_io.c").read_text(encoding="utf-8", errors="replace")
+    key_io_h = (periph / "key_io.h").read_text(encoding="utf-8", errors="replace")
+    assert "MODE_BLE_24G_PIN" not in key_io_c, "key_io.c 仍写死单脚 MODE_BLE_24G_PIN"
+    assert "gpio_read(MODE_24G_PIN)" in key_io_c, "key_io.c 未改成双脚模式判断"
+    assert "#ifdef KEY_PAIR_PIN" in key_io_h, "key_io.h 的 PAIR 宏未加编译保护"
+    user_c = (periph / "user_config.c").read_text(encoding="utf-8", errors="replace")
+    assert "MODE_24G_PIN" in user_c and "MODE_BLE_24G_PIN" not in user_c
+    assert "KEY_PAIR_PIN" not in user_c
+
+
+def test_dual_mode_keil_build(tmp_path):
+    """双脚+无PAIR 真实工程必须 Keil 0/0（S205 自动填表脚本的回归防线）。"""
+    sdk = _build_s205(tmp_path, "S205DualKeil")
+    proj = Path(sdk) / "projects/mouse_demo/keil5/SE71M.uvprojx"
+    assert proj.is_file()
+    log = tmp_path / "dual_build.log"
+    subprocess.run(
+        [str(UV4), "-r", str(proj), "-o", str(log)],
+        capture_output=True, text=True, timeout=300, check=False,
+    )
+    content = log.read_text(encoding="utf-8", errors="replace") if log.is_file() else ""
+    assert "0 Error(s), 0 Warning(s)" in content, content[-2000:]
+    out = Path(sdk) / "projects/mouse_demo/keil5/out"
+    if out.is_dir():
+        shutil.rmtree(out, ignore_errors=True)

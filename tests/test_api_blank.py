@@ -116,6 +116,31 @@ def test_blank_set_board_and_fill(tmp_path):
     assert rejected["ok"] is False
 
 
+def test_required_roles_follow_mode_pins(tmp_path):
+    """用户场景：板型选双脚后，单脚角色不能再被标成必需。
+
+    前端「必需」标签读 blank_status().required，这里断言它随板型切换而变。
+    """
+    sdk = str(tmp_path / "ModeTags")
+    api = Api()
+    assert api.blank_new("ModeTags", sdk)["ok"]
+
+    assert api.blank_set_board(sdk, {"mode_pins": "single"})["ok"]
+    single = set(api.blank_status(sdk)["required"])
+    assert "MODE_BLE_24G_PIN" in single
+    assert "MODE_24G_PIN" not in single and "MODE_BLE_PIN" not in single
+
+    assert api.blank_set_board(sdk, {"mode_pins": "dual"})["ok"]
+    dual = set(api.blank_status(sdk)["required"])
+    assert {"MODE_24G_PIN", "MODE_BLE_PIN"} <= dual
+    assert "MODE_BLE_24G_PIN" not in dual
+
+    assert api.blank_set_board(sdk, {"mode_pins": "wired"})["ok"]
+    wired = set(api.blank_status(sdk)["required"])
+    assert "MODE_WIRED_PIN" in wired
+    assert "MODE_BLE_24G_PIN" not in wired and "MODE_24G_PIN" not in wired
+
+
 def test_blank_fill_idempotent(tmp_path):
     sdk = str(tmp_path / "Mouse")
     Api().blank_new("Mouse", sdk)

@@ -107,6 +107,29 @@ def test_set_board_value_text_keeps_comment():
     assert after.replace("wheel: ENCODER_PINMUX_SEL_IO_05_06", "wheel: ENCODER_PINMUX_SEL_IO_00_01") == text
 
 
+def test_set_board_value_text_sensor_dir_clock():
+    """sensor.dir_clock 嵌套键应改写 sensor 子块的 dir_clock，不动其它行。"""
+    text = (CONFIGS / "KC536.omcfg").read_text(encoding="utf-8")
+    after = model.set_board_value_text(text, "sensor.dir_clock", "9")
+    cfg = model.load_config_text(after)
+    assert cfg["board"]["sensor"]["dir_clock"] == 9
+    assert cfg["board"]["sensor"]["bus"] == "sdio_3wire"
+    assert after.replace("dir_clock: 9", "dir_clock: 6") == text
+
+
+def test_set_board_value_text_mode_24g_led():
+    """mode_24g_led 是 board 顶层标量键，setter 应追加/改写且保留其它行。"""
+    text = (CONFIGS / "KC536.omcfg").read_text(encoding="utf-8")
+    assert model.mode_24g_led(model.load_config_text(text)) == "R"  # 缺省回退 KC536 红灯
+    after = model.set_board_value_text(text, "mode_24g_led", "G")
+    cfg = model.load_config_text(after)
+    assert cfg["board"]["mode_24g_led"] == "G"
+    assert model.mode_24g_led(cfg) == "G"
+    # 再改回 R 应只替换该行。
+    back = model.set_board_value_text(after, "mode_24g_led", "R")
+    assert model.mode_24g_led(model.load_config_text(back)) == "R"
+
+
 def test_set_pin_text_rejects_unknown_role():
     text = (CONFIGS / "KC536.omcfg").read_text(encoding="utf-8")
     try:

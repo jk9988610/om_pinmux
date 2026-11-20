@@ -94,7 +94,21 @@ def active_key_mode_roles(root: Path | str, config: dict | None = None) -> set[s
         for mode in KEY_MODE_USE_RE.findall(key_c)
         if mode in mapping
     }
-LED_ON_RE = re.compile(r"#define\s+led_r_on\(\)\s+\((gpio_set|gpio_clear)\(LED_MODE_R_PIN\)\)")
+# 逐只灯的 on 宏：函数名 -> (宏名, user_config.h 里操作的目标脚)。
+# 旧版别名 24G/BT1/BT0 复用 R/G/B 的物理脚，极性跟随对应主模式灯。
+LED_ON_FUNCS = {
+    "led_r_on": ("LED_MODE_R_PIN", "LED_MODE_R_PIN"),
+    "led_g_on": ("LED_MODE_G_PIN", "LED_MODE_G_PIN"),
+    "led_b_on": ("LED_MODE_B_PIN", "LED_MODE_B_PIN"),
+    "led_low_on": ("LED_LOW_PIN", "LED_LOW_PIN"),
+    "led_24g_on": ("LED_MODE_24G_PIN", "LED_MODE_R_PIN"),
+    "led_bt1_on": ("LED_MODE_BT1_PIN", "LED_MODE_G_PIN"),
+    "led_bt0_on": ("LED_MODE_BT0_PIN", "LED_MODE_B_PIN"),
+}
+def _led_on_re(func: str, macro: str) -> re.Pattern[str]:
+    return re.compile(rf"#define\s+{func}\(\)\s+\((gpio_set|gpio_clear)\({macro}\)\)")
+
+
 LEDC_SEL_RE = re.compile(r"drv_pmu_ledc_sel\s*\(\s*PMU_LEDC_SEL_IO_(\d{2})\s*\)")
 DPI_INI_RE = re.compile(r"sensor_dpi_ini\s*\[\s*\]\s*=\s*\{([^}]*)\}", re.S)
 DPI_DEFAULT_RE = re.compile(r"#define\s+DEFAULT_DPI_GRADE\s+(\d+)")
@@ -312,19 +326,23 @@ def audit(config: dict, root: Path | str, strict: bool = False) -> validate.Repo
                 "给 key_io.h/.c 的 PAIR 相关代码加 #ifdef KEY_PAIR_PIN",
             )
 
-    polarity = model.board(config).get("led_polarity")
-    on_match = LED_ON_RE.search(header)
-    if on_match:
+    # 逐只灯按自己的极性校验 on 宏；别名脚跟随其主模式灯的极性。
+    for func, (macro, source_role) in LED_ON_FUNCS.items():
+        if macro not in pins:
+            continue
+        polarity = model.role_polarity(config, source_role)
+        match = _led_on_re(func, macro).search(header)
+        if not match:
+            add("led.polarity", f"{func}()", f"user_config.h 缺少或无法解析 {func}() 宏")
+            continue
         expected_on = "gpio_set" if polarity == "active_high" else "gpio_clear"
-        if on_match.group(1) != expected_on:
+        if match.group(1) != expected_on:
             add(
                 "led.polarity",
-                "board.led_polarity",
-                f"配置 {polarity}，但 led_r_on() 使用 {on_match.group(1)}",
-                "灯极性与驱动宏必须成组更新；执行 gen --apply",
+                f"polarity.{source_role}",
+                f"{source_role} 极性 {polarity}，但 {func}() 使用 {match.group(1)}",
+                "执行 gen --apply 按逐脚极性重新生成",
             )
-    else:
-        add("led.polarity", "led_r_on()", "user_config.h 缺少 led_r_on() 宏")
 
     ledc_text = _read(root, sdk.PERIPH / "ledc.c")
     data_pin = pins.get("LEDC_PIN", {}).get("pin", "")

@@ -89,6 +89,11 @@ def render_pins(config: dict, pins: dict[str, dict[str, str]]) -> str:
     if model.board(config).get("mode_pins") == "dual":
         for role in mode_roles:
             lines.append(pin_line(role, pins[role]["pin"], 24))
+        # 双脚拨杆各有独立有效电平（S205 两脚均高有效）；key_io 三档判断要用。
+        lines.append("//{")
+        lines.append("    #define MODE_BLE_CHECK      1")
+        lines.append("    #define MODE_24G_CHECK      1")
+        lines.append("//}")
     else:
         lines.append("//* 模式检测脚配置 */")
         for role in mode_roles:
@@ -99,11 +104,11 @@ def render_pins(config: dict, pins: dict[str, dict[str, str]]) -> str:
         lines.append("//}")
     lines.append("")
 
-    high = model.board(config).get("led_polarity") == "active_high"
-    on = "gpio_set" if high else "gpio_clear"
-    off = "gpio_clear" if high else "gpio_set"
-    all_off = "DATAOUTCLR" if high else "DATAOUTSET"
-    all_on = "DATAOUTSET" if high else "DATAOUTCLR"
+    # 极性逐脚独立：每只灯读自己的 config.polarity，互不牵连。旧版别名
+    # 24G/BT1/BT0 复用 R/G/B 物理脚，role_polarity 已让它们跟随对应主模式灯。
+    def _on_off(role: str) -> tuple[str, str]:
+        high = model.role_polarity(config, role) == "active_high"
+        return ("gpio_set", "gpio_clear") if high else ("gpio_clear", "gpio_set")
 
     lines.append("//* LED指示灯配置 */")
     for role in ("LED_MODE_R_PIN", "LED_MODE_G_PIN", "LED_MODE_B_PIN", "LED_LOW_PIN"):
@@ -111,35 +116,52 @@ def render_pins(config: dict, pins: dict[str, dict[str, str]]) -> str:
             width = 22 if role != "LED_LOW_PIN" else 22
             lines.append(pin_line(role, pins[role]["pin"], width))
     lines.append("//{")
-    lines.append(f"    #define led_r_on()            ({on}(LED_MODE_R_PIN))")
-    lines.append(f"    #define led_r_off()           ({off}(LED_MODE_R_PIN))")
-    lines.append(f"    #define led_g_on()            ({on}(LED_MODE_G_PIN))")
-    lines.append(f"    #define led_g_off()           ({off}(LED_MODE_G_PIN))")
-    lines.append(f"    #define led_b_on()            ({on}(LED_MODE_B_PIN))")
-    lines.append(f"    #define led_b_off()           ({off}(LED_MODE_B_PIN))")
+    for fn, role in (
+        ("led_r", "LED_MODE_R_PIN"),
+        ("led_g", "LED_MODE_G_PIN"),
+        ("led_b", "LED_MODE_B_PIN"),
+    ):
+        on, off = _on_off(role)
+        lines.append(f"    #define {pad(fn + '_on()', 22)}({on}({role}))")
+        lines.append(f"    #define {pad(fn + '_off()', 22)}({off}({role}))")
     if "LED_LOW_PIN" in pins:
-        lines.append(f"    #define led_low_off()         ({off}(LED_LOW_PIN))")
-        lines.append(f"    #define led_low_on()          ({on}(LED_LOW_PIN))")
-    lines.append(
-        f"    #define mode_led_all_off()    (OM_GPIO0->{all_off} = "
-        "(1<<LED_MODE_R_PIN)|(1<<LED_MODE_G_PIN)|(1<<LED_MODE_B_PIN))"
-    )
-    lines.append(
-        f"    #define mode_led_all_on()     (OM_GPIO0->{all_on} = "
-        "(1<<LED_MODE_R_PIN)|(1<<LED_MODE_G_PIN)|(1<<LED_MODE_B_PIN))"
-    )
+        on, off = _on_off("LED_LOW_PIN")
+        lines.append(f"    #define {pad('led_low_off()', 22)}({off}(LED_LOW_PIN))")
+        lines.append(f"    #define {pad('led_low_on()', 22)}({on}(LED_LOW_PIN))")
+        # S205 充电指示灯复用 low 灯（同极性），供 sys_deep_sleep_process 使用。
+        lines.append(f"    #define {pad('led_chg_off()', 22)}({off}(LED_LOW_PIN))")
+        lines.append(f"    #define {pad('led_chg_on()', 22)}({on}(LED_LOW_PIN))")
+    # 批量宏按每只模式灯各自的极性分别置位/清零；三脚同极性时折叠成一条
+    # DATAOUTSET/CLR，保持 KC536 基线字节一致。
+    mode_leds = [r for r in ("LED_MODE_R_PIN", "LED_MODE_G_PIN", "LED_MODE_B_PIN") if r in pins]
+    if mode_leds:
+        highs = [model.role_polarity(config, r) == "active_high" for r in mode_leds]
+        if len(set(highs)) == 1:
+            reg = "DATAOUTCLR" if highs[0] else "DATAOUTSET"
+            inv = "DATAOUTSET" if highs[0] else "DATAOUTCLR"
+            mask = "|".join(f"(1<<{r})" for r in mode_leds)
+            lines.append(f"    #define {pad('mode_led_all_off()', 22)}(OM_GPIO0->{reg} = {mask})")
+            lines.append(f"    #define {pad('mode_led_all_on()', 22)}(OM_GPIO0->{inv} = {mask})")
+        else:
+            off_ops = " ".join(f"({_on_off(r)[1]}({r}));" for r in mode_leds)
+            on_ops = " ".join(f"({_on_off(r)[0]}({r}));" for r in mode_leds)
+            lines.append(f"    #define {pad('mode_led_all_off()', 22)}do {{ {off_ops} }} while(0)")
+            lines.append(f"    #define {pad('mode_led_all_on()', 22)}do {{ {on_ops} }} while(0)")
     lines.append("//}")
     lines.append("")
-    lines.append(f"#define {pad('LED_MODE_24G_PIN', 24)}LED_MODE_R_PIN")
+    # 2.4G 指示灯复用 R/G/B 由硬件决定（board.mode_24g_led）：KC536=R，S205=G(P05)。
+    lines.append(f"#define {pad('LED_MODE_24G_PIN', 24)}{model.mode_24g_main_role(config)}")
     lines.append(f"#define {pad('LED_MODE_BT1_PIN', 24)}LED_MODE_G_PIN")
     lines.append(f"#define {pad('LED_MODE_BT0_PIN', 24)}LED_MODE_B_PIN")
     lines.append("//{")
-    lines.append(f"    #define led_bt0_on()            ({on}(LED_MODE_BT0_PIN))")
-    lines.append(f"    #define led_bt0_off()           ({off}(LED_MODE_BT0_PIN))")
-    lines.append(f"    #define led_24g_on()            ({on}(LED_MODE_24G_PIN))")
-    lines.append(f"    #define led_24g_off()           ({off}(LED_MODE_24G_PIN))")
-    lines.append(f"    #define led_bt1_on()            ({on}(LED_MODE_BT1_PIN))")
-    lines.append(f"    #define led_bt1_off()           ({off}(LED_MODE_BT1_PIN))")
+    for fn, role in (
+        ("led_bt0", "LED_MODE_BT0_PIN"),
+        ("led_24g", "LED_MODE_24G_PIN"),
+        ("led_bt1", "LED_MODE_BT1_PIN"),
+    ):
+        on, off = _on_off(role)
+        lines.append(f"    #define {pad(fn + '_on()', 24)}({on}({role}))")
+        lines.append(f"    #define {pad(fn + '_off()', 24)}({off}({role}))")
     lines.append("//}")
     lines.append("")
 
@@ -313,6 +335,15 @@ def render_features(config: dict, pins: dict[str, dict[str, str]]) -> str:
         lines.append(f"#define {pad('BOARD_WHEEL_IO_SELECT', 28)}{model.wheel_select(config)}")
     if model.lvd_index(config, pins):
         lines.append(f"#define {pad('BOARD_LVD_CHECK_INDEX', 28)}{model.lvd_index(config, pins)}")
+    # 物料参数：数量/极性/拨杆段数/蓝牙通道以数值宏暴露，业务代码不再写死字符串。
+    lines += [
+        "",
+        "/* 物料参数（由选料写入 project.materials，经 board 派生） */",
+        f"#define {pad('BOARD_RGB_COUNT', 28)}{model.ledc_rgb_number(config)}",
+        f"#define {pad('BOARD_SWITCH_SEGMENTS', 28)}{model.switch_segments(config)}",
+        f"#define {pad('BOARD_BLE_CHANNELS', 28)}{model.ble_channels(config)}",
+        f"#define {pad('BOARD_MODE_KEY_PRESENT', 28)}{1 if model.mode_key_present(config) else 0}",
+    ]
     lines += [
         "",
         "/* 示例：",

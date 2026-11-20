@@ -40,6 +40,7 @@ def default_board() -> dict[str, Any]:
         "mode_pins": "single",
         "logo": "rgb",
         "led_polarity": "active_low",
+        "mode_24g_led": "R",
         "sensor": {"bus": "sdio_3wire", "dir_clock": 6},
         "wheel": "ENCODER_PINMUX_SEL_IO_20_21",
     }
@@ -142,6 +143,11 @@ def build_required_roles(
     KEY_MODE_* 不算硬依赖（CH04 旧工程即此类）。读不到源码则保守沿用全局清单。
     """
     roles = [mac for mac, opt in load_options().items() if opt.get("build_required")]
+    if config is not None:
+        from . import materials as _materials
+
+        removed = _materials.removed_roles(config)
+        roles = [role for role in roles if role not in removed]
     if sdk_path is None:
         return roles
     from . import rules
@@ -193,12 +199,22 @@ def is_complete(config: dict[str, Any], sdk_path: Path | str | None = None) -> b
 
 
 def summary(config: dict[str, Any], sdk_path: Path | str | None = None) -> dict[str, Any]:
-    """给 GUI/CLI 展示的构建进度。"""
+    """给 GUI/CLI 展示的构建进度。
+
+    required 是**当前 board 选项 + 插件 + 选料 + 源码硬依赖**下真正必需的角色
+    全集（含已分配的），供前端渲染「必需」标签；不再用 options.json 的静态
+    required 标记——那个标记与板型选项无关，会在选了双脚后仍把单脚标成必需。
+    """
     opts = load_options()
     assigned = config.get("pins", {})
+    required = list(validate.required_roles(config, model.pin_entries(config)))
+    for role in build_required_roles(sdk_path, config):
+        if role not in required:
+            required.append(role)
     return {
         "total_roles": len(opts),
         "assigned": len(assigned),
+        "required": required,
         "missing": missing_roles(config, sdk_path),
         "conflicts": conflicts(config),
         "complete": is_complete(config, sdk_path),
