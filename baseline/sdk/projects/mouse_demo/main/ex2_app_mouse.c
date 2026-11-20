@@ -203,6 +203,9 @@ void ex2_app_mouse_ble_init(void)
     {
         drv_rf_set_tx_power(DRV_RF_PA_PWR_0dBm);
         mouse_state = MOUSE_LE_STATE_ADV_SWIFT;
+#if !BOARD_LED_INDICATOR_ONLY
+        /* hint_only：广播灯效由 mode_led_hint 独占（蓝牙 P06 / 2.4G P05），
+           底层 ind_config 不再点灯，否则 IND_GREEN 常亮会占住 P05 掩盖蓝牙灯 */
         ind_val_t ind_val = {
             .ind_color = IND_GREEN,
             .ind_times = ALWAYS_ON,
@@ -212,11 +215,14 @@ void ex2_app_mouse_ble_init(void)
         if(bt_index != iDEVICE_TYPE_BT0)
             ind_val.ind_color = IND_BLUE;
         ind_config(&ind_val);
+#endif
     }
     else                                            /* 回连广播 */
     {
         drv_rf_set_tx_power(DRV_RF_PA_PWR_5dBm);
         mouse_state = MOUSE_LE_STATE_DISCONN;
+#if !BOARD_LED_INDICATOR_ONLY
+        /* hint_only：同上，广播灯效只由 mode_led_hint 接管 */
         ind_val_t ind_val = {
             .ind_color = IND_GREEN,
             .ind_times = ALWAYS_ON,
@@ -226,6 +232,7 @@ void ex2_app_mouse_ble_init(void)
         if(bt_index != iDEVICE_TYPE_BT0)
             ind_val.ind_color = IND_BLUE;
         ind_config(&ind_val);
+#endif
     }
     extern void reset_connect_para_check_res(void);
     reset_connect_para_check_res();

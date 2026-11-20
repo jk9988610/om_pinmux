@@ -75,6 +75,32 @@ def test_render_pins_hint_only_macro_has_space(draft):
     assert "BOARD_LED_INDICATOR_ONLY1" not in hint_text, "宏名与 1 之间必须有空格"
 
 
+def test_baseline_guards_every_indirect_led_call():
+    """hint_only 必须守护所有底层点灯调用，漏一处就会出现灯色掩盖。
+
+    真实回归：BLE 广播态 ex2_app_mouse.c 的 ind_config(IND_GREEN) 未被守护，
+    ALWAYS_ON 把 P05 常亮，掩盖了 mode_led_hint 要点亮的蓝牙灯 P06。
+    S205 原件此处本就删掉了 ind_config，工具曾因用 KC536 骨架而漏掉。
+    """
+    from omcfg import baseline
+
+    sdk = baseline.SDK_DIR
+    # 精确断言 BLE 广播两处 ind_config 都在守护块内（防止换基线回退）。
+    # 用「每个 ind_config 之前必须有未闭合的 #if !BOARD_LED_INDICATOR_ONLY」验证，
+    # 而不是仅统计文件里出现过守护宏——否则守护漏一处也会通过（这正是本次 bug）。
+    adv = (sdk / "projects/mouse_demo/main/ex2_app_mouse.c").read_text(encoding="utf-8")
+    assert adv.count("ind_config(&ind_val)") == 2
+    depth = 0
+    for line in adv.splitlines():
+        stripped = line.strip()
+        if stripped == "#if !BOARD_LED_INDICATOR_ONLY":
+            depth += 1
+        elif stripped == "#endif" and depth:
+            depth -= 1
+        if "ind_config(&ind_val)" in stripped:
+            assert depth >= 1, "BLE 广播的 ind_config 必须处在 hint_only 守护块内"
+
+
 # --- 3. 身份改写闭环 -------------------------------------------------------
 
 def test_blank_new_ble_name_becomes_truth_source(tmp_path):

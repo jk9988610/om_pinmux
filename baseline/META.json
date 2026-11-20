@@ -6,9 +6,9 @@
   "created": "2026-11-18",
   "state": "已初始化并生成（OMCFG 标记块 + board_features.h）；由 omcfg 依据工程现状推导配置并复核",
   "file_count": 203,
-  "size_bytes": 9180750,
-  "tree_sha256": "cf1d693b2e6e050da6a2e1b47a2b0f1d7676609f216680a1783abe2b0d025df0",
+  "size_bytes": 9181089,
+  "tree_sha256": "b0a2656d57cd57483898b33ea8cf40b15a469211649668fa4cce2df00196f8af",
   "config_sha256": "45072112cfec22bbe0705ce160fc662e08c1411b8dc57d570bd1f8319014df0b",
   "license": "sdk/LICENSE.md (OM-SLA01)",
-  "notes": "清理后的 KC536 SDK 基线：无 out/_build/.git/uvguix/日志/.omcfg_bak；引脚忠于源码现状（single 模式、RGB、滚轮 ENCODER_20_21、28 脚）；已初始化并生成。原 CH04 基线备份于仓库外 om_pinmux_baseline_backup_ch04_20261118_100842。来源工程无 git 提交。更新方式见 docs/PLAN-INTERNAL-SDK.md 3.1。 2026-11-20: sensor.c/sensor_type_check.c 纳入 S205 传感器适配（上电唤醒+3/2Wire 切换、完整 DPI 表、bdpi_mul、全方向分支）。 2026-11-20: led.c/key_io.c/mode_ind.c(.h) 纳入 S205 指示灯/按键适配（DPI长按对码、三段拨杆、2.4G对码快闪、logo_process让路不跑呼吸灯）。 2026-11-20: 指示灯策略可配置——模板底层点灯调用加 #if !BOARD_LED_INDICATOR_ONLY 守护（hint_only 只留 mode_led_hint，full 保 KC536）。"
+  "notes": "清理后的 KC536 SDK 基线：无 out/_build/.git/uvguix/日志/.omcfg_bak；引脚忠于源码现状（single 模式、RGB、滚轮 ENCODER_20_21、28 脚）；已初始化并生成。原 CH04 基线备份于仓库外 om_pinmux_baseline_backup_ch04_20261118_100842。来源工程无 git 提交。更新方式见 docs/PLAN-INTERNAL-SDK.md 3.1。 2026-11-20: sensor.c/sensor_type_check.c 纳入 S205 传感器适配（上电唤醒+3/2Wire 切换、完整 DPI 表、bdpi_mul、全方向分支）。 2026-11-20: led.c/key_io.c/mode_ind.c(.h) 纳入 S205 指示灯/按键适配（DPI长按对码、三段拨杆、2.4G对码快闪、logo_process让路不跑呼吸灯）。 2026-11-20: 指示灯策略可配置——模板底层点灯调用加 #if !BOARD_LED_INDICATOR_ONLY 守护（hint_only 只留 mode_led_hint，full 保 KC536）。 2026-11-20: 修复 BLE 广播态漏网——ex2_app_mouse.c 两处 ind_config 也纳入守护，否则 IND_GREEN 常亮占住 P05 掩盖蓝牙灯 P06（S205 原件此处本就无 ind_config）。"
 }
