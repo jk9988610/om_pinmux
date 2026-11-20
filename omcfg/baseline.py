@@ -9,6 +9,7 @@ from __future__ import annotations
 import binascii
 import hashlib
 import json
+import os
 from pathlib import Path
 
 from . import artifacts, model
@@ -159,6 +160,44 @@ def verify_meta(
         problems.append("SDK 文件树摘要与 META.json 不一致")
     if data.get("config_sha256") and data["config_sha256"] != file_digest(config):
         problems.append("baseline/project.omcfg 摘要与 META.json 不一致")
+    return problems
+
+
+def source_sdk_problems(source: Path | str | None = None) -> list[str]:
+    """检测「来源真实 SDK 相对基线快照是否漂移」，返回问题列表；空列表=未漂移。
+
+    与 tree_digest 用同一套产物过滤口径（Keil 产物 / .cache 索引 / 事务备份
+    均排除），避免编译一次就误报。快照值取自 META.json 的
+    source_tree_sha256 / source_file_count。
+
+    source 参数优先；未传时依次用 OMCFG_REAL_SDK 环境变量、META.source_sdk。
+    """
+    data = meta()
+    if source is not None:
+        path = Path(source)
+    elif os.environ.get("OMCFG_REAL_SDK"):
+        path = Path(os.environ["OMCFG_REAL_SDK"])
+    else:
+        path = Path(data.get("source_sdk") or "")
+    if not path.is_dir():
+        return [f"来源 SDK 不存在或不是目录: {path}"]
+
+    problems: list[str] = []
+    expected = data.get("source_tree_sha256")
+    if expected:
+        actual = tree_digest(path)
+        if actual != expected:
+            problems.append(f"源码摘要已变化: 实际 {actual} / 快照 {expected}")
+    expected_count = data.get("source_file_count")
+    if expected_count is not None:
+        actual_count = sum(
+            1
+            for path_item in path.rglob("*")
+            if path_item.is_file()
+            and not artifacts.is_artifact_path(path_item.relative_to(path).as_posix())
+        )
+        if actual_count != expected_count:
+            problems.append(f"源码文件数已变化: 实际 {actual_count} / 快照 {expected_count}")
     return problems
 
 
